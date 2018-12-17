@@ -1,0 +1,17 @@
+{
+  "agentid": "BUILDING1_agent",
+  "name": "BUILDING1",
+
+  "market_cycle_in_min": 60,
+
+  "duality_gap_threshold": 0.0005,
+  "max_deliver_capacity": 120,
+  "demand_threshold_coef": 0.3,
+
+  "ts_name": "Date",
+  "weather_file": "/home/vuzer/volttron/transactivecontrol/TNSAgent/tns/weather_data/energyplus.csv",
+
+  "simulation": true,
+  "simulation_start_time": "2018-06-22 00:00:00",
+  "simulation_one_hour_in_seconds": 1200
+}

@@ -1,0 +1,20 @@
+{
+  "agentid": "campus_agent",
+  "name": "Campus",
+
+  "market_cycle_in_min": 60,
+  "market_reservation_in_hours": 1440,
+  "buildings": ["BUILDING1"],
+  "building_powers": {
+    "BUILDING1": [0.0, -120.0, -35.0]
+  },
+
+  "duality_gap_threshold": 0.001,
+
+  "ts_name": "Date",
+  "weather_file": "/home/hngo/PycharmProjects/volttron-applications/pnnl/TNSAgent/tns/weather_data/forecast.csv",
+
+  "simulation": true,
+  "simulation_start_time": "2018-06-22 00:00:00",
+  "simulation_one_hour_in_seconds": 1200
+}

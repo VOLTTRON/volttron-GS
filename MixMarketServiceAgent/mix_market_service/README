@@ -1,0 +1,8 @@
+This is a derivation work from the original Market. It has more or less the same issues that the original work contains:
+- The sequential RPC calls when collecting offer (registration_manager.py/make_offer)
+- The unnecessary reservation phase
+
+This modification changes/adds:
+- Replace director.py by a function that initiates a new market cycle
+- Inject clearing prices from external entities. Thus, removing clearing price calculation from original work.
+- The role of this work is not a global service agent anymore. It is now served as a on-demand sub-market for a monolithic market designed by Don Hammerstron. Should we consider to break such monolithic market,  that's another big work...
