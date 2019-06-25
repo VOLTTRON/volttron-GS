@@ -105,12 +105,28 @@ class TccModel(LocalAssetModel):
         self.prices = prices
 
     def schedule_power(self, mkt):
+        """
+        This function should ask mixmarket to rerun and get back new scheduledPower and curves based on new set of
+        marginalPrice. However, because the building already provided the curve in the 1st place, there is no need to
+        rerun the mix market...
+        """
         self.scheduledPowers = []
         time_intervals = mkt.timeIntervals
+        if self.tcc_curves is not None:
+            # Curves existed, update vertices first
+            self.update_vertices(mkt)
+
         for i in range(len(time_intervals)):
             value = self.defaultPower
-            if self.quantities is not None and len(self.quantities) > i and self.quantities[i] is not None:
-                value = -self.quantities[i]
+            # if self.quantities is not None and len(self.quantities) > i and self.quantities[i] is not None:
+            #     value = -self.quantities[i]
+
+            if self.tcc_curves is not None:
+                # Update power at this marginal_price
+                marginal_price = find_obj_by_ti(mkt.marginalPrices, time_intervals[i])
+                marginal_price = marginal_price.value
+                value = production(self, marginal_price, time_intervals[i])  # [avg. kW]
+
             iv = IntervalValue(self, time_intervals[i], mkt, MeasurementType.ScheduledPower, value)
             self.scheduledPowers.append(iv)
 

@@ -97,13 +97,14 @@ class CampusAgent(Agent, myTransactiveNode):
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
         self.building_names = self.config.get('buildings', [])
         self.building_powers = self.config.get('building_powers')
+        self.db_topic = self.config.get("db_topic", "tnc")
 
         self.neighbors = []
 
-        self.city_supply_topic = 'tnsmarket/city/campus/supply'
-        self.building_demand_topic = 'tnsmarket/{}/campus/demand'
-        self.campus_demand_topic = 'tnsmarket/campus/city/demand'
-        self.campus_supply_topic = 'tnsmarket/campus/{}/supply'
+        self.city_supply_topic = "{}/city/campus/supply".format(self.db_topic)
+        self.building_demand_topic = "/".join([self.db_topic, "{}/campus/demand"])
+        self.campus_demand_topic = "{}/campus/city/demand".format(self.db_topic)
+        self.campus_supply_topic = "/".join([self.db_topic, "campus/{}/supply"])
 
         self.reschedule_interval = timedelta(minutes=10, seconds=1)
 
@@ -161,7 +162,8 @@ class CampusAgent(Agent, myTransactiveNode):
 
         self.city.model.receive_transactive_signal(self, supply_curves)
 
-        self.balance_market(1, start_of_cycle, fail_to_converged)
+        if start_of_cycle:
+            self.balance_market(1, start_of_cycle, fail_to_converged)
 
     def balance_market(self, run_cnt, start_of_cycle=False, fail_to_converged=False, fail_to_converged_neighbor=None):
         market = self.markets[0]  # Assume only 1 TNS market per node
@@ -338,6 +340,8 @@ class CampusAgent(Agent, myTransactiveNode):
         bldg.name = name
         bldg.maximumPower = bldg_powers[0]  # Remember loads have negative power [avg.kW]
         bldg.minimumPower = bldg_powers[1]  # [avg.kW]
+        _log.debug("{} has minPower of {} and maxPower of {}".format(bldg.name,
+                                                                     bldg.minimumPower, bldg.maximumPower))
 
         # Create neighbor model
         bldg_model = NeighborModel()

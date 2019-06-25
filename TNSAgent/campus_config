@@ -1,11 +1,15 @@
 {
-  "agentid": "campus_agent",
-  "name": "Campus",
+  "agentid": "pnnl_agent",
+  "name": "PNNL_Campus",
 
   "market_cycle_in_min": 60,
   "market_reservation_in_hours": 1440,
-  "buildings": ["BUILDING1"],
+  "buildings": ["BUILDING1"],  # ["SEB", "350_BUILDING"],  # The names here should match the names in building config files
   "building_powers": {
+    "SEB": [0.0, -300.0, -70.0],
+    "350_BUILDING": [0.0, -600.0, -90.0],
+    "SIGMA1": [0.0, -800.0, -150.0],
+    "SMALL_OFFICE": [0.0, -120.0, -45.0],
     "BUILDING1": [0.0, -120.0, -35.0]
   },
 

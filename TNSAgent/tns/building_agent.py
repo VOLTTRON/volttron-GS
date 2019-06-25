@@ -59,11 +59,13 @@ import logging
 import datetime
 import gevent
 from dateutil import parser
+import uuid
+
 
 from volttron.platform.vip.agent import Agent, Core, PubSub, RPC, compat
 from volttron.platform.agent import utils
 from volttron.platform.agent.utils import (get_aware_utc_now, format_timestamp)
-from volttron.platform.messaging import topics
+from volttron.platform.messaging import topics, headers as headers_mod
 from volttron.platform.agent.base_market_agent import MarketAgent
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
@@ -105,9 +107,13 @@ def setup_logging(name, log_file, level=logging.DEBUG):
     logger.addHandler(handler)
     return logger
 
-
-_log2 = setup_logging('mixmarket', '/home/vuzer/volttron/mixmarket.log')
-
+ep_res_path = '/Users/ngoh511/Documents/projects/PycharmProjects/transactivenetwork/TNSAgent/tns/test_data/energyplus.txt'
+mixmarket_log = '/home/vuzer/volttron/mixmarket'
+if not os.path.exists(mixmarket_log):
+    _log2 = setup_logging('mixmarket', mixmarket_log + '.log')
+else:
+    temp = str(uuid.uuid4())
+    _log2 = setup_logging('mixmarket', mixmarket_log + temp + '.log')
 
 
 __version__ = '0.1'
@@ -122,6 +128,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         self.config = utils.load_config(config_path)
         self.name = self.config.get('name')
         self.agent_name = self.config.get('agentid', 'building_agent')
+        self.db_topic = self.config.get("db_topic", "tnc")
 
         self.market_cycle_in_min = int(self.config.get('market_cycle_in_min', 60))
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
@@ -129,13 +136,15 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         self.neighbors = []
         self.max_deliver_capacity = float(self.config.get('max_deliver_capacity'))
         self.demand_threshold_coef = float(self.config.get('demand_threshold_coef'))
+        self.monthly_peak_power = float(self.config.get('monthly_peak_power'))
 
-        self.building_demand_topic = "tnsmarket/{}/campus/demand".format(self.name)
-        self.campus_supply_topic = "tnsmarket/campus/{}/supply".format(self.name)
+        self.building_demand_topic = "{}/{}/campus/demand".format(self.db_topic, self.name)
+        self.campus_supply_topic = "{}/campus/{}/supply".format(self.db_topic, self.name)
 
         self.mix_market_running = False
         verbose_logging = self.config.get('verbose_logging', True)
 
+        self.prices = [None for i in range(25)]
         self.quantities = [None for i in range(25)]
         self.building_demand_curves = [None for i in range(25)]
         self.mix_market_duration = timedelta(minutes=20)
@@ -164,10 +173,11 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         if self.simulation:
             self.ep_lines = []
             self.cur_ep_line = 0
-            ep_res_path = '/Users/ngoh511/Documents/projects/PycharmProjects/transactivenetwork/TNSAgent/tns/test_data/energyplus.txt'
             with open(ep_res_path, 'r') as fh:
                 for line in fh:
                     self.ep_lines.append(line)
+
+        _log2.debug("Mixmarket for agent {}:".format(self.name))
 
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
@@ -191,17 +201,23 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         start_of_cycle = message['start_of_cycle']
 
         self.campus.model.receive_transactive_signal(self, supply_curves)
-
-        # If signal is start_of_cycle (1st start or on top of the hour) then force restart mix-market
         _log.debug("At {}, mixmarket state is {}, start_of_cycle {}".format(Timer.get_cur_time(),
                                                                             self.mix_market_running,
                                                                             start_of_cycle))
+
+        db_topic = "/".join([self.db_topic, self.name, "CampusSupply"])
+        message = supply_curves
+        headers = {headers_mod.DATE: format_timestamp(Timer.get_cur_time())}
+        self.vip.pubsub.publish("pubsub", db_topic, headers, message).get()
+
         if start_of_cycle:
-            _log.debug("At {}, start of cycle. mixmarket state before overriding is {}".format(Timer.get_cur_time(),
-                                                                                               self.mix_market_running))
-            self.mix_market_running = False
-            
-        if not self.mix_market_running:
+            _log.debug("At {}, start of cycle. "
+                       "Mixmarket state before overriding is {}".format(Timer.get_cur_time(),
+                                                                        self.mix_market_running))
+
+            # if self.simulation:
+            #     self.run_ep_sim(start_of_cycle)
+            # else:
             self.start_mixmarket(start_of_cycle)
 
     def near_end_of_hour(self, now):
@@ -273,9 +289,6 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
                                             message={"prices": self.prices[-24:],
                                                      "temp": temps,
                                                      "hour": now.hour})
-        # Not renegotiate if near end of hour
-        elif not near_end_of_hour:
-            self.renegotiate(market)
 
     def balance_market(self, run_cnt):
         market = self.markets[0]  # Assume only 1 TNS market per node
@@ -298,34 +311,6 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
                 _log.debug("Campus model not converged. Sending signal back to campus.")
                 self.campus.model.prep_transactive_signal(market, self)
                 self.campus.model.send_transactive_signal(self, self.building_demand_topic)
-            else:
-                # Schedule rerun balancing if not in simulation mode
-                if not self.simulation:
-                    dt = datetime.now()
-                    _log.debug("{} ({}) did not send records due to check_for_convergence()".format(self.name, dt))
-                    # Schedule to rerun after 5 minutes if it is in the same hour and is the first reschedule
-                    next_run_dt = dt + self.reschedule_interval
-                    if dt.hour == next_run_dt.hour and run_cnt >= 1:
-                        _log.debug("{} reschedule to run at {}".format(self.name, next_run_dt))
-                        self.core.schedule(next_run_dt, self.balance_market, run_cnt + 1)
-
-        else:
-            self.renegotiate(market)
-
-    def renegotiate(self, market):
-        _log.debug("Market balancing sub-problem failed.")
-        # Update scheduledPower before renegotiate
-        # self.campus.model.scheduledPowers = []
-        # for sp in self.elastive_load_model.scheduledPowers:
-        #     interval_value = IntervalValue(self, sp.timeInterval, market,
-        #                                    MeasurementType.ScheduledPower, -sp.value)
-        #
-        #     # Append the scheduled power to the list of scheduled powers
-        #     self.campus.model.scheduledPowers.append(interval_value)
-
-        # Prep & send signal
-        self.campus.model.prep_transactive_signal(market, self)
-        self.campus.model.send_transactive_signal(self, self.building_demand_topic, fail_to_converged=True)
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         if market_name in self.market_names:
@@ -433,7 +418,8 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         campus_model.name = 'PNNL_Campus_Model'
         campus_model.location = self.name
         campus_model.defaultVertices = [Vertex(0.045, 25, 0, True), Vertex(0.048, 0, self.max_deliver_capacity, True)]
-        #campus_model.demandThreshold = self.demand_threshold_coef * campus.maximumPower
+        campus_model.demand_threshold_coef = self.demand_threshold_coef
+        campus_model.demandThreshold = self.demand_threshold_coef * self.monthly_peak_power
         campus_model.transactive = True
 
         # Cross-reference object & model
@@ -531,6 +517,23 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
             _log2.debug("Quantities: {}".format(self.quantities))
             _log2.debug("Prices: {}".format(self.prices))
             _log2.debug("Curves: {}".format(curves_arr))
+
+            db_topic = "/".join([self.db_topic, self.name, "AggregateDemand"])
+            message = {"Timestamp": format_timestamp(timestamp), "Curves": self.building_demand_curves}
+            headers = {headers_mod.DATE: format_timestamp(Timer.get_cur_time())}
+            self.vip.pubsub.publish("pubsub", db_topic, headers, message).get()
+
+            db_topic = "/".join([self.db_topic, self.name, "Price"])
+            price_message = []
+            for i in range(len(self.markets[0].timeIntervals)):
+                ts = self.markets[0].timeIntervals[i].name
+                price = self.prices[i]
+                quantity = self.quantities[i]
+                price_message.append({'timeInterval': ts, 'price': price, 'quantity': quantity})
+            message = {"Timestamp": format_timestamp(timestamp), "Price": price_message}
+            headers = {headers_mod.DATE: format_timestamp(Timer.get_cur_time())}
+            self.vip.pubsub.publish("pubsub", db_topic, headers, message).get()
+
             self.elastive_load_model.set_tcc_curves(self.quantities,
                                                     self.prices,
                                                     self.building_demand_curves)
@@ -610,12 +613,6 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
                                                         self.building_demand_curves)
                 self.balance_market(1)
             # End E+ output reading
-
-        # Not renegotiate if near end of hour
-        elif not near_end_of_hour:
-            self.renegotiate(market)
-
-
 
     def error_callback(self, timestamp, market_name, buyer_seller, error_code, error_message, aux):
         _log.debug("{}: error for {} as {} at {} - Message: {}".format(self.agent_name,

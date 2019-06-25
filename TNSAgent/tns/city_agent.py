@@ -100,8 +100,9 @@ class CityAgent(Agent, myTransactiveNode):
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
         self.neighbors = []
 
-        self.campus_demand_topic = 'tnsmarket/campus/city/demand'
-        self.city_supply_topic = 'tnsmarket/city/campus/supply'
+        self.db_topic = self.config.get("db_topic", "tnc")
+        self.campus_demand_topic = "{}/campus/city/demand".format(self.db_topic)
+        self.city_supply_topic = "{}/city/campus/supply".format(self.db_topic)
 
         self.reschedule_interval = timedelta(minutes=10, seconds=1)
 
@@ -190,7 +191,7 @@ class CityAgent(Agent, myTransactiveNode):
                            start_of_cycle=True)
 
     def new_demand_signal(self, peer, sender, bus, topic, headers, message):
-        _log.debug("At {}, {} receives new demand signal: {}".format(Timer.get_cur_time(),
+        _log.debug("At {}, {} receives new demand records: {}".format(Timer.get_cur_time(),
                                                                      self.name, message))
         demand_curves = message['curves']
 

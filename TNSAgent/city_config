@@ -1,6 +1,6 @@
 {
-  "agentid": "city_agent",
-  "name": "City",
+  "agentid": "cor_agent",
+  "name": "City_Of_Richland",
 
   "market_cycle_in_min": 60,
   "duality_gap_threshold": 0.001,

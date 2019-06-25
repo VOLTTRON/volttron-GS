@@ -233,9 +233,9 @@ class Market(object):
                                     "The market {} failed to clear.".format(self.market_name)
 
                 # Overwrite price and quantity if needed
-                if quantity is None:
-                    quantity = dummy_quantity
-                price = self.price
+                # if quantity is None:
+                #     quantity = dummy_quantity
+                # price = self.price
 
         _log.info("Clearing price for Market: {} Price: {} Qty: {}".format(self.market_name, price, quantity))
         timestamp = self._get_time()

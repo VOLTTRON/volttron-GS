@@ -89,8 +89,9 @@ class NeighborModel(Model, object):
         self.convergenceFlags = []  # IntervalValue.empty  # values are Boolean
         self.convergenceThreshold = 0.05  # [0.01 = 1#]
         self.demandMonth = datetime.today().month  # used to re-set demand charges
-        self.demandRate = 0  # 4.5  # [$ / kW (/h)]
+        self.demandRate = 4.5  # 4.5  # [$ / kW (/h)]
         self.demandThreshold = 1e9  # power that causes demand charges [kW]
+        self.demand_threshold_coef = 0.8
         self.effectiveImpedance = 0.0  # Ohms for future use
         self.friend = False  # friendly Neighbors might get preferred rates
         self.mySignal = []  # TransactiveRecord.empty  # current records ready to send
@@ -485,7 +486,7 @@ class NeighborModel(Model, object):
             # This must be the start of a new month. The demand threshold must be
             # reset. For now, "resetting" means using a fraction (e.g., 80#) of
             # the final demand threshold in the prior month.
-            self.demandThreshold = 0.8 * self.demandThreshold
+            self.demandThreshold = self.demand_threshold_coef * self.demandThreshold
             self.demandMonth = mon
 
     def update_dual_costs(self, mkt):
@@ -752,9 +753,24 @@ class NeighborModel(Model, object):
                                     # demand threshold. Demand charges are in play.
                                     # Set a flag.
                                     demand_charge_flag = k
+
+                                if demand_charge_flag:
+                                    _log.debug("DEMAND CHARGE")
+                                else:
+                                    _log.debug("NO DEMAND CHARGE")
+                                # Debug negative price & demand charge
+                                _log.debug("power: {} - demand charge threshold: {} - predicted power peak: {}"
+                                           .format(power, demand_charge_threshold, predicted_prior_peak))
+                                _log.debug("prior power: {}".format(prior_power))
+                                _log.debug("received vertices: {}"
+                                           .format([(v.timeInterval, v.power) for v in received_vertices]))
+
                             except:
-                                _log.error("{} has power {} and maxPower {}"
-                                           .format(self.name, power, self.object.maximumPower))
+                                _log.error("{} has power {} AND object ({}) maxPower {} and minPower {}"
+                                           .format(self.name, power,
+                                                   self.object.name,
+                                                   self.object.maximumPower,
+                                                   self.object.minimumPower))
                                 raise
                         # Create a corresponding (price,power) pair (aka "active
                         # vertex") using the received power and marginal price.
@@ -776,6 +792,7 @@ class NeighborModel(Model, object):
                     # be larger than the current demand-charge threshold, as
                     # would be indicated by this flag being a value other than 0.
                     if demand_charge_flag != 0:
+                        _log.debug("DEMAND CHARGE 1")
                         # Demand charges are in play.
                         # Get the newly updated active vertices for this
                         # transactive Neighbor again in the indexed time interval.
@@ -840,6 +857,8 @@ class NeighborModel(Model, object):
 
                                 # ... and re-store the vertex in its IntervalValue
                                 interval_values[k].value = vertex  # an IntervalValue object
+                    else:
+                        _log.debug("NO DEMAND CHARGE 1")
 
             else:
                 # Logic should not arrive here. Error.

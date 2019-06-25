@@ -849,6 +849,10 @@ class Market:
         # Extract active time intervals
         time_intervals = self.timeIntervals  # active TimeIntervals
 
+        time_interval_values = [t.startTime for t in time_intervals]
+        # Delete netPowers not in active time intervals
+        self.netPowers = [x for x in self.netPowers if x.timeInterval.startTime in time_interval_values]
+
         # Index through the active time intervals ti
         for i in range(1, len(time_intervals)):
             # Initialize total generation tg
