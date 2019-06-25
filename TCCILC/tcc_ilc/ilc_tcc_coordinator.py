@@ -73,9 +73,9 @@ from dateutil.parser import parse
 from tcc_ilc.device_handler import ClusterContainer, DeviceClusters, parse_sympy, init_schedule, check_schedule
 import pandas as pd
 from volttron.platform.agent import utils
-from volttron.platform.messaging import topics
+from volttron.platform.messaging import topics, headers as headers_mod
 
-from volttron.platform.agent.utils import setup_logging, format_timestamp
+from volttron.platform.agent.utils import setup_logging, format_timestamp, get_aware_utc_now
 from volttron.platform.agent.math_utils import mean, stdev
 from volttron.platform.vip.agent import Agent, Core
 
@@ -98,7 +98,9 @@ class TransactiveIlcCoordinator(MarketAgent):
         config = utils.load_config(config_path)
         campus = config.get("campus", "")
         building = config.get("building", "")
+        logging_topic = config.get("logging_topic", "tnc")
         self.target_topic = '/'.join(['record', 'target_agent', campus, building, 'goal'])
+        self.logging_topic = '/'.join([logging_topic, campus, building, "TCILC"])
         cluster_configs = config["clusters"]
         self.clusters = ClusterContainer()
 
@@ -186,7 +188,6 @@ class TransactiveIlcCoordinator(MarketAgent):
         self.power_prices['day'] = self.power_prices.index.day.astype(int)
         self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
 
-
     @Core.receiver("onstart")
     def starting_base(self, sender, **kwargs):
         """
@@ -209,6 +210,9 @@ class TransactiveIlcCoordinator(MarketAgent):
             demand_curve = self.create_demand_curve()
             if demand_curve is not None:
                 self.make_offer(market_name, buyer_seller, demand_curve)
+                topic_suffix = "/".join([self.logging_topic, "DemandCurve"])
+                message = {"Curve": demand_curve.tuppleize(), "Commodity": "Electricity"}
+                self.publish_record(topic_suffix, message)
 
     def create_demand_curve(self):
         if self.power_min is not None and self.power_max is not None:
@@ -233,6 +237,11 @@ class TransactiveIlcCoordinator(MarketAgent):
         elif not occupied:
             demand_goal = None
             self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
+        if price is None:
+            price = "None"
+        message = {"Price": price, "Quantity": demand_goal, "Commodity": "Electricity"}
+        topic_suffix = "/".join([self.logging_topic, "MarketClear"])
+        self.publish_record(topic_suffix, message)
 
     def publish_demand_limit(self, demand_goal, task_id):
         """
@@ -358,22 +367,34 @@ class TransactiveIlcCoordinator(MarketAgent):
         # figure out what to send if the market is not formed or curves don't intersect.
         _log.debug("AUX: {}".format(aux))
         if market_name == "electric":
+            if self.bldg_power:
+                dt = self.bldg_power[-1][0]
+                occupied = check_schedule(dt, self.occupancy_schedule)
 
             _log.debug("AUX: {}".format(aux))
-            if aux.get('SQn,DQn', 0) == -1 and aux.get('SQx,DQx', 0) == -1:
-                demand_goal = self.demand_curve.min_x()
-
-                self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-            elif aux.get('SPn,DPn', 0) == 1 and aux.get('SPx,DPx', 0) == 1:
-                demand_goal = self.demand_curve.min_x()
-                self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-            elif aux.get('SPn,DPn', 0) == -1 and aux.get('SPx,DPx', 0) == -1:
-                demand_goal = self.demand_curve.max_x()
-                self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-            else:
+            if not occupied:
                 demand_goal = None
                 self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
+            else:
+                if aux.get('SQn,DQn', 0) == -1 and aux.get('SQx,DQx', 0) == -1:
+                    demand_goal = self.demand_curve.min_x()
+                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
+                elif aux.get('SPn,DPn', 0) == 1 and aux.get('SPx,DPx', 0) == 1:
+                    demand_goal = self.demand_curve.min_x()
+                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
+                elif aux.get('SPn,DPn', 0) == -1 and aux.get('SPx,DPx', 0) == -1:
+                    demand_goal = self.demand_curve.max_x()
+                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
+                else:
+                    demand_goal = None
+                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
         return
+
+    def publish_record(self, topic_suffix, message):
+        headers = {headers_mod.DATE: format_timestamp(get_aware_utc_now())}
+        message["TimeStamp"] = format_timestamp(self.current_time)
+        topic = "/".join([self.record_topic, topic_suffix])
+        self.vip.pubsub.publish("pubsub", topic, headers, message).get()
 
 
 def main(argv=sys.argv):

@@ -65,7 +65,8 @@ under Contract DE-AC05-76RL01830
 from sympy import symbols
 import logging
 from sympy.parsing.sympy_parser import parse_expr
-from volttron.platform.agent.utils import setup_logging
+from volttron.platform.agent.utils import setup_logging, format_timestamp, get_aware_utc_now
+from volttron.platform.messaging import topics, headers as headers_mod
 
 from .utils import parse_sympy, create_device_topic_map, fix_up_point_name
 
@@ -73,12 +74,18 @@ setup_logging()
 _log = logging.getLogger(__name__)
 
 
+def publish_data(time_stamp, message, topic, publish_method):
+    headers = {headers_mod.DATE: format_timestamp(get_aware_utc_now())}
+    message["TimeStamp"] = format_timestamp(time_stamp)
+    publish_method("pubsub", topic, headers, message).get()
+
+
 class ControlCluster(object):
-    def __init__(self, cluster_config, actuator):
+    def __init__(self, cluster_config, actuator, logging_topic, parent):
         self.devices = {}
         self.device_topics = set()
         for device_name, device_config in cluster_config.items():
-            control_manager = ControlManager(device_config)
+            control_manager = ControlManager(device_config, logging_topic, parent)
             self.devices[device_name, actuator] = control_manager
             self.device_topics |= control_manager.device_topics
 
@@ -110,15 +117,6 @@ class ControlContainer(object):
     def get_device_topic_set(self):
         return self.device_topics
 
-    def reset_curtail_count(self):
-        for device in self.devices.itervalues():
-            device.reset_curtail_count()
-
-    def reset_currently_curtailed(self):
-        for device in self.devices.itervalues():
-            for device_id in self.command_status:
-                device.reset_currently_curtailed(device_id)
-
     def get_devices_status(self, state):
         all_on_devices = []
         for cluster in self.clusters:
@@ -126,13 +124,13 @@ class ControlContainer(object):
             all_on_devices.extend(on_device)
         return all_on_devices
 
-    def ingest_data(self, data):
+    def ingest_data(self, time_stamp, data):
         for device in self.devices.itervalues():
-            device.ingest_data(data)
+            device.ingest_data(time_stamp, data)
 
 
 class DeviceStatus(object):
-    def __init__(self, device_status_args=[], condition="", default_device=""):
+    def __init__(self, logging_topic, parent, device_status_args=[], condition="", default_device=""):
         self.current_device_values = {}
         #device_status_args = parse_sympy(device_status_args)
         device_status_args = device_status_args
@@ -145,12 +143,15 @@ class DeviceStatus(object):
         self.condition = parse_sympy(condition, condition=True)
         self.expr = parse_expr(self.condition)
         self.command_status = False
+        self.default_device = default_device
+        self.parent = parent
+        self.logging_topic = logging_topic
 
-    def ingest_data(self, data):
+    def ingest_data(self, time_stamp, data):
         for topic, point in self.device_topic_map.iteritems():
             if topic in data:
                 self.current_device_values[point] = data[topic]
-        _log.debug("DEVICE_STATUS current device values: {}".format(self.current_device_values))
+                _log.debug("DEVICE_STATUS: {} current device values: {}".format(topic, self.current_device_values))
         # bail if we are missing values.
         if len(self.current_device_values) < len(self.device_topic_map):
             return
@@ -164,10 +165,14 @@ class DeviceStatus(object):
             self.command_status = bool(conditional_value)
         except TypeError:
             self.command_status = False
+        message = self.current_device_values
+        message["Status"] = self.command_status
+        topic = "/".join([self.logging_topic, self.default_device, "DeviceStatus"])
+        publish_data(time_stamp, message, topic, self.parent.vip.pubsub.publish)
 
 
 class Controls(object):
-    def __init__(self, curtail_config, default_device=""):
+    def __init__(self, curtail_config, logging_topic, parent, default_device=""):
         self.device_topics = set()
 
         device_topic = curtail_config.pop("device_topic", default_device)
@@ -180,7 +185,7 @@ class Controls(object):
             curtailment_settings = [curtailment_settings]
 
         for settings in curtailment_settings:
-            conditional_curtailment = ControlSetting(default_device=device_topic, **settings)
+            conditional_curtailment = ControlSetting(logging_topic, parent, default_device=device_topic, **settings)
             self.device_topics |= conditional_curtailment.device_topics
             self.conditional_curtailments.append(conditional_curtailment)
 
@@ -190,24 +195,23 @@ class Controls(object):
             augment_settings = [augment_settings]
 
         for settings in augment_settings:
-            conditional_augment = ControlSetting(default_device=device_topic, **settings)
+            conditional_augment = ControlSetting(logging_topic, parent, default_device=device_topic, **settings)
             self.device_topics |= conditional_augment.device_topics
             self.conditional_augments.append(conditional_augment)
 
-        self.device_status = DeviceStatus(default_device=device_topic, **curtail_config.pop('device_status', {}))
+        self.device_status = DeviceStatus(logging_topic, parent, default_device=device_topic, **curtail_config.pop('device_status', {}))
         self.device_topics |= self.device_status.device_topics
-        self.curtail_count = 0.0
         self.currently_curtailed = False
 
-    def ingest_data(self, data):
+    def ingest_data(self, time_stamp, data):
         for conditional_curtailment in self.conditional_curtailments:
-            conditional_curtailment.ingest_data(data)
+            conditional_curtailment.ingest_data(time_stamp, data)
         for conditional_augment in self.conditional_augments:
-            conditional_augment.ingest_data(data)
-        self.device_status.ingest_data(data)
+            conditional_augment.ingest_data(time_stamp, data)
+        self.device_status.ingest_data(time_stamp, data)
 
     def get_control_info(self, state):
-        settings = self.conditional_curtailments if state == 'shed' else self.conditional_augments
+        settings = self.conditional_curtailments if state == 'curtail' else self.conditional_augments
         for setting in settings:
             if setting.check_condition():
                 return setting.get_control_info()
@@ -215,47 +219,39 @@ class Controls(object):
         return None
 
     def get_point_device(self, state):
-        settings = self.conditional_curtailments if state == 'shed' else self.conditional_augments
+        settings = self.conditional_curtailments if state == 'curtail' else self.conditional_augments
         for setting in settings:
             if setting.check_condition():
                 return setting.get_point_device()
 
         return None
 
-    def reset_curtail_count(self):
-        self.curtail_count = 0.0
-
     def increment_control(self):
         self.currently_curtailed = True
-        self.curtail_count += 1.0
 
     def reset_curtail_status(self):
         self.currently_curtailed = False
 
 
 class ControlManager(object):
-    def __init__(self, device_config, default_device=""):
+    def __init__(self, device_config, logging_topic, parent, default_device=""):
         self.device_topics = set()
         self.controls = {}
 
         for device_id, curtail_config in device_config.items():
-            controls = Controls(curtail_config, default_device)
+            controls = Controls(curtail_config, logging_topic, parent, default_device)
             self.controls[device_id] = controls
             self.device_topics |= controls.device_topics
 
-    def ingest_data(self, data):
+    def ingest_data(self, time_stamp, data):
         for control in self.controls.itervalues():
-            control.ingest_data(data)
+            control.ingest_data(time_stamp, data)
 
     def get_control_info(self, device_id, state):
         return self.controls[device_id].get_control_info(state)
 
     def get_point_device(self, device_id, state):
         return self.controls[device_id].get_point_device(state)
-
-    def reset_curtail_count(self):
-        for control in self.controls.itervalues():
-            control.reset_curtail_count()
 
     def increment_control(self, device_id):
         self.controls[device_id].increment_control()
@@ -264,14 +260,14 @@ class ControlManager(object):
         self.controls[device_id].reset_curtail_status()
 
     def get_device_status(self, state):
-        if state == 'shed':
+        if state == 'curtail':
             return [command for command, control in self.controls.iteritems() if control.device_status.command_status]
         else:
             return [command for command, control in self.controls.iteritems() if not control.device_status.command_status]
 
 
 class ControlSetting(object):
-    def __init__(self, point=None, value=None, load=None, offset=None, maximum=None, minimum=None,
+    def __init__(self, logging_topic, parent, point=None, value=None, load=None, offset=None, maximum=None, minimum=None,
                  revert_priority=None, equation=None, control_method=None,
                  condition="", conditional_args=[], default_device=""):
         if control_method is None:
@@ -289,6 +285,9 @@ class ControlSetting(object):
         self.revert_priority = revert_priority
         self.maximum = maximum
         self.minimum = minimum
+        self.logging_topic = logging_topic
+        self.parent = parent
+        self.default_device = default_device
 
         if self.control_method.lower() == 'equation':
             self.equation_args = []
@@ -391,7 +390,7 @@ class ControlSetting(object):
             value = False
         return value
 
-    def ingest_data(self, data):
+    def ingest_data(self, time_stamp, data):
         for topic, point in self.device_topic_map.iteritems():
             if topic in data:
                 self.current_device_values[point] = data[topic]

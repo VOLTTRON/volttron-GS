@@ -69,7 +69,8 @@ from sympy.parsing.sympy_parser import parse_expr
 from collections import deque
 import logging
 from datetime import timedelta as td
-from volttron.platform.agent.utils import setup_logging
+from volttron.platform.agent.utils import setup_logging, get_aware_utc_now, format_timestamp
+from volttron.platform.messaging import topics, headers as headers_mod
 from .ilc_matrices import (build_score, input_matrix)
 
 from .utils import parse_sympy, create_device_topic_map, fix_up_point_name
@@ -88,7 +89,7 @@ def register_criterion(name):
 
 
 class CriteriaCluster(object):
-    def __init__(self, priority, criteria_labels, row_average, cluster_config):
+    def __init__(self, priority, criteria_labels, row_average, cluster_config, logging_topic, parent):
         self.criteria = {}
         self.priority = priority
         self.criteria_labels = criteria_labels
@@ -100,14 +101,15 @@ class CriteriaCluster(object):
             mappers = {}
 
         for device_name, device_criteria in cluster_config.items():
-            self.criteria[device_name] = DeviceCriteria(device_criteria)
+            self.criteria[device_name] = DeviceCriteria(device_criteria, logging_topic, parent)
 
-    def get_all_evaluations(self):
+    def get_all_evaluations(self, state):
         results = {}
         for name, device in self.criteria.items():
             for device_id in device.criteria.keys():
-                evaluations = device.evaluate(device_id)
-                results[name, device_id] = evaluations
+                if state in device_id:
+                    evaluations = device.evaluate(device_id)
+                    results[name, device_id[0]] = evaluations
         return results
 
 
@@ -120,18 +122,22 @@ class CriteriaContainer(object):
         self.clusters.append(cluster)
         self.devices.update(cluster.criteria)
 
-    def get_score_order(self):
+    def get_score_order(self, state):
         all_scored = []
         for cluster in self.clusters:
-            evaluations = cluster.get_all_evaluations()
+            evaluations = cluster.get_all_evaluations(state)
 
             _log.debug('Device Evaluations: ' + str(evaluations))
 
             if not evaluations:
                 continue
 
-            input_arr = input_matrix(evaluations, cluster.criteria_labels)
-            scores = build_score(input_arr, cluster.row_average, cluster.priority)
+            if state not in cluster.criteria_labels.keys() or state not in cluster.row_average.keys():
+                _log.debug("Criteria - Not configured for current state: {}".format(state))
+                continue
+
+            input_arr = input_matrix(evaluations, cluster.criteria_labels[state])
+            scores = build_score(input_arr, cluster.row_average[state], cluster.priority)
             all_scored.extend(scores)
 
             _log.debug('Input Array: ' + str(input_arr))
@@ -145,21 +151,26 @@ class CriteriaContainer(object):
     def get_device(self, device_name):
         return self.devices[device_name]
 
+    # this passes all data coming in to all device criteria
+    # TODO:  rethink this approach.  Is there a better way to create the topic map to pass only data needed
     def ingest_data(self, time_stamp, data):
         for device in self.devices.itervalues():
             device.ingest_data(time_stamp, data)
 
 
 class DeviceCriteria(object):
-    def __init__(self, criteria_config):
+    def __init__(self, criteria_config, logging_topic, parent):
         self.criteria = {}
         self.points = {}
         self.expressions = {}
         self.condition = {}
 
-        for device_id, device_criteria in criteria_config.items():
-            criteria = Criteria(device_criteria)
-            self.criteria[device_id] = criteria
+        for device_id, settings in criteria_config.items():
+            if "curtail" not in settings.keys() and "augment" not in settings.keys():
+                settings = {"curtail": settings}
+            for state, device_criteria in settings.items():
+                criteria = Criteria(device_criteria, logging_topic, parent)
+                self.criteria[(device_id, state)] = criteria
 
     def ingest_data(self, time_stamp, data):
         for criteria in self.criteria.values():
@@ -173,19 +184,20 @@ class DeviceCriteria(object):
 
 
 class Criteria(object):
-    def __init__(self, criteria):
+    def __init__(self, criteria, logging_topic, parent):
         device_topic = criteria.pop("device_topic", "")
         self.device_topics = set()
         self.device_topics.add(device_topic)
+        _log.debug("DEVICE_TOPICS: {}".format(self.device_topics))
         self.criteria = {}
         for name, criterion in criteria.items():
-            self.add(name, criterion, device_topic)
+            self.add(name, criterion, device_topic, logging_topic, parent)
 
-    def add(self, name, criterion, device_topic):
+    def add(self, name, criterion, device_topic, logging_topic, parent):
         _log.debug("Criteria: {}".format(criterion))
         operation_type = criterion.pop('operation_type')
         klass = criterion_registry[operation_type]
-        self.criteria[name] = klass(device_topic=device_topic, **criterion)
+        self.criteria[name] = klass(device_topic=device_topic, logging_topic=logging_topic, parent=parent, **criterion)
 
     def evaluate(self):
         results = {}
@@ -206,13 +218,15 @@ class Criteria(object):
 class BaseCriterion(object):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, device_topic="", minimum=None, maximum=None):
+    def __init__(self, device_topic="", logging_topic='tnc', parent=None, minimum=None, maximum=None):
         self.min_func = (lambda x: x) if minimum is None else (lambda x: max(x, minimum))
         self.max_func = (lambda x: x) if maximum is None else (lambda x: min(x, maximum))
         self.minimum = minimum
         self.maximum = maximum
         self.device_topic = device_topic
+        self.logging_topic = logging_topic
         self.device_topics = set()
+        self.parent = parent
 
     def numeric_check(self, value):
         """
@@ -260,6 +274,14 @@ class BaseCriterion(object):
     def criteria_status(self, status):
         pass
 
+    def publish_data(self, topic, value, time_stamp):
+        headers = {headers_mod.DATE: format_timestamp(get_aware_utc_now())}
+        message = {"Value": value}
+        message["TimeStamp"] = format_timestamp(time_stamp)
+        topic = "/".join([self.logging_topic, topic])
+        _log.debug("LOGGING {} - {} - {}".format(topic, value, time_stamp))
+        self.parent.vip.pubsub.publish("pubsub", topic, headers, message).get()
+
 
 @register_criterion('status')
 class StatusCriterion(BaseCriterion):
@@ -282,12 +304,14 @@ class StatusCriterion(BaseCriterion):
 
     def ingest_data(self, time_stamp, data):
         if self.point_name in data:
+            value = data[self.point_name]
+            self.publish_data(self.point_name, value, time_stamp)
             self.current_status = bool(data[self.point_name])
 
 
 @register_criterion('constant')
 class ConstantCriterion(BaseCriterion):
-    def __init__(self, value=None, off_value=0.0, point_name=None, **kwargs):
+    def __init__(self, value=None, **kwargs):
         super(ConstantCriterion, self).__init__(**kwargs)
         if value is None:
             raise ValueError('Missing parameter')
@@ -312,9 +336,9 @@ class FormulaCriterion(BaseCriterion):
         self.build_ingest_map(operation_args)
         _log.debug("Device topic map: {}".format(self.device_topic_map))
         self.expr = parse_expr(parse_sympy(operation))
+        self.status = False
 
         self.current_operation_values = {}
-        self.status = False
 
     def fixup_dict_args(self, operation_args):
         "backwards compatiblility with old configurations"
@@ -336,7 +360,6 @@ class FormulaCriterion(BaseCriterion):
                 result["nc"].append(key)
 
         return result
-
 
     def build_ingest_map(self, operation_args):
         "Build data structures for ingest data and return operation points for sympy"
@@ -363,7 +386,9 @@ class FormulaCriterion(BaseCriterion):
         for topic, point in self.device_topic_map.iteritems():
             if topic in data:
                 if not self.status or point not in self.update_points.get("nc", set()):
-                    self.current_operation_values[point] = data[topic]
+                    value = data[topic]
+                    self.publish_data(topic, value, time_stamp)
+                    self.current_operation_values[point] = value
 
     def criteria_status(self, status):
         self.status = status
@@ -429,3 +454,4 @@ class HistoryCriterion(BaseCriterion):
             self.history_time = time_stamp - self.previous_time_delta
             self.current_value = data[self.point_name]
             self.history.appendleft((time_stamp, self.current_value))
+

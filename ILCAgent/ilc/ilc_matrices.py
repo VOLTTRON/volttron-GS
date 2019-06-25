@@ -81,22 +81,31 @@ def extract_criteria(filename):
     :param filename:
     :return:
     """
+    criteria_labels = {}
+    criteria_matrix = {}
     config_matrix = utils.load_config(filename)
-    index_of = dict([(a,i) for i, a in enumerate(config_matrix.keys())])
+    # check if file has been updated or uses old format
+    _log.debug("CONFIG_MATRIX: {}".format(config_matrix))
+    if "curtail" not in config_matrix.keys() and "augment" not in config_matrix.keys():
+        config_matrix = {"curtail": config_matrix}
 
-    criteria_labels = []
-    for label, index in index_of.items():
-        criteria_labels.insert(index, label)
+    _log.debug("CONFIG_MATRIX: {}".format(config_matrix))
+    for state in config_matrix:
+        index_of = dict([(a, i) for i, a in enumerate(config_matrix[state].keys())])
 
-    criteria_matrix = [[0.0 for _ in config_matrix] for _ in config_matrix]
-    for j in config_matrix:
-        row = index_of[j]
-        criteria_matrix[row][row] = 1.0
+        criteria_labels[state] = []
+        for label, index in index_of.items():
+            criteria_labels[state].insert(index, label)
 
-        for k in config_matrix[j]:
-            col = index_of[k]
-            criteria_matrix[row][col] = float(config_matrix[j][k])
-            criteria_matrix[col][row] = float(1.0 / criteria_matrix[row][col])
+        criteria_matrix[state] = [[0.0 for _ in config_matrix[state]] for _ in config_matrix[state]]
+        for j in config_matrix[state]:
+            row = index_of[j]
+            criteria_matrix[state][row][row] = 1.0
+
+            for k in config_matrix[state][j]:
+                col = index_of[k]
+                criteria_matrix[state][row][col] = float(config_matrix[state][j][k])
+                criteria_matrix[state][col][row] = float(1.0 / criteria_matrix[state][row][col])
 
     return criteria_labels, criteria_matrix
 
@@ -107,12 +116,14 @@ def calc_column_sums(criteria_matrix):
     :param criteria_matrix:
     :return:
     """
-    j = 0
-    cumsum = []
-    while j < len(criteria_matrix[0]):
-        col = [float(row[j]) for row in criteria_matrix]
-        cumsum.append(sum(col))
-        j += 1
+    cumsum = {}
+    for state in criteria_matrix:
+        j = 0
+        cumsum[state] = []
+        while j < len(criteria_matrix[state][0]):
+            col = [float(row[j]) for row in criteria_matrix[state]]
+            cumsum[state].append(sum(col))
+            j += 1
     return cumsum
 
 
@@ -124,20 +135,23 @@ def normalize_matrix(criteria_matrix, col_sums):
     :param col_sums:
     :return:
     """
-    normalized_matrix = []
-    row_sums = []
-    i = 0
-    while i < len(criteria_matrix):
-        j = 0
-        norm_row = []
-        while j < len(criteria_matrix[0]):
-            norm_row.append(criteria_matrix[i][j]/(col_sums[j] if col_sums[j] != 0 else 1))
-            j += 1
-        row_sum = sum(norm_row)
-        norm_row.append(row_sum/j)
-        row_sums.append(row_sum/j)
-        normalized_matrix.append(norm_row)
-        i += 1
+    normalized_matrix = {}
+    row_sums = {}
+    for state in criteria_matrix:
+        normalized_matrix[state] = []
+        row_sums[state] = []
+        i = 0
+        while i < len(criteria_matrix[state]):
+            j = 0
+            norm_row = []
+            while j < len(criteria_matrix[state][0]):
+                norm_row.append(criteria_matrix[state][i][j]/(col_sums[state][j] if col_sums[state][j] != 0 else 1))
+                j += 1
+            row_sum = sum(norm_row)
+            norm_row.append(row_sum/j)
+            row_sums[state].append(row_sum/j)
+            normalized_matrix[state].append(norm_row)
+            i += 1
     return row_sums
 
 
@@ -153,35 +167,45 @@ def validate_input(pairwise_matrix, col_sums):
     """
     # Calculate row products and take the 5th root
     _log.info("Validating matrix")
-    random_index = [0, 0, 0, 0.58, 0.9, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
-    roots = []
-    for row in pairwise_matrix:
-        roots.append(math.pow(reduce(operator.mul, row, 1), 1.0/5))
-    # Sum the vector of products
-    root_sum = sum(roots)
-    # Calculate the priority vector
-    priority_vec = []
-    for item in roots:
-        priority_vec.append(item / root_sum)
+    consistent = True
+    for state in pairwise_matrix:
+        random_index = [0, 0, 0, 0.58, 0.9, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
+        roots = []
+        for row in pairwise_matrix[state]:
+            roots.append(math.pow(reduce(operator.mul, row, 1), 1.0/5))
+        # Sum the vector of products
+        root_sum = sum(roots)
+        # Calculate the priority vector
+        priority_vec = []
+        for item in roots:
+            priority_vec.append(item / root_sum)
 
-    # Calculate the priority row
-    priority_row = []
-    for i in range(0, len(col_sums)):
-        priority_row.append(col_sums[i] * priority_vec[i])
+        # Calculate the priority row
+        priority_row = []
+        for i in range(0, len(col_sums[state])):
+            priority_row.append(col_sums[state][i] * priority_vec[i])
 
-    # Sum the priority row
-    priority_row_sum = sum(priority_row)
+        # Sum the priority row
+        priority_row_sum = sum(priority_row)
 
-    # Calculate the consistency index
-    ncols = max(len(col_sums) - 1, 1)
-    consistency_index = \
-        (priority_row_sum - len(col_sums))/ncols
+        # Calculate the consistency index
+        ncols = max(len(col_sums[state]) - 1, 1)
+        consistency_index = \
+            (priority_row_sum - len(col_sums[state]))/ncols
 
-    # Calculate the consistency ratio
-    rindex = max(random_index[len(col_sums)], 0.3)
-    consistency_ratio = consistency_index / rindex
+        # Calculate the consistency ratio
+        if len(col_sums[state]) < 4:
+            consistency_ratio = consistency_index
+        else:
+            rindex = random_index[len(col_sums[state])]
+            consistency_ratio = consistency_index / rindex
 
-    return consistency_ratio < 0.2
+        _log.debug("Pairwise comparison: {} - CR: {}".format(state, consistency_index))
+        if consistency_ratio > 0.2:
+            consistent = False
+            _log.debug("Inconsistent pairwise comparison: {} - CR: {}".format(state, consistency_ratio))
+
+    return consistent
 
 
 def build_score(_matrix, weight, priority):
