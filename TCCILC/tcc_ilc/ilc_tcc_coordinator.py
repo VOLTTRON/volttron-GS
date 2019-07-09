@@ -237,8 +237,13 @@ class TransactiveIlcCoordinator(MarketAgent):
         elif not occupied:
             demand_goal = None
             self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
+        else:
+            _log.debug("Possible market problem price: {} - quantity: {}".format(price, quantity))
+            demand_goal = None
+            
         if price is None:
             price = "None"
+            demand_goal = "None"
         message = {"Price": price, "Quantity": demand_goal, "Commodity": "Electricity"}
         topic_suffix = "/".join([self.logging_topic, "MarketClear"])
         self.publish_record(topic_suffix, message)
@@ -336,6 +341,10 @@ class TransactiveIlcCoordinator(MarketAgent):
         power_max, power_min = self.generate_power_points(current_power)
         _log.debug("QUANTITIES: max {} - min {} - cur {}".format(power_max, power_min, current_power))
 
+        topic_suffix = "/".join([self.logging_topic, "BuildingFlexibility"])
+        message = {"MaximumPower": power_max, "MinimumPower": power_min, "AveragePower": current_power}
+        self.publish_record(topic_suffix, message)
+
         if self.bldg_power:
             current_average_window = self.bldg_power[-1][0] - self.bldg_power[0][0] + td(seconds=15)
         else:
@@ -390,10 +399,9 @@ class TransactiveIlcCoordinator(MarketAgent):
                     self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
         return
 
-    def publish_record(self, topic_suffix, message):
+    def publish_record(self, topic, message):
         headers = {headers_mod.DATE: format_timestamp(get_aware_utc_now())}
         message["TimeStamp"] = format_timestamp(self.current_time)
-        topic = "/".join([self.record_topic, topic_suffix])
         self.vip.pubsub.publish("pubsub", topic, headers, message).get()
 
 

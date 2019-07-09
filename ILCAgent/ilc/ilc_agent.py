@@ -23,7 +23,7 @@ from ilc.criteria_handler import CriteriaContainer, CriteriaCluster, parse_sympy
 from transitions import Machine
 # from transitions.extensions import GraphMachine as Machine
 
-__version__ = "2.0.0"
+__version__ = "1.0.0"
 
 setup_logging()
 _log = logging.getLogger(__name__)
@@ -692,6 +692,7 @@ class ILCAgent(Agent):
                 self.vip.pubsub.publish("pubsub", load_topic, headers=headers, message=power_message).get(timeout=30.0)
             except:
                 _log.debug("Unable to publish average power information.  Input data may not contain metadata.")
+            # TODO: Refactor this code block.  Disparate code paths for simulation and real devices is undesireable
             if self.sim_running:
                 gevent.sleep(0.25)
                 while self.sim_time >= 15:
@@ -736,11 +737,11 @@ class ILCAgent(Agent):
         :return:
         """
         scored_devices = self.criteria_container.get_score_order(self.state)
-        _log.debug("SCORED1: {}".format(scored_devices))
+        _log.debug("SCORED devices: {}".format(scored_devices))
         active_devices = self.control_container.get_devices_status(self.state)
-        _log.debug("SCORED2: {}".format(active_devices))
+        _log.debug("ACTIVE devices: {}".format(active_devices))
         score_order = [device for scored in scored_devices for device in active_devices if scored in [(device[0], device[1])]]
-        _log.debug("SCORED3: {}".format(score_order))
+        _log.debug("SCORED AND ACTIVE devices: {}".format(score_order))
         score_order = self.actuator_request(score_order)
 
         need_curtailed = abs(self.avg_power - self.demand_limit)
@@ -985,7 +986,7 @@ class ILCAgent(Agent):
                     _log.debug("Reverted point: {} - Result: {}".format(control_pt, result))
                 if currently_controlled:
                     _log.debug("Removing from controlled list: {} ".format(controlled_iterate[item]))
-                    self.control_container.get_device((device, actuator)).reset_curtail_status(device_id)
+                    self.control_container.get_device((device, actuator)).reset_control_status(device_id)
                     index = controlled_iterate.index(controlled_iterate[item]) - index_counter
                     currently_controlled.pop(index)
                     index_counter += 1

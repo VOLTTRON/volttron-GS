@@ -151,7 +151,9 @@ class DeviceStatus(object):
         for topic, point in self.device_topic_map.iteritems():
             if topic in data:
                 self.current_device_values[point] = data[topic]
-                _log.debug("DEVICE_STATUS: {} current device values: {}".format(topic, self.current_device_values))
+                _log.debug("DEVICE_STATUS: {} - {} current device values: {}".format(topic,
+                                                                                     self.condition,
+                                                                                     self.current_device_values))
         # bail if we are missing values.
         if len(self.current_device_values) < len(self.device_topic_map):
             return
@@ -160,7 +162,6 @@ class DeviceStatus(object):
         conditional_value = False
         if conditional_points:
             conditional_value = self.expr.subs(conditional_points)
-        _log.debug('{} (device status) evaluated to {}'.format(self.condition, conditional_value))
         try:
             self.command_status = bool(conditional_value)
         except TypeError:
@@ -172,15 +173,15 @@ class DeviceStatus(object):
 
 
 class Controls(object):
-    def __init__(self, curtail_config, logging_topic, parent, default_device=""):
+    def __init__(self, control_config, logging_topic, parent, default_device=""):
         self.device_topics = set()
 
-        device_topic = curtail_config.pop("device_topic", default_device)
+        device_topic = control_config.pop("device_topic", default_device)
         self.device_topics.add(device_topic)
-
+        self.device_status = {}
         self.conditional_curtailments = []
 
-        curtailment_settings = curtail_config.pop('curtail_settings', [])
+        curtailment_settings = control_config.pop('curtail_settings', [])
         if isinstance(curtailment_settings, dict):
             curtailment_settings = [curtailment_settings]
 
@@ -190,7 +191,7 @@ class Controls(object):
             self.conditional_curtailments.append(conditional_curtailment)
 
         self.conditional_augments = []
-        augment_settings = curtail_config.pop('augment_settings', [])
+        augment_settings = control_config.pop('augment_settings', [])
         if isinstance(augment_settings, dict):
             augment_settings = [augment_settings]
 
@@ -198,17 +199,23 @@ class Controls(object):
             conditional_augment = ControlSetting(logging_topic, parent, default_device=device_topic, **settings)
             self.device_topics |= conditional_augment.device_topics
             self.conditional_augments.append(conditional_augment)
-
-        self.device_status = DeviceStatus(logging_topic, parent, default_device=device_topic, **curtail_config.pop('device_status', {}))
-        self.device_topics |= self.device_status.device_topics
-        self.currently_curtailed = False
+        device_status_dict = control_config.pop('device_status')
+        if "curtail" not in device_status_dict and "augment" not in device_status_dict:
+            self.device_status["curtail"] = DeviceStatus(logging_topic, parent, default_device=device_topic, **device_status_dict)
+            self.device_topics |= self.device_status["curtail"].device_topics
+        else:
+            for state, device_status_parms in device_status_dict.items():
+                self.device_status[state] = DeviceStatus(logging_topic, parent, default_device=device_topic, **device_status_parms)
+                self.device_topics |= self.device_status[state].device_topics
+        self.currently_controlled = False
 
     def ingest_data(self, time_stamp, data):
         for conditional_curtailment in self.conditional_curtailments:
             conditional_curtailment.ingest_data(time_stamp, data)
         for conditional_augment in self.conditional_augments:
             conditional_augment.ingest_data(time_stamp, data)
-        self.device_status.ingest_data(time_stamp, data)
+        for state in self.device_status:
+            self.device_status[state].ingest_data(time_stamp, data)
 
     def get_control_info(self, state):
         settings = self.conditional_curtailments if state == 'curtail' else self.conditional_augments
@@ -227,10 +234,10 @@ class Controls(object):
         return None
 
     def increment_control(self):
-        self.currently_curtailed = True
+        self.currently_controlled = True
 
-    def reset_curtail_status(self):
-        self.currently_curtailed = False
+    def reset_control_status(self):
+        self.currently_controlled = False
 
 
 class ControlManager(object):
@@ -238,8 +245,8 @@ class ControlManager(object):
         self.device_topics = set()
         self.controls = {}
 
-        for device_id, curtail_config in device_config.items():
-            controls = Controls(curtail_config, logging_topic, parent, default_device)
+        for device_id, control_config in device_config.items():
+            controls = Controls(control_config, logging_topic, parent, default_device)
             self.controls[device_id] = controls
             self.device_topics |= controls.device_topics
 
@@ -256,14 +263,11 @@ class ControlManager(object):
     def increment_control(self, device_id):
         self.controls[device_id].increment_control()
 
-    def reset_curtail_status(self, device_id):
-        self.controls[device_id].reset_curtail_status()
+    def reset_control_status(self, device_id):
+        self.controls[device_id].reset_control_status()
 
     def get_device_status(self, state):
-        if state == 'curtail':
-            return [command for command, control in self.controls.iteritems() if control.device_status.command_status]
-        else:
-            return [command for command, control in self.controls.iteritems() if not control.device_status.command_status]
+        return [command for command, control in self.controls.items() if (state in control.device_status and control.device_status[state].command_status)]
 
 
 class ControlSetting(object):
@@ -329,14 +333,14 @@ class ControlSetting(object):
 
         # self.conditional_args = []
         self.conditional_expr = None
-        self.conditional_curtail = None
+        self.conditional_control = None
         self.device_topic_map, self.device_topics = {}, set()
         self.current_device_values = {}
 
         if conditional_args and condition:
             # self.conditional_args = parse_sympy(conditional_args)
             self.conditional_expr = parse_sympy(condition, condition=True)
-            self.conditional_curtail = parse_expr(self.conditional_expr)
+            self.conditional_control = parse_expr(self.conditional_expr)
 
             self.device_topic_map, self.device_topics = create_device_topic_map(conditional_args, default_device)
         self.device_topics.add(self.point_device)
@@ -384,8 +388,8 @@ class ControlSetting(object):
             return True
 
         if self.conditional_points:
-            value = self.conditional_curtail.subs(self.conditional_points)
-            _log.debug('{} (conditional_curtail) evaluated to {}'.format(self.conditional_expr, value))
+            value = self.conditional_control.subs(self.conditional_points)
+            _log.debug('{} (conditional_control) evaluated to {}'.format(self.conditional_expr, value))
         else:
             value = False
         return value
