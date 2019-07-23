@@ -129,6 +129,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         self.name = self.config.get('name')
         self.agent_name = self.config.get('agentid', 'building_agent')
         self.db_topic = self.config.get("db_topic", "tnc")
+        self.power_topic = self.config.get("power_topic")
 
         self.market_cycle_in_min = int(self.config.get('market_cycle_in_min', 60))
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
@@ -193,6 +194,9 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix=self.campus_supply_topic,
                                   callback=self.new_supply_signal)
+        self.vip.pubsub.subscribe(peer='pubsub',
+                                  prefix=self.power_topic,
+                                  callback=self.new_demand_signal)
 
     def new_supply_signal(self, peer, sender, bus, topic, headers, message):
         _log.debug("At {}, {} receives new supply records: {}".format(Timer.get_cur_time(),
@@ -219,6 +223,11 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
             #     self.run_ep_sim(start_of_cycle)
             # else:
             self.start_mixmarket(start_of_cycle)
+
+    def new_demand_signal(self, peer, sender, bus, topic, headers, message):
+        if len(self.meterPoints) > 0:
+            cur_power = float( message[0]["WholeBuildingPower"])
+            self.meterPoints[0].set_meter_value(cur_power)
 
     def near_end_of_hour(self, now):
         near_end_of_hour = False
@@ -340,13 +349,13 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
     def init_objects(self):
         # Add meter
         meter = MeterPoint()
-        meter.measurementType = MeasurementType.PowerReal
         meter.name = 'BuildingElectricMeter'
+        meter.measurementType = MeasurementType.AverageDemandkW
         meter.measurementUnit = MeasurementUnit.kWh
         self.meterPoints.append(meter)
 
         # Add weather forecast service
-        weather_service = TemperatureForecastModel(self.config_path)
+        weather_service = TemperatureForecastModel(self.config_path, self)
         self.informationServiceModels.append(weather_service)
 
         # # Add inelastive asset

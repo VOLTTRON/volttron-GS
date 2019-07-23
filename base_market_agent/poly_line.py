@@ -289,10 +289,10 @@ class PolyLine:
         p1_pmin = min([point[1] for point in pl_1])
         p2_pmin = min([point[1] for point in pl_2])
         # The lines don't intersect, add the auxillary information
-        if p1_pmax < p2_pmax and p1_pmax < p2_pmin:
+        if p1_pmax <= p2_pmax and p1_pmax <= p2_pmin:
             quantity = p1_qmin
             price = p2_pmax
-        elif p2_pmin < p1_pmin and p2_pmax < p1_pmin:
+        elif p2_pmin <= p1_pmin and p2_pmax <= p1_pmin:
             quantity = p1_qmax
             price = p2_pmin
         else:

@@ -70,45 +70,37 @@ from helpers import format_ts, format_date
 
 
 class MeterPoint:
-    # Text name that identifies a data file, database, or historian
-    # where meter data points are to be stored. A default is provided,
-    # but a meaningful filename should be used.
-    today = date.today()
-    dateFile = 'MP' + format_date(today)
-
-    # DESCRIPTION
-    description = ''
-
-    # The measurement point datum that was collected during the last
-    # reading update. This measurement must be of the measurement type
-    # and measurement unit specified by object properties. The
-    # measurement took place at the last update datetime. If needed
-    # these measurements should be saved to a database or historian.
-    lastMeasurement = None  # (1, 1)
-
-    # Datetime of the last meter reading. This time is used with
-    # the measurement interval to determine when the meter should be
-    # read.
-    lastUpdate = datetime.utcnow()
-
-    # Constant time interval between readings. This and the last
-    # measurement time are used to schedule the next meter reading.
-    measurementInterval = timedelta(hours=1)
-
-    # See MeasurementType enumeration. Property being metered.
-    measurementType = MeasurementType.Unknown
-
-    # See MeasurementUnit enumeration. Allowed units of measure. This
-    # formulation is currently simplified by allowing only a limited
-    # number of measurement units. These are not necessarily the raw
-    # units; it should be the proper converted units.
-    measurementUnit = MeasurementUnit.Unknown
-
-    # NAME
-    name = ''
-
     def __init__(self):
-        pass
+        self.name = ''
+        self.description = ''
+
+        # The measurement point datum that was collected during the last
+        # reading update. This measurement must be of the measurement type
+        # and measurement unit specified by object properties. The
+        # measurement took place at the last update datetime. If needed
+        # these measurements should be saved to a database or historian.
+        self.current_measurement = None
+
+        # Datetime of the last meter reading. This time is used with
+        # the measurement interval to determine when the meter should be read.
+        self.lastUpdate = None
+
+        # Constant time interval between readings. This and the last
+        # measurement time are used to schedule the next meter reading.
+        self.measurementInterval = timedelta(hours=1)
+
+        # See MeasurementType enumeration. Property being metered.
+        self.measurementType = MeasurementType.Unknown
+
+        # See MeasurementUnit enumeration. Allowed units of measure. This
+        # formulation is currently simplified by allowing only a limited
+        # number of measurement units. These are not necessarily the raw
+        # units; it should be the proper converted units.
+        self.measurementUnit = MeasurementUnit.Unknown
+
+    def set_meter_value(self, value, last_update=datetime.utcnow()):
+        self.current_measurement = value
+        self.lastUpdate = last_update
 
     def read_meter(self, obj):
         # Read the meter point at scheduled intervals
@@ -130,9 +122,4 @@ class MeterPoint:
         repeated in records. Minimum content should be reading time and datum.
         Implementers will be found to have diverse practices for historians.
         """
-        print('Made it to store() function in ' + self.name + ' targeting database ' + self.dataFile)
-
-        # Open a simple text file for appending
-        # Append the formatted, paired last measurement time and its datum
-        with open(self.dataFile, "a") as myfile:
-            myfile.write("{},{};".format(format_ts(self.lastUpdate), self.lastMeasurement))
+        pass

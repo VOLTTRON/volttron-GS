@@ -91,7 +91,7 @@ class NeighborModel(Model, object):
         self.demandMonth = datetime.today().month  # used to re-set demand charges
         self.demandRate = 4.5  # 4.5  # [$ / kW (/h)]
         self.demandThreshold = 1e9  # power that causes demand charges [kW]
-        self.demand_threshold_coef = 0.8
+        self.demand_threshold_coef = 1  # 0.8
         self.effectiveImpedance = 0.0  # Ohms for future use
         self.friend = False  # friendly Neighbors might get preferred rates
         self.mySignal = []  # TransactiveRecord.empty  # current records ready to send
@@ -364,6 +364,8 @@ class NeighborModel(Model, object):
     # SEALED - DONOT MODIFY
     # Have object schedule its power in active time intervals
     def schedule(self, mkt):
+        self.update_dc_threshold(mkt)
+
         # If the object is a NeighborModel give its vertices priority
         self.update_vertices(mkt)
         self.schedule_power(mkt)
@@ -439,8 +441,6 @@ class NeighborModel(Model, object):
 
     def update_dc_threshold(self, mkt):
         # Keep track of the month's demand-charge threshold
-        # obj - BulkSupplier_dc object, which is a NeighborModel
-        # mkt - Market object
         #
         # Pseudocode:
         # 1. This method should be called prior to using the demand threshold. In
@@ -467,17 +467,21 @@ class NeighborModel(Model, object):
             time_intervals.sort(key=lambda x: x.startTime)
 
             # Find current demand d that corresponds to the nearest time interval.
-            d = find_obj_by_ti(self.scheduledPowers, time_intervals[0])
+            cur_demand = find_obj_by_ti(self.scheduledPowers, time_intervals[0])
 
-            # Update the inferred demand.
-            self.demandThreshold = max([0, self.demandThreshold, d.value])  # [avg.kW]
-
+            # Update the inferred demand
+            d = None if cur_demand is None else cur_demand.value
+            self.demandThreshold = max([0, self.demandThreshold, d])  # [avg.kW]
+            _log.debug("measurement: {} threshold: {}".format(d, self.demandThreshold))
         else:
             # An appropriate MeterPoint object was found. The demand threshold
             # may be updated from the MeterPoint object.
 
             # Update the demand threshold.
-            self.demandThreshold = max([0, self.demandThreshold, mtr.currentMeasurement])  # [avg.kW]
+            self.demandThreshold = max([0, self.demandThreshold, mtr.current_measurement])  # [avg.kW]
+            _log.debug("Meter: {} measurement: {} threshold: {}".format(mtr.name,
+                                                                        mtr.current_measurement,
+                                                                        self.demandThreshold))
 
         # The demand threshold should be reset in a new month. First find the current month number mon.
         mon = Timer.get_cur_time().month
