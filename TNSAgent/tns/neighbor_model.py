@@ -470,8 +470,10 @@ class NeighborModel(Model, object):
             cur_demand = find_obj_by_ti(self.scheduledPowers, time_intervals[0])
 
             # Update the inferred demand
+            # ScheduledPower may use default values from campus, which may be greater than the config threshold
+            # For campus test, it doesn't happen because a building always has a meter so for now don't update demand
             d = None if cur_demand is None else cur_demand.value
-            self.demandThreshold = max([0, self.demandThreshold, d])  # [avg.kW]
+            # self.demandThreshold = max([0, self.demandThreshold, d])  # [avg.kW]
             _log.debug("measurement: {} threshold: {}".format(d, self.demandThreshold))
         else:
             # An appropriate MeterPoint object was found. The demand threshold
