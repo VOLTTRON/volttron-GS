@@ -351,10 +351,20 @@ class PolyLine:
         demand_min_quantity = demand_curve.min_x()
         supply_max_quantity = supply_curve.max_x()
         supply_min_quantity = supply_curve.min_x()
-        aux['Sn,Dn'] = cmp(supply_min_quantity,demand_min_quantity)
-        aux['Sn,DX'] = cmp(supply_min_quantity,demand_max_quantity)
-        aux['Sx,Dn'] = cmp(supply_max_quantity,demand_min_quantity)
-        aux['Sx,DX'] = cmp(supply_max_quantity,demand_max_quantity)
+        demand_max_price = demand_curve.max_y()
+        demand_min_price = demand_curve.min_y()
+        supply_max_price = supply_curve.max_y()
+        supply_min_price = supply_curve.min_y()
+
+        aux['SQn,DQn'] = cmp(supply_min_quantity, demand_min_quantity)
+        aux['SQn,DQx'] = cmp(supply_min_quantity, demand_max_quantity)
+        aux['SQx,DQn'] = cmp(supply_max_quantity, demand_min_quantity)
+        aux['SQx,DQx'] = cmp(supply_max_quantity, demand_max_quantity)
+
+        aux['SPn,DPn'] = cmp(supply_min_price, demand_min_price)
+        aux['SPn,DPx'] = cmp(supply_min_price, demand_max_price)
+        aux['SPx,DPn'] = cmp(supply_max_price, demand_min_price)
+        aux['SPx,DPx'] = cmp(supply_max_price, demand_max_price)
         return aux
 
 
