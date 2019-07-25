@@ -145,6 +145,7 @@ class TransactiveBase(MarketAgent):
             ct_flex = output_info.get("control_flexibility", flex)
             ct_flex = np.linspace(ct_flex[0], ct_flex[1], 11)
             flex = np.linspace(flex[0], flex[1], 11)
+            fallback = output_info.get("fallback", mean(ct_flex))
             # TODO:  Use condition to determine multiple output scenario
             condition = output_info.get("condition", True)
 
@@ -154,7 +155,7 @@ class TransactiveBase(MarketAgent):
                                           topic).get(timeout=10)
             except (RemoteError, gevent.Timeout, errors.VIPError) as ex:
                 _log.warning("Failed to get {} - ex: {}".format(topic, str(ex)))
-                value = None
+                value = fallback
             if isinstance(release, str) and release.lower() == "default" and value is not None:
                 release_value = value
             else:
