@@ -70,7 +70,7 @@ from datetime import timedelta as td, datetime as dt
 import uuid
 from dateutil.parser import parse
 
-from tcc_ilc.device_handler import ClusterContainer, DeviceClusters, parse_sympy, init_schedule, check_schedule
+from tcc_ilc.device_handler import ClusterContainer, DeviceClusters, parse_sympy
 import pandas as pd
 from volttron.platform.agent import utils
 from volttron.platform.messaging import topics, headers as headers_mod
@@ -79,13 +79,6 @@ from volttron.platform.agent.utils import setup_logging, format_timestamp, get_a
 from volttron.platform.agent.math_utils import mean, stdev
 from volttron.platform.vip.agent import Agent, Core
 
-from volttron.platform.agent.base_market_agent import MarketAgent
-from volttron.platform.agent.base_market_agent.poly_line import PolyLine
-from volttron.platform.agent.base_market_agent.point import Point
-from volttron.platform.agent.base_market_agent.error_codes import NOT_FORMED, SHORT_OFFERS, BAD_STATE, NO_INTERSECT
-from volttron.platform.agent.base_market_agent.buy_sell import BUYER
-
-from dateutil import parser
 import pandas as pd
 from pandas.tseries.offsets import CustomBusinessDay, BDay
 from pandas.tseries.holiday import USFederalHolidayCalendar
@@ -95,20 +88,32 @@ __version__ = "0.2"
 
 setup_logging()
 _log = logging.getLogger(__name__)
-
-
-class TransactiveIlcCoordinator(MarketAgent):
+###TODO:  Remove use of mixmarket and directly communicate demand curves for next 24 hours to TNS market
+"""
+1.  query data for one day for all devices and power meter [Outer loop]
+2.  Group data by minute.
+    3.  pass one minute of data for each device to new_data() [inner loop]
+    4.  pass one minute of power meter data to load_message_handler()
+    5.  load_message_handler will calculate power_min (qmin) and power_max (qmax) for that minute
+        log to local sqlite db.
+    6.  Go to next minute of data [step 3].
+7.  Query next day of data (will query for a total of 10 business days [step 1].
+8.  Using 10 days of qmin and qmax in local sqlite db use PGE approach to calculate qmin and qmax for the next 24 hours
+"""
+# IF we transition this to use the TNS would the inheritence change?
+class TransactiveIlcCoordinator(Agent):
     def __init__(self, config_path, **kwargs):
         super(TransactiveIlcCoordinator, self).__init__(**kwargs)
         config = utils.load_config(config_path)
         campus = config.get("campus", "")
         building = config.get("building", "")
+        tz = config.get("timezone", "US/Pacific")
         logging_topic = config.get("logging_topic", "tnc")
         self.target_topic = '/'.join(['record', 'target_agent', campus, building, 'goal'])
         self.logging_topic = '/'.join([logging_topic, campus, building, "TCILC"])
+
         cluster_configs = config["clusters"]
         self.clusters = ClusterContainer()
-
         for cluster_config in cluster_configs:
             device_cluster_config = cluster_config["device_cluster_file"]
             load_type = cluster_config.get("load_type", "discreet")
@@ -120,11 +125,7 @@ class TransactiveIlcCoordinator(MarketAgent):
             cluster = DeviceClusters(cluster_config, load_type)
             self.clusters.add_curtailment_cluster(cluster)
 
-        self.device_topic_list = []
-        self.device_topic_map = {}
         all_devices = self.clusters.get_device_name_list()
-        occupancy_schedule = config.get("occupancy_schedule", False)
-        self.occupancy_schedule = init_schedule(occupancy_schedule)
         self.device_query_dict = defaultdict(list)
         for device_name in all_devices:
             for device_id in self.clusters.devices[device_name].sop_args:
@@ -134,67 +135,43 @@ class TransactiveIlcCoordinator(MarketAgent):
                                                           unit=device_name,
                                                           path="",
                                                           point=point)
+                    # device_name is the same as the value needed in new_data
+                    # the device topic is the same as needed for the rpc call to platform historian
                     self.device_query_dict[device_name].append(device_topic)
-        _log.debug("QUERY LIST: {}".format(self.device_query_dict))
+        _log.debug("TCILC QUERY LIST: {}".format(self.device_query_dict))
 
         power_token = config["power_meter"]
         power_meter = power_token["device"]
         self.power_point = power_token["point"]
-        self.current_datetime = config.get("start_date", get_aware_utc_now())
+        # this is local aware datetime, need to start query from historian at midnight
+        # local time but the historian requires UTC.  Need to be careful here.
+        self.current_datetime = config.get("start_date", dt.now(pytz.timezone(tz)))
         self.power_meter_topic = topics.RPC_DEVICE_PATH(campus=campus,
                                                         building=building,
                                                         unit=power_meter,
                                                         path="",
                                                         point=self.power_point )
+        self.power_meter_device = topics.DEVICES_VALUE(campus=campus,
+                                                      building=building,
+                                                      unit=power_meter,
+                                                      path="",
+                                                      point="all")
         self.demand_limit = None
         self.bldg_power = []
         self.business_days = []
-        self.avg_power = 0.
-        self.last_demand_update = None
-        self.demand_curve = None
-        self.power_prices = None
         self.power_min = None
         self.power_max = None
-
+        self.market_prices = None
         self.average_building_power_window = td(minutes=config.get("average_building_power_window", 15))
-        self.minimum_update_time = td(minutes=config.get("minimum_update_time", 5))
-        self.market_name = config.get("market", "electric")
-        self.tz = None
-        # self.prices = power_prices
+        market_name = config.get("market", "electric")
         self.oat_predictions = []
         self.comfort_to_dollar = config.get('comfort_to_dollar', 1.0)
+        self.market_name = []
+        self.market_number = 24
+        for i in range(self.market_number):
+            self.market_name.append('_'.join([market_name, str(i)]))
+            self.join_market(self.market_name[i], BUYER, None, self.offer_callback, None, self.price_callback, self.error_callback)
 
-        # self.prices_from = config.get("prices_from", 'pubsub')
-        # self.prices_topic = config.get("price_topic", "prices")
-        # #self.prices_file = config.get("price_file")
-        self.join_market(self.market_name, BUYER, None, self.offer_callback, None, self.price_callback, self.error_callback)
-
-    # def setup_prices(self):
-    #     _log.debug("Prices from {}".format(self.prices_from))
-    #     if self.prices_from == "file":
-    #         self.power_prices = pd.read_csv(self.prices_file)
-    #         self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
-    #         self.power_prices.index = pd.to_datetime(self.power_prices.index)
-    #         self.power_prices.resample('H').mean()
-    #         self.power_prices['MA'] = self.power_prices[::-1].rolling(window=24, min_periods=1).mean()[::-1]
-    #         self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
-    #         self.power_prices['month'] = self.power_prices.index.month.astype(int)
-    #         self.power_prices['day'] = self.power_prices.index.day.astype(int)
-    #         self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
-    #     elif self.prices_from == "pubsub":
-    #         self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
-
-    def update_prices(self, peer, sender, bus, topic, headers, message):
-        self.power_prices = pd.DataFrame(message)
-        self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
-        self.power_prices.index = pd.to_datetime(self.power_prices.index)
-        self.power_prices["price"] = self.power_prices
-        self.power_prices.resample('H').mean()
-        self.power_prices['MA'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).mean()[::-1]
-        self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
-        self.power_prices['month'] = self.power_prices.index.month.astype(int)
-        self.power_prices['day'] = self.power_prices.index.day.astype(int)
-        self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
 
     @Core.receiver("onstart")
     def starting_base(self, sender, **kwargs):
@@ -207,21 +184,19 @@ class TransactiveIlcCoordinator(MarketAgent):
         :return:
         """
         self.make_baseline()
-
-        for device_topic in self.device_topic_list:
-            _log.debug("Subscribing to " + device_topic)
-            self.vip.pubsub.subscribe(peer="pubsub", prefix=device_topic, callback=self.new_data)
-        _log.debug("Subscribing to " + self.power_meter_topic)
-        self.vip.pubsub.subscribe(peer="pubsub", prefix=self.power_meter_topic, callback=self.load_message_handler)
+        _log.debug("Subscribing to " + self.power_meter_device)
+        _log.debug("Subscribing to " + self.prices_topic)
+        self.vip.pubsub.subscribe(peer="pubsub", prefix=self.power_meter_device, callback=self.update_time)
         self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
 
     def make_baseline(self):
-        self.make_baseline()
         self.get_business_days()
+        # this is start of outer loop.
         for start_dt in self.business_days:
             end_dt = start_dt.replace(hour=23, minute=59, second=59)
             device_df = self.query_data(start_dt, end_dt)
             power_df = self.query_power(start_dt, end_dt)
+            # Now we need to add the code to pass the data to
 
     def get_business_days(self):
         self.business_days = []
@@ -246,7 +221,7 @@ class TransactiveIlcCoordinator(MarketAgent):
             df = df2 if df is None else pd.merge(df, df2, on=self.ts_name, how='outer')
         return df
 
-    def power(self, start, end, timeout=10000):
+    def query_power(self, start, end, timeout=10000):
         df = None
         result = self.vip.rpc.call('platform.historian',
                                    'query',
@@ -254,55 +229,12 @@ class TransactiveIlcCoordinator(MarketAgent):
                                    start=start,
                                    end=end,
                                    order="FIRST_TO_LAST").get(timeout=timeout)
-            #need hungs help here assume df returns data in format we need
+            # need hungs help here assume df returns data in format we need to process though new_data
             df2 = pd.DataFrame(result['values'], columns=[self.ts_name, point])
             df2[self.ts_name] = pd.to_datetime(df2[self.ts_name])
             df2 = df2.resample('H').mean()
             df = df2 if df is None else pd.merge(df, df2, on=self.ts_name, how='outer')
         return df
-
-    def offer_callback(self, timestamp, market_name, buyer_seller):
-        if self.current_time is not None:
-            demand_curve = self.create_demand_curve()
-            if demand_curve is not None:
-                self.make_offer(market_name, buyer_seller, demand_curve)
-                topic_suffix = "/".join([self.logging_topic, "DemandCurve"])
-                message = {"Curve": demand_curve.tuppleize(), "Commodity": "Electricity"}
-                self.publish_record(topic_suffix, message)
-
-    def create_demand_curve(self):
-        if self.power_min is not None and self.power_max is not None:
-            demand_curve = PolyLine()
-            price_min, price_max = self.generate_price_points()
-            demand_curve.add(Point(price=price_max, quantity=self.power_min))
-            demand_curve.add(Point(price=price_min, quantity=self.power_max))
-        else:
-            demand_curve = None
-        self.demand_curve = demand_curve
-        return demand_curve
-
-    def price_callback(self, timestamp, market_name, buyer_seller, price, quantity):
-        if self.bldg_power:
-            _log.debug("Price is {} at {}".format(price, self.bldg_power[-1][0]))
-            dt = self.bldg_power[-1][0]
-            occupied = check_schedule(dt, self.occupancy_schedule)
-
-        if self.demand_curve is not None and price is not None and occupied:
-            demand_goal = self.demand_curve.x(price)
-            self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-        elif not occupied:
-            demand_goal = None
-            self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-        else:
-            _log.debug("Possible market problem price: {} - quantity: {}".format(price, quantity))
-            demand_goal = None
-            
-        if price is None:
-            price = "None"
-            demand_goal = "None"
-        message = {"Price": price, "Quantity": demand_goal, "Commodity": "Electricity"}
-        topic_suffix = "/".join([self.logging_topic, "MarketClear"])
-        self.publish_record(topic_suffix, message)
 
     def publish_demand_limit(self, demand_goal, task_id):
         """
@@ -312,14 +244,9 @@ class TransactiveIlcCoordinator(MarketAgent):
         :return:
         """
         _log.debug("Updating demand limit: {}".format(demand_goal))
-        self.demand_limit = demand_goal
-        if self.last_demand_update is not None:
-            if (self.current_time - self.last_demand_update) < self.minimum_update_time:
-                _log.debug("Minimum demand update time has not elapsed.")
-                return
-        if self.current_time is None:
-            _log.debug("No data received, not updating demand goal!")
+        if demand_goal is None:
             return
+
 
         self.last_demand_update = self.current_time
 
@@ -342,118 +269,65 @@ class TransactiveIlcCoordinator(MarketAgent):
         ]
         self.vip.pubsub.publish('pubsub', self.target_topic, headers, target_msg).get(timeout=15)
 
-    def new_data(self, peer, sender, bus, topic, headers, message):
+    def new_data(self, device_name, data):
         """
-        Call back method for device data subscription.
-        :param peer:
-        :param sender:
-        :param bus:
-        :param topic:
-        :param headers:
-        :param message:
+
+        :param self:
+        :param device_name:
+        :param data:
         :return:
         """
-        _log.info("Data Received for {}".format(topic))
-        # topic of form:  devices/campus/building/device
-        device_name = self.device_topic_map[topic]
-        data = message[0]
-        self.current_time = parse(headers["Date"])
+        # parsed_data needs to be a dictionary of key value pairs
+        # device name is the same device name from self.device_query_dict
         parsed_data = parse_sympy(data)
         self.clusters.get_device(device_name).ingest_data(parsed_data)
 
+    def update_time(self, peer, sender, bus, topic, headers, message):
+        self.current_time = parse(headers["Date"])
+
+    def update_prices(self, peer, sender, bus, topic, headers, message):
+        _log.debug("Get prices prior to market start.")
+        current_hour = message['hour']
+
+        # Store received prices so we can use it later when doing clearing process
+        if self.market_prices:
+            if current_hour != self.current_time.hour:
+                self.current_price = self.market_prices[0]
+        self.current_hour = current_hour
+        self.oat_predictions = []
+        oat_predictions = message.get("temp", [])
+
+        self.oat_predictions = oat_predictions
+        self.market_prices = message['prices']  # Array of prices
+        # integrate this with the TNS and remove the volttron market service dependency
+        # receiving prices should trigger everything!
+
     def generate_price_points(self):
-        # need to figure out where we are getting the pricing information and the form
-        # probably via RPC
-        _log.debug("DEBUG_PRICES: {}".format(self.current_time))
-        df_query = self.power_prices[(self.power_prices["hour"] == self.current_time.hour) & (self.power_prices["day"] == self.current_time.day) & (self.power_prices["month"] == self.current_time.month)]
-        price_min = df_query['MA'] - df_query['STD']*self.comfort_to_dollar
-        price_max = df_query['MA'] + df_query['STD']*self.comfort_to_dollar
-        _log.debug("DEBUG TCC price - min {} - max {}".format(float(price_min), float(price_max)))
+        if self.market_prices:
+            price_min = mean(self.market_prices) - stdev(self.market_prices)*self.comfort_to_dollar
+            price_max = mean(self.market_prices) + stdev(self.market_prices)*self.comfort_to_dollar
+        else:
+            price_min = 0.02
+            price_max = 0.05
+        _log.debug("TCILC PRICE - min {} - max {}".format(float(price_min), float(price_max)))
         return max(float(price_min), 0.0), float(price_max)
 
     def generate_power_points(self, current_power):
         positive_power, negative_power = self.clusters.get_power_bounds()
-        _log.debug("DEBUG TCC - pos {} - neg {}".format(positive_power, negative_power))
+        _log.debug("TCILC POWER - pos {} - neg {}".format(positive_power, negative_power))
         return float(current_power + sum(positive_power)), float(current_power - sum(negative_power))
 
-    def load_message_handler(self, peer, sender, bus, topic, headers, message):
+    def load_message_handler(self, current_power):
         """
-        Call back method for building power meter. Calculates the average
-        building demand over a configurable time and manages the curtailment
-        time and curtailment break times.
-        :param peer:
-        :param sender:
-        :param bus:
-        :param topic:
-        :param headers:
-        :param message:
+
+        :param self:
+        :param current_power:
         :return:
         """
-        # Use instantaneous power or average building power.
-        data = message[0]
-        current_power = data[self.power_point]
-        current_time = parse(headers["Date"])
-
+        # Current power should be float
         power_max, power_min = self.generate_power_points(current_power)
-        _log.debug("QUANTITIES: max {} - min {} - cur {}".format(power_max, power_min, current_power))
-
-        topic_suffix = "/".join([self.logging_topic, "BuildingFlexibility"])
-        message = {"MaximumPower": power_max, "MinimumPower": power_min, "AveragePower": current_power}
-        self.publish_record(topic_suffix, message)
-
-        if self.bldg_power:
-            current_average_window = self.bldg_power[-1][0] - self.bldg_power[0][0] + td(seconds=15)
-        else:
-            current_average_window = td(minutes=0)
-
-        if current_average_window >= self.average_building_power_window and current_power > 0:
-            self.bldg_power.append((current_time, current_power, power_min, power_max))
-            self.bldg_power.pop(0)
-        elif current_power > 0:
-            self.bldg_power.append((current_time, current_power, power_min, power_max))
-
-        smoothing_constant = 2.0 / (len(self.bldg_power) + 1.0) * 2.0 if self.bldg_power else 1.0
-        smoothing_constant = smoothing_constant if smoothing_constant <= 1.0 else 1.0
-        power_sort = list(self.bldg_power)
-        power_sort.sort(reverse=True)
-        avg_power_max = 0.
-        avg_power_min = 0.
-        avg_power = 0.
-
-        for n in xrange(len(self.bldg_power)):
-            avg_power += power_sort[n][1] * smoothing_constant * (1.0 - smoothing_constant) ** n
-            avg_power_min += power_sort[n][2] * smoothing_constant * (1.0 - smoothing_constant) ** n
-            avg_power_max += power_sort[n][3] * smoothing_constant * (1.0 - smoothing_constant) ** n
-        self.avg_power = avg_power
-        self.power_min = avg_power_min
-        self.power_max = avg_power_max
-
-    def error_callback(self, timestamp, market_name, buyer_seller, error_code, error_message, aux):
-        # figure out what to send if the market is not formed or curves don't intersect.
-        _log.debug("AUX: {}".format(aux))
-        if market_name == "electric":
-            if self.bldg_power:
-                dt = self.bldg_power[-1][0]
-                occupied = check_schedule(dt, self.occupancy_schedule)
-
-            _log.debug("AUX: {}".format(aux))
-            if not occupied:
-                demand_goal = None
-                self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-            else:
-                if aux.get('SQn,DQn', 0) == -1 and aux.get('SQx,DQx', 0) == -1:
-                    demand_goal = self.demand_curve.min_x()
-                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-                elif aux.get('SPn,DPn', 0) == 1 and aux.get('SPx,DPx', 0) == 1:
-                    demand_goal = self.demand_curve.min_x()
-                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-                elif aux.get('SPn,DPn', 0) == -1 and aux.get('SPx,DPx', 0) == -1:
-                    demand_goal = self.demand_curve.max_x()
-                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-                else:
-                    demand_goal = None
-                    self.publish_demand_limit(demand_goal, str(uuid.uuid1()))
-        return
+        # power_max and power_min are the qmin and qmax respectively
+        # log to db for later processing
 
     def publish_record(self, topic, message):
         headers = {headers_mod.DATE: format_timestamp(get_aware_utc_now())}
