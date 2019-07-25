@@ -65,7 +65,7 @@ under Contract DE-AC05-76RL01830
 import os
 import sys
 import logging
-
+from collections import defaultdict
 from datetime import timedelta as td, datetime as dt
 import uuid
 from dateutil.parser import parse
@@ -85,6 +85,11 @@ from volttron.platform.agent.base_market_agent.point import Point
 from volttron.platform.agent.base_market_agent.error_codes import NOT_FORMED, SHORT_OFFERS, BAD_STATE, NO_INTERSECT
 from volttron.platform.agent.base_market_agent.buy_sell import BUYER
 
+from dateutil import parser
+import pandas as pd
+from pandas.tseries.offsets import CustomBusinessDay, BDay
+from pandas.tseries.holiday import USFederalHolidayCalendar
+import pytz
 
 __version__ = "0.2"
 
@@ -120,27 +125,30 @@ class TransactiveIlcCoordinator(MarketAgent):
         all_devices = self.clusters.get_device_name_list()
         occupancy_schedule = config.get("occupancy_schedule", False)
         self.occupancy_schedule = init_schedule(occupancy_schedule)
+        self.device_query_dict = defaultdict(list)
         for device_name in all_devices:
-            device_topic = topics.DEVICES_VALUE(campus=campus,
-                                                building=building,
-                                                unit=device_name,
-                                                path="",
-                                                point="all")
-
-            self.device_topic_list.append(device_topic)
-            self.device_topic_map[device_topic] = device_name
+            for device_id in self.clusters.devices[device_name].sop_args:
+                for point in self.clusters.devices[device_name].sop_args[device_id]:
+                    device_topic = topics.RPC_DEVICE_PATH(campus=campus,
+                                                          building=building,
+                                                          unit=device_name,
+                                                          path="",
+                                                          point=point)
+                    self.device_query_dict[device_name].append(device_topic)
+        _log.debug("QUERY LIST: {}".format(self.device_query_dict))
 
         power_token = config["power_meter"]
         power_meter = power_token["device"]
         self.power_point = power_token["point"]
-        self.current_time = None
-        self.power_meter_topic = topics.DEVICES_VALUE(campus=campus,
-                                                      building=building,
-                                                      unit=power_meter,
-                                                      path="",
-                                                      point="all")
+        self.current_datetime = config.get("start_date", get_aware_utc_now())
+        self.power_meter_topic = topics.RPC_DEVICE_PATH(campus=campus,
+                                                        building=building,
+                                                        unit=power_meter,
+                                                        path="",
+                                                        point=self.power_point )
         self.demand_limit = None
         self.bldg_power = []
+        self.business_days = []
         self.avg_power = 0.
         self.last_demand_update = None
         self.demand_curve = None
@@ -156,25 +164,25 @@ class TransactiveIlcCoordinator(MarketAgent):
         self.oat_predictions = []
         self.comfort_to_dollar = config.get('comfort_to_dollar', 1.0)
 
-        self.prices_from = config.get("prices_from", 'pubsub')
-        self.prices_topic = config.get("price_topic", "prices")
-        self.prices_file = config.get("price_file")
+        # self.prices_from = config.get("prices_from", 'pubsub')
+        # self.prices_topic = config.get("price_topic", "prices")
+        # #self.prices_file = config.get("price_file")
         self.join_market(self.market_name, BUYER, None, self.offer_callback, None, self.price_callback, self.error_callback)
 
-    def setup_prices(self):
-        _log.debug("Prices from {}".format(self.prices_from))
-        if self.prices_from == "file":
-            self.power_prices = pd.read_csv(self.prices_file)
-            self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
-            self.power_prices.index = pd.to_datetime(self.power_prices.index)
-            self.power_prices.resample('H').mean()
-            self.power_prices['MA'] = self.power_prices[::-1].rolling(window=24, min_periods=1).mean()[::-1]
-            self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
-            self.power_prices['month'] = self.power_prices.index.month.astype(int)
-            self.power_prices['day'] = self.power_prices.index.day.astype(int)
-            self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
-        elif self.prices_from == "pubsub":
-            self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
+    # def setup_prices(self):
+    #     _log.debug("Prices from {}".format(self.prices_from))
+    #     if self.prices_from == "file":
+    #         self.power_prices = pd.read_csv(self.prices_file)
+    #         self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
+    #         self.power_prices.index = pd.to_datetime(self.power_prices.index)
+    #         self.power_prices.resample('H').mean()
+    #         self.power_prices['MA'] = self.power_prices[::-1].rolling(window=24, min_periods=1).mean()[::-1]
+    #         self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
+    #         self.power_prices['month'] = self.power_prices.index.month.astype(int)
+    #         self.power_prices['day'] = self.power_prices.index.day.astype(int)
+    #         self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
+    #     elif self.prices_from == "pubsub":
+    #         self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
         self.power_prices = pd.DataFrame(message)
@@ -198,12 +206,60 @@ class TransactiveIlcCoordinator(MarketAgent):
         :param kwargs:
         :return:
         """
+        self.make_baseline()
+
         for device_topic in self.device_topic_list:
             _log.debug("Subscribing to " + device_topic)
             self.vip.pubsub.subscribe(peer="pubsub", prefix=device_topic, callback=self.new_data)
         _log.debug("Subscribing to " + self.power_meter_topic)
         self.vip.pubsub.subscribe(peer="pubsub", prefix=self.power_meter_topic, callback=self.load_message_handler)
-        self.setup_prices()
+        self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
+
+    def make_baseline(self):
+        self.make_baseline()
+        self.get_business_days()
+        for start_dt in self.business_days:
+            end_dt = start_dt.replace(hour=23, minute=59, second=59)
+            device_df = self.query_data(start_dt, end_dt)
+            power_df = self.query_power(start_dt, end_dt)
+
+    def get_business_days(self):
+        self.business_days = []
+        for i in range(11, 1, -1):
+            business_day = (self.current_datetime - BDay()).replace(hour=0, minute=0, second=0)
+            self.business_days.append(business_day)
+
+    def query_data(self, start, end, timeout=10000):
+        df = None
+        for device, point_topic in self.device_query_dict.items():
+
+            result = self.vip.rpc.call('platform.historian',
+                                       'query',
+                                       topic=point_topic,
+                                       start=start,
+                                       end=end,
+                                       order="FIRST_TO_LAST").get(timeout=timeout)
+            #need hungs help here assume df returns data in format we need
+            df2 = pd.DataFrame(result['values'], columns=[self.ts_name, point])
+            df2[self.ts_name] = pd.to_datetime(df2[self.ts_name])
+            df2 = df2.resample('H').mean()
+            df = df2 if df is None else pd.merge(df, df2, on=self.ts_name, how='outer')
+        return df
+
+    def power(self, start, end, timeout=10000):
+        df = None
+        result = self.vip.rpc.call('platform.historian',
+                                   'query',
+                                   topic=self.power_meter_topic,
+                                   start=start,
+                                   end=end,
+                                   order="FIRST_TO_LAST").get(timeout=timeout)
+            #need hungs help here assume df returns data in format we need
+            df2 = pd.DataFrame(result['values'], columns=[self.ts_name, point])
+            df2[self.ts_name] = pd.to_datetime(df2[self.ts_name])
+            df2 = df2.resample('H').mean()
+            df = df2 if df is None else pd.merge(df, df2, on=self.ts_name, how='outer')
+        return df
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         if self.current_time is not None:
