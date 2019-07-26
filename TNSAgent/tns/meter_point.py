@@ -74,6 +74,8 @@ class MeterPoint:
         self.name = ''
         self.description = ''
 
+        self.current_hour_measurements = []
+
         # The measurement point datum that was collected during the last
         # reading update. This measurement must be of the measurement type
         # and measurement unit specified by object properties. The
@@ -99,8 +101,13 @@ class MeterPoint:
         self.measurementUnit = MeasurementUnit.Unknown
 
     def set_meter_value(self, value, last_update=datetime.utcnow()):
-        self.current_measurement = value
+        self.current_hour_measurements.append(value)
         self.lastUpdate = last_update
+
+    def update_avg(self):
+        if len(self.current_hour_measurements) > 0:
+            self.current_measurement = sum(self.current_hour_measurements) / len(self.current_hour_measurements)
+        return self.current_measurement
 
     def read_meter(self, obj):
         # Read the meter point at scheduled intervals

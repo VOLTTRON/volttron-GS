@@ -98,6 +98,8 @@ class CampusAgent(Agent, myTransactiveNode):
         self.building_names = self.config.get('buildings', [])
         self.building_powers = self.config.get('building_powers')
         self.db_topic = self.config.get("db_topic", "tnc")
+        self.PV_max_kW = float(self.config.get("PV_max_kW"))
+        self.city_loss_factor = float(self.config.get("city_loss_factor"))
 
         self.neighbors = []
 
@@ -259,7 +261,7 @@ class CampusAgent(Agent, myTransactiveNode):
 
         # Add solar PV asset
         solar_pv = SolarPvResource()
-        solar_pv.maximumPower = 120.0  # [avg.kW]
+        solar_pv.maximumPower = self.PV_max_kW  # [avg.kW]
         solar_pv.minimumPower = 0.0  # [avg.kW]
         solar_pv.name = 'SolarPv'
         solar_pv.description = '120 kW solar PV site on the campus'
@@ -306,6 +308,7 @@ class CampusAgent(Agent, myTransactiveNode):
         city.description = 'City of Richland (COR) electricity supplier node'
         city.maximumPower = 20000  # Remember loads have negative power [avg.kW]
         city.minimumPower = 0  # [avg.kW]
+        city.lossFactor = self.city_loss_factor
 
         # City model
         city_model = NeighborModel()

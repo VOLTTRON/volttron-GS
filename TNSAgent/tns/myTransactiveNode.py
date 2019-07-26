@@ -71,8 +71,8 @@ class myTransactiveNode(object):
 
         # The agent must keep track of various devices and their models that are
         # listed among these properties.
-        self.informationServiceModels = []  # InformationServiceModel.empty
-        self.localAssets = []  # LocalAsset.empty
-        self.markets = []  # Market.empty
-        self.meterPoints = []  # MeterPoint.empty
-        self.neighbors = []  # Neighbor.empty
+        self.informationServiceModels = []
+        self.localAssets = []
+        self.markets = []
+        self.meterPoints = []
+        self.neighbors = []

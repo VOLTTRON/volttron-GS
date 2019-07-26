@@ -1121,3 +1121,4 @@ class NeighborModel(Model, object):
 
 if __name__ == '__main__':
     nm = NeighborModel()
+    

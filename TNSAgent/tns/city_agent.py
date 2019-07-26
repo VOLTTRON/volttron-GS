@@ -98,6 +98,7 @@ class CityAgent(Agent, myTransactiveNode):
         self.name = self.config.get('name')
         self.market_cycle_in_min = int(self.config.get('market_cycle_in_min', 60))
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
+        self.supplier_loss_factor = float(self.config.get('supplier_loss_factor'))
         self.neighbors = []
 
         self.db_topic = self.config.get("db_topic", "tnc")
@@ -328,7 +329,7 @@ class CityAgent(Agent, myTransactiveNode):
         supplier = Neighbor()
         supplier.name = 'BPA'
         supplier.description = 'The Bonneville Power Administration as electricity supplier to the City of Richland, WA'
-        supplier.lossFactor = 0.02
+        supplier.lossFactor = self.supplier_loss_factor
         supplier.maximumPower = 200800  # [avg.kW, twice the average COR load]
         supplier.minimumPower = 0.0  # [avg.kW, will not export]
 

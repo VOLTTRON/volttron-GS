@@ -4,6 +4,7 @@
 
   "market_cycle_in_min": 60,
   "duality_gap_threshold": 0.001,
+  "supplier_loss_factor": 0.02,
 
   "ts_name": "Date",
   "weather_file": "/home/hngo/PycharmProjects/volttron-applications/pnnl/TNSAgent/tns/weather_data/forecast.csv",

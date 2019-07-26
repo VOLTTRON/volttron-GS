@@ -133,6 +133,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
 
         self.market_cycle_in_min = int(self.config.get('market_cycle_in_min', 60))
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
+        self.campus_loss_factor = float(self.config.get('campus_loss_factor', 0.01))
 
         self.neighbors = []
         self.max_deliver_capacity = float(self.config.get('max_deliver_capacity'))
@@ -225,9 +226,13 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
             self.start_mixmarket(start_of_cycle)
 
     def new_demand_signal(self, peer, sender, bus, topic, headers, message):
-        if len(self.meterPoints) > 0:
-            cur_power = float( message[0]["WholeBuildingPower"])
-            self.meterPoints[0].set_meter_value(cur_power)
+        mtrs = self.campus.model.meterPoints
+        if len(mtrs) > 0:
+            bldg_meter = mtrs[0]
+            cur_power = float(message[0]["WholeBuildingPower"])
+            bldg_meter.set_meter_value(cur_power)
+            if Timer.get_cur_time().minute >= 58:
+                bldg_meter.update_avg()
 
     def near_end_of_hour(self, now):
         near_end_of_hour = False
@@ -348,11 +353,11 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
 
     def init_objects(self):
         # Add meter
-        meter = MeterPoint()
-        meter.name = 'BuildingElectricMeter'
-        meter.measurementType = MeasurementType.AverageDemandkW
-        meter.measurementUnit = MeasurementUnit.kWh
-        self.meterPoints.append(meter)
+        # meter = MeterPoint()
+        # meter.name = 'BuildingElectricMeter'
+        # meter.measurementType = MeasurementType.PowerReal
+        # meter.measurementUnit = MeasurementUnit.kWh
+        # self.meterPoints.append(meter)
 
         # Add weather forecast service
         weather_service = TemperatureForecastModel(self.config_path, self)
@@ -421,6 +426,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         campus.description = 'PNNL_Campus'
         campus.maximumPower = self.max_deliver_capacity
         campus.minimumPower = 0.  # [avg.kW]
+        campus.lossFactor = self.campus_loss_factor
 
         # Campus model
         campus_model = NeighborModel()
@@ -430,6 +436,13 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         campus_model.demand_threshold_coef = self.demand_threshold_coef
         campus_model.demandThreshold = self.demand_threshold_coef * self.monthly_peak_power
         campus_model.transactive = True
+
+        # Avg building meter
+        building_meter = MeterPoint()
+        building_meter.name = self.name + ' ElectricMeter'
+        building_meter.measurementType = MeasurementType.AverageDemandkW
+        building_meter.measurementUnit = MeasurementUnit.kWh
+        campus_model.meterPoints.append(building_meter)
 
         # Cross-reference object & model
         campus_model.object = campus

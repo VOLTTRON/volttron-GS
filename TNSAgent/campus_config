@@ -13,6 +13,8 @@
     "BUILDING1": [0.0, -120.0, -35.0]
   },
 
+  "PV_max_kW": 120.0,
+  "city_loss_factor": 0.01,
   "duality_gap_threshold": 0.001,
 
   "ts_name": "Date",
