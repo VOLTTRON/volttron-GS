@@ -239,7 +239,7 @@ class CampusAgent(Agent, myTransactiveNode):
         self.meterPoints.append(meter)
 
         # Add weather forecast service
-        weather_service = TemperatureForecastModel(self.config_path)
+        weather_service = TemperatureForecastModel(self.config_path, self)
         self.informationServiceModels.append(weather_service)
 
         # Add inelastive asset
