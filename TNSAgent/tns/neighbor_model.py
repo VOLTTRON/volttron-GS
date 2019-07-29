@@ -492,8 +492,9 @@ class NeighborModel(Model, object):
             # This must be the start of a new month. The demand threshold must be
             # reset. For now, "resetting" means using a fraction (e.g., 80#) of
             # the final demand threshold in the prior month.
-            self.demandThreshold = self.demand_threshold_coef * self.demandThreshold
-            self.demandMonth = mon
+            if mtr.current_measurement is not None:
+                self.demandThreshold = self.demand_threshold_coef * self.demandThreshold
+                self.demandMonth = mon
 
     def update_dual_costs(self, mkt):
         # Gather the active time intervals.
