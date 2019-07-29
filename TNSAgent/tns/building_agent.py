@@ -175,9 +175,9 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         if self.simulation:
             self.ep_lines = []
             self.cur_ep_line = 0
-            with open(ep_res_path, 'r') as fh:
-                for line in fh:
-                    self.ep_lines.append(line)
+            # with open(ep_res_path, 'r') as fh:
+            #     for line in fh:
+            #         self.ep_lines.append(line)
 
         _log2.debug("Mixmarket for agent {}:".format(self.name))
 
