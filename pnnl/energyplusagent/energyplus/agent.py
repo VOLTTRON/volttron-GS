@@ -386,7 +386,7 @@ class SocketServer():
         self.client = None
         self.sent = None
         self.rcvd = None
-        self.host = None
+        self.host = "127.0.0.1"
         self.port = None
 
     def on_recv(self, msg):
@@ -465,6 +465,7 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         self.cosim_sync_counter = 0
         self.tns_actuate = None
         self.rt_periodic = None
+        self.time_scale = 1.0
         self.passtime = False
         self.real_time_flag = False
         self.currenthour=datetime.now().hour
@@ -588,27 +589,27 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         if self.realtime:
             return
         timestep = int(60/self.timestep)
-        if self.operation>0:
-            if not self.real_time_flag:
-               self.cosim_sync_counter += timestep
-               if self.cosim_sync_counter < self.co_sim_timestep:
-                      self.advance_simulation(None, None, None, None, None, None)
-               else:
-                      self.cosim_sync_counter = 0
-                      self.vip.pubsub.publish('pubsub', self.tns_actuate, headers={}, message={}).get(timeout=10)
-            else:
-               if self.hour>self.currenthour or self.passtime:
-                  self.passtime=True
-                  self.cosim_sync_counter += timestep
-                  if self.cosim_sync_counter < self.co_sim_timestep:
-                      self.advance_simulation(None, None, None, None, None, None)
-                  else:
-                      self.cosim_sync_counter = 0
-                      self.vip.pubsub.publish('pubsub', self.tns_actuate, headers={}, message={}).get(timeout=10)
-               else:
-                      self.advance_simulation(None, None, None, None, None, None)
+        #if self.operation>0:
+        if not self.real_time_flag:
+           self.cosim_sync_counter += timestep
+           if self.cosim_sync_counter < self.co_sim_timestep:
+                  self.advance_simulation(None, None, None, None, None, None)
+           else:
+                  self.cosim_sync_counter = 0
+                  self.vip.pubsub.publish('pubsub', self.tns_actuate, headers={}, message={}).get(timeout=10)
         else:
-            self.advance_simulation(None, None, None, None, None, None)
+           if self.hour>self.currenthour or self.passtime:
+              self.passtime=True
+              self.cosim_sync_counter += timestep
+              if self.cosim_sync_counter < self.co_sim_timestep:
+                  self.advance_simulation(None, None, None, None, None, None)
+              else:
+                  self.cosim_sync_counter = 0
+                  self.vip.pubsub.publish('pubsub', self.tns_actuate, headers={}, message={}).get(timeout=10)
+           else:
+                  self.advance_simulation(None, None, None, None, None, None)
+        #else:
+        #    self.advance_simulation(None, None, None, None, None, None)
         return
 
     def run_periodic(self):
@@ -625,7 +626,7 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         input = self.input()
 
         if self.realtime and self.rt_periodic is None:
-            timestep = int(60 / self.timestep)*60
+            timestep = 60. / (self.timestep*self.time_scale)*60.
             self.rt_periodic = self.core.periodic(timestep, self.run_periodic, wait=timestep)
 
         if self.sim_flag != '0':
