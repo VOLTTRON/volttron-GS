@@ -434,7 +434,8 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         campus_model.location = self.name
         campus_model.defaultVertices = [Vertex(0.045, 25, 0, True), Vertex(0.048, 0, self.max_deliver_capacity, True)]
         campus_model.demand_threshold_coef = self.demand_threshold_coef
-        campus_model.demandThreshold = self.demand_threshold_coef * self.monthly_peak_power
+        # campus_model.demandThreshold = self.demand_threshold_coef * self.monthly_peak_power
+        campus_model.demandThreshold = self.monthly_peak_power
         campus_model.transactive = True
 
         # Avg building meter
