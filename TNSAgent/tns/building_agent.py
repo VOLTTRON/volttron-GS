@@ -229,7 +229,11 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         mtrs = self.campus.model.meterPoints
         if len(mtrs) > 0:
             bldg_meter = mtrs[0]
+            power_unit = message[1]
             cur_power = float(message[0]["WholeBuildingPower"])
+            power_unit = power_unit.get("WholeBuildingPower", {}).get("units", "kW")
+            if isinstance(power_unit, str) and power_unit.lower() == "watts":
+                cur_power = cur_power / 1000.0
             bldg_meter.set_meter_value(cur_power)
             if Timer.get_cur_time().minute >= 58:
                 bldg_meter.update_avg()
