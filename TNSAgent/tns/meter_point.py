@@ -105,8 +105,9 @@ class MeterPoint:
         self.lastUpdate = last_update
 
     def update_avg(self):
-        if len(self.current_hour_measurements) > 0:
+        if len(self.current_hour_measurements) > 30:
             self.current_measurement = sum(self.current_hour_measurements) / len(self.current_hour_measurements)
+            self.current_hour_measurements = []
         return self.current_measurement
 
     def read_meter(self, obj):
