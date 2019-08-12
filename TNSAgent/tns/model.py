@@ -126,6 +126,16 @@ class Model:
         # exportation of electricity to the neighbhor. [$]
         self.totalProductionCost = 0.0  # {mustBeReal, mustBeNonnegative}
 
+        # Volttron
+        self.mtn = None
+        self.power_topic = ''
+        self.system_loss_topic = ''
+
+    def inject(self, mtn, power_topic='', system_loss_topic=''):
+        self.mtn = mtn
+        self.power_topic = power_topic
+        self.system_loss_topic = system_loss_topic
+
     def schedule(self, mkt):
         """
         Have object schedule its power in active time intervals
