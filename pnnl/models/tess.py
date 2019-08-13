@@ -20,19 +20,19 @@ class TESS(object):
 
 class tess(object):
     def __init__(self, config, parent, **kwargs):
-        self.a_coef = np.array([0.257986, 0.0389016, -0.00021708, 0.0468684, -0.00094284, -0.00034344])
-        self.b_coef = np.array([0.933884, -0.058212, 0.00450036, 0.00243, 0.000486, -0.001215])
-        self.p_coef = np.array([4.0033, -3.5162, -5.4302, 5.6807, -1.1989, -0.1963, 0.8593])
-        self.r_coef = np.array([0.9804, -2.6207, 3.6708, -2.6975, 0.0446, 1.2533, 0.2494])
-        self.c_coef = np.array([0.222903, 0.313387, 0.46371])
-        self.Q_norm = 95  # kW
-        self.Q_stor = 500  # kWh
-        self.COP = 3.5
-        self.Cf = 3.915  # kJ/kg-K
-        self.m_ice = 5.24  # kg/s
-        self.T_cw_ch = -5  # degrees C
-        self.T_cw_norm = 4.4  # degrees C
-        self.T_fr = 0  # degrees C
+        self.a_coef = config.get("a_coef", [0.257986, 0.0389016, -0.00021708, 0.0468684, -0.00094284, -0.00034344])
+        self.b_coef = config.get("b_coef", [0.933884, -0.058212, 0.00450036, 0.00243, 0.000486, -0.001215])
+        self.p_coef = np.array(config.get("p_coef", [4.0033, -3.5162, -5.4302, 5.6807, -1.1989, -0.1963, 0.8593]))
+        self.r_coef = np.array(config.get("r_coef", [0.9804, -2.6207, 3.6708, -2.6975, 0.0446, 1.2533, 0.2494]))
+        self.c_coef = np.array(config.get("c_coef", [0.222903, 0.313387, 0.46371]))
+        self.Q_norm = config.get("Q_norm", 95)  # kW
+        self.Q_stor = config.get("Q_stor", 500)  # kWh
+        self.COP = config.get("COP", 3.5)
+        self.Cf = config.get("Cf", 3.915)  # kJ/kg-K
+        self.m_ice = config.get("m_ice", 5.24)  # kg/s
+        self.T_cw_ch = config.get("T_cw_ch", -5)  # degrees C
+        self.T_cw_norm = config.get("T_cw_norm", 4.4)  # degrees C
+        self.T_fr = config.get("T_fr", 0)  # degrees C
 
     @staticmethod
     def poly(c, x):

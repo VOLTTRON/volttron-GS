@@ -25,12 +25,12 @@ class BESS(object):
 class bess(object):
     def __init__(self, config, parent, **kwargs):
         # BESS CONSTANTS --- should be config parameters
-        self.MESA1_C0 = -1.44E-02  # unit: 1/h
-        self.MESA1_C_p = -9.38E-04  # unit: 1/kWh
-        self.MESA1_C_n = -9.22E-04  # unit: 1/kWht_UB_range
-        self.p_max = 1.0
-        self.init_soc = 0.8
-        self.final_soc = -1.0
+        self.MESA1_C0 = config.get("MESA1_C0", -1.44E-02)  # unit: 1/h
+        self.MESA1_C_p = config.get("MESA1_C_p", -9.38E-04)  # unit: 1/kWh
+        self.MESA1_C_n = config.get("MESA1_C_n", -9.22E-04)  # unit: 1/kWht_UB_range
+        self.p_max = config.get("p_max", 1.0)
+        self.init_soc = config.get("init_soc", 0.8)
+        self.final_soc = config.get("final_soc", -1.0)
 
     def build_bess_constraints(self, energy_price, reserve_price, p_max, init_soc, final_soc):
         """
