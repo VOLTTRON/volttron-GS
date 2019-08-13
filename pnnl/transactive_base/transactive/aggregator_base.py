@@ -27,11 +27,11 @@ class Aggregator(TransactiveBase):
         self.consumer_demand_curve = dict.fromkeys(consumer_market_base_name, [])
         self.consumer_market = dict.fromkeys(consumer_market_base_name, [])
         self.supplier_market = []
-        self.supplier_market = ['_'.join([supplier_market_base_name, str(i)]) for i in range(len(self.market_number))]
+        self.supplier_market = ['_'.join([supplier_market_base_name, str(i)]) for i in range(self.market_number)]
         self.aggregate_demand = [None]*self.market_number
         if consumer_market_base_name:
             for market_name in self.consumer_market:
-                self.consumer_market[market_name] = ['_'.join([market_name, str(i)]) for i in range(len(self.market_number))]
+                self.consumer_market[market_name] = ['_'.join([market_name, str(i)]) for i in range(self.market_number)]
                 self.consumer_demand_curve[market_name] = [None]*self.market_number
         self.supplier_curve = []
 
