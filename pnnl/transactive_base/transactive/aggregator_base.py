@@ -16,6 +16,10 @@ class Aggregator(TransactiveBase):
         super(Aggregator, self).__init__(config, **kwargs)
         supplier_market_base_name = config.get("supplier_market_name", "")
         consumer_market_base_name = config.get("consumer_market_name", [])
+
+        if isinstance(consumer_market_base_name, str):
+            consumer_market_base_name = [consumer_market_base_name]
+
         self.aggregate_clearing_market = config.get("aggregate_clearing_market", "electric")
         self.supply_commodity = None
         self.consumer_commodity = self.commodity
