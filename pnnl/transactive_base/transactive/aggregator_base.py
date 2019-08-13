@@ -19,7 +19,7 @@ class Aggregator(TransactiveBase):
         self.aggregate_clearing_market = config.get("aggregate_clearing_market", "electric")
         self.supply_commodity = None
         self.consumer_commodity = self.commodity
-        self.aggregate_demand = []
+
         self.consumer_demand_curve = dict.fromkeys(consumer_market_base_name, [])
         self.consumer_market = dict.fromkeys(consumer_market_base_name, [])
         self.supplier_market = []
@@ -44,7 +44,6 @@ class Aggregator(TransactiveBase):
         if buyer_seller == BUYER:
             market_index = self.supplier_market.index(market_name)
             _log.debug("{} - received aggregated {} curve - {}".format(self.agent_name, market_name, agg_demand.points))
-            self.aggregate_demand[market_index] = agg_demand
             self.translate_aggregate_demand(agg_demand, market_index)
 
             if self.consumer_market:

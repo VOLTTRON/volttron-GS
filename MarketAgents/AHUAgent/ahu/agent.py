@@ -95,7 +95,8 @@ class AHUAgent(Aggregator, AHUChiller):
         for point in air_demand.points:
             electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
-        return electric_demand_curve
+        # Hard-coding the market names is not ideal.  Need to come up with more robust solution
+        self.consumer_demand_curve["electric"][index] = electric_demand_curve
 
 
 def main():
