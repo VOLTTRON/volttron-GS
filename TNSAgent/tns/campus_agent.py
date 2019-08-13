@@ -107,6 +107,7 @@ class CampusAgent(Agent, myTransactiveNode):
         self.building_demand_topic = "/".join([self.db_topic, "{}/campus/demand"])
         self.campus_demand_topic = "{}/campus/city/demand".format(self.db_topic)
         self.campus_supply_topic = "/".join([self.db_topic, "campus/{}/supply"])
+        self.solar_topic = "/".join([self.db_topic, "campus/pv"])
 
         self.reschedule_interval = timedelta(minutes=10, seconds=1)
 
@@ -274,6 +275,7 @@ class CampusAgent(Agent, myTransactiveNode):
         solar_pv_model.defaultPower = 0.0  # [avg.kW]
         solar_pv_model.defaultVertices = [Vertex(0, 0, 30.0, True)]
         solar_pv_model.costParameters = [0, 0, 0]
+        solar_pv_model.inject(self, power_topic=self.solar_topic)
 
         # Cross-reference asset & asset model
         solar_pv.model = solar_pv_model

@@ -152,6 +152,13 @@ class LocalAssetModel(Model, object):
         """
         # But give power scheduling priority for a LocalAssetModel
         self.schedule_power(mkt)
+        # Log if possible
+        if self.mtn is not None and self.power_topic != '':
+            sp = [(x.timeInterval.name, x.value) for x in self.scheduledPowers]
+            self.mtn.vip.pubsub.publish(peer='pubsub',
+                                        topic=self.power_topic,
+                                        message={'power': sp})
+
         self.schedule_engagement(mkt)  # only LocalAssetModels
         self.update_vertices(mkt)
 

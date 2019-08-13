@@ -752,6 +752,18 @@ class NeighborModel(Model, object):
                                 power = power / factor2
                                 marginal_price = marginal_price * factor2
 
+                                if self.mtn is not None and self.system_loss_topic != '':
+                                    msg = {
+                                        'ts': received_vertices[k].timeInterval,
+                                        'power': power,
+                                        'max_power': self.object.maximumPower,
+                                        'factor1': factor1,
+                                        'factor2': factor2
+                                    }
+                                    self.mtn.vip.pubsub.publish(peer='pubsub',
+                                                                topic=self.system_loss_topic,
+                                                                message=msg)
+
                                 if power > demand_charge_threshold:
                                     # The power is greater than the anticipated
                                     # demand threshold. Demand charges are in play.
