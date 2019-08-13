@@ -61,17 +61,17 @@ import logging
 from datetime import timedelta as td
 from volttron.platform.agent import utils
 
-from volttron.pnnl.models.vav import VAV
-from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
+from transactivecontrol.pnnl.models.vav import VAV
+from transactivecontrol.pnnl.transactive_base.transactive.transactive import TransactiveBase
 
-from decorators import time_cls_methods
+#from decorators import time_cls_methods
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = '0.3'
 
 
-@time_cls_methods
+#@time_cls_methods
 class VAVAgent(TransactiveBase, VAV):
     """
     The SampleElectricMeterAgent serves as a sample of an electric meter that
