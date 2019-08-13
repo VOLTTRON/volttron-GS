@@ -16,14 +16,19 @@ class Aggregator(TransactiveBase):
         super(Aggregator, self).__init__(config, **kwargs)
         supplier_market_base_name = config.get("supplier_market_name", "")
         consumer_market_base_name = config.get("consumer_market_name", [])
+
+        if isinstance(consumer_market_base_name, str):
+            consumer_market_base_name = [consumer_market_base_name]
+
         self.aggregate_clearing_market = config.get("aggregate_clearing_market", "electric")
         self.supply_commodity = None
         self.consumer_commodity = self.commodity
-        self.aggregate_demand = []
+
         self.consumer_demand_curve = dict.fromkeys(consumer_market_base_name, [])
         self.consumer_market = dict.fromkeys(consumer_market_base_name, [])
         self.supplier_market = []
         self.supplier_market = ['_'.join([supplier_market_base_name, str(i)]) for i in range(len(self.market_number))]
+        self.aggregate_demand = [None]*self.market_number
         if consumer_market_base_name:
             for market_name in self.consumer_market:
                 self.consumer_market[market_name] = ['_'.join([market_name, str(i)]) for i in range(len(self.market_number))]
@@ -91,8 +96,16 @@ class Aggregator(TransactiveBase):
     def create_supply_curve(self, clear_price, supply_market):
         index = self.supplier_market.index(supply_market)
         supply_curve = PolyLine()
-        min_quantity = self.aggregate_demand[index].min_x()*0.8
-        max_quantity = self.aggregate_demand[index].max_x()*1.2
+        try:
+            if self.aggregate_demand:
+                min_quantity = self.aggregate_demand[index].min_x()*0.8
+                max_quantity = self.aggregate_demand[index].max_x()*1.2
+            else:
+                min_quantity = 0.0
+                max_quantity = 10000.0
+        except:
+            min_quantity = 0.0
+            max_quantity = 10000.0
         supply_curve.add(Point(price=clear_price, quantity=min_quantity))
         supply_curve.add(Point(price=clear_price, quantity=max_quantity))
         return supply_curve
