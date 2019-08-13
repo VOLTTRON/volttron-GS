@@ -63,7 +63,7 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from volttron.pnnl.models.ahuchiller import AHUChiller
+from volttron.pnnl.models.ahu import AHU
 
 # from pnnl.models.firstorderzone import FirstOrderZone
 
@@ -72,30 +72,41 @@ utils.setup_logging()
 __version__ = "0.2"
 
 
-class AHUAgent(Aggregator, AHUChiller):
+# https://stash.pnnl.gov/users/ngoh511/repos/transactivecontrol/raw/MarketAgents/AHUAgent/ahu/agent.py?at=refs%2Fheads%2Fahu_chiller_split
+
+
+class AHUAgent(Aggregator, AHU):
     """
-    The SampleElectricMeterAgent serves as a sample of an electric meter that
-    sells electricity for a single building at a fixed price.
+    The AHUAgent participates in 3 markets:
+    1. Electricity Market: Consumer of electricity
+    2. Air Market: Supplier of air
+    3. Chilled Water Market: Consumer of chilled water
     """
 
     def __init__(self, config_path, **kwargs):
         try:
             config = utils.load_config(config_path)
-        except StandardError:
+        except Exception.StandardError:
             config = {}
         self.agent_name = config.get("agent_name", "ahu")
         model_config = config.get("model_parameters", {})
         Aggregator.__init__(self, config, **kwargs)
-        AHUChiller.__init__(self, model_config, **kwargs)
+        AHU.__init__(self, model_config, **kwargs)
+
         self.init_markets()
 
     def translate_aggregate_demand(self, air_demand, index):
         electric_demand_curve = PolyLine()
+        coil_load_demand_curve = PolyLine()
         oat = self.oat_predictions[index] if self.oat_predictions else None
         for point in air_demand.points:
-            electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
-        _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
-        return electric_demand_curve
+            self.model.input_zone_load(point.x)
+            electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_electric_load()))
+            coil_load_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_coil_load(oat)))
+
+        # Hard-coding the market names is not ideal.  Need to come up with more robust solution
+        self.consumer_market["electric"][index] = electric_demand_curve
+        self.consumer_market["chilled_water"][index] = coil_load_demand_curve
 
 
 def main():
