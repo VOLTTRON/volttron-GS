@@ -1,0 +1,3 @@
+TimeStamp,TimeInterval,Record,MarginalPrice,Power,PowerUncertainty,Cost,ReactivePower,ReactivePowerUncertainty,Voltage,VoltageUncertainty
+20180312T003647,20180312T003647,0,0.1,0.0,0,0.0,0.0,0.0,0.0,0.0
+20180312T003647,20180312T003647,1,0.2,0.0,100,0.0,0.0,0.0,0.0,0.0
