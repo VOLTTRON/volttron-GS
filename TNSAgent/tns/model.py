@@ -130,11 +130,13 @@ class Model:
         self.mtn = None
         self.power_topic = ''
         self.system_loss_topic = ''
+        self.dc_threshold_topic = ''
 
-    def inject(self, mtn, power_topic='', system_loss_topic=''):
+    def inject(self, mtn, power_topic='', system_loss_topic='', dc_threshold_topic=''):
         self.mtn = mtn
         self.power_topic = power_topic
         self.system_loss_topic = system_loss_topic
+        self.dc_threshold_topic = dc_threshold_topic
 
     def schedule(self, mkt):
         """

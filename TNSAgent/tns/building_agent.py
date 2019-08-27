@@ -143,6 +143,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         self.building_demand_topic = "{}/{}/campus/demand".format(self.db_topic, self.name)
         self.campus_supply_topic = "{}/campus/{}/supply".format(self.db_topic, self.name)
         self.system_loss_topic = "{}/{}/system_loss".format(self.db_topic, self.name)
+        self.dc_threshold_topic = "{}/{}/dc_threshold_topic".format(self.db_topic, self.name)
 
         self.mix_market_running = False
         verbose_logging = self.config.get('verbose_logging', True)
@@ -442,7 +443,9 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         # campus_model.demandThreshold = self.demand_threshold_coef * self.monthly_peak_power
         campus_model.demandThreshold = self.monthly_peak_power
         campus_model.transactive = True
-        campus_model.inject(self, system_loss_topic=self.system_loss_topic)
+        campus_model.inject(self,
+                            system_loss_topic=self.system_loss_topic,
+                            dc_threshold_topic=self.dc_threshold_topic)
 
         # Avg building meter
         building_meter = MeterPoint()
