@@ -16,7 +16,7 @@ class Light(object):
 
     def __init__(self, config, **kwargs):
         model_type = config.get("model_type", "simple")
-        module = importlib.import_module("volttron.pnnl.models.light")
+        module = importlib.import_module("transactivecontrol.pnnl.models.light")
         model_class = getattr(module, model_type)
         self.model = model_class(config, self)
 
@@ -29,7 +29,10 @@ class simple(object):
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
         self.inputs = parent.inputs
-        self.rated_power = config["rated_power"]
+        if "rated_power" in config: 
+           self.rated_power = config["rated_power"]
+        else:
+           self.rated_power = config["model_parameters"]["rated_power"]
 
     def update_data(self):
         pass

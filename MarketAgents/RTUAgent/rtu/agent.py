@@ -61,8 +61,8 @@ import logging
 
 from datetime import timedelta as td
 from volttron.platform.agent import utils
-from transactivecontrol.pnnl.models.rtu import RTU
-from transactivecontrol.pnnl.transactive_base.transactive.transactive import TransactiveBase
+from volttron.pnnl.models.rtu import RTU
+from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
 
 
 

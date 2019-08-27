@@ -36,9 +36,9 @@ class RTU(object):
 
 class firstorderzone(object):
     def __init__(self, config, parent, **kwargs):
-        self.c1 = config.get("c1", 0)
-        self.c2 = config.get("c2", 0)
-        self.c3 = config.get("c3", 0)
+        self.c1 = round(config.get("c1", 0),2)
+        self.c2 = round(config.get("c2", 0),2)
+        self.c3 = round(config.get("c3", 0),2)
         self.c = config.get("c", 0)
         self.parent = parent
         self.rated_power = config["rated_power"]
