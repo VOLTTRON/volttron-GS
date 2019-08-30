@@ -21,33 +21,33 @@ class Market:
     # TimeIntervals are created.
     
     def __init__(self, measurementType = [MeasurementType.PowerReal]):
-        self.activeVertices = [[]]*len(measurementType)  # IntervalValue.empty  # values are vertices
+        self.activeVertices = [[] for mt in measurementType]  # IntervalValue.empty  # values are vertices
         self.blendedPrices1 = []  # IntervalValue.empty  # future
         self.blendedPrices2 = []  # IntervalValue.empty  # future
         self.commitment = False
         self.converged = False
-        self.defaultPrice = [0.05]*len(measurementType)  # [$/kWh]
-        self.dualCosts = [[]]*len(measurementType)  # IntervalValue.empty  # values are [$]
+        self.defaultPrice = [0.05 for mt in measurementType]  # [$/kWh]
+        self.dualCosts = [[] for mt in measurementType]   # IntervalValue.empty  # values are [$]
         self.dualityGapThreshold = 0.01  # [dimensionless, 0.01 = 1#]
         self.futureHorizon = timedelta(hours=24)  # [h]                                          # [h]
         self.initialMarketState = MarketState.Inactive  # enumeration
         self.intervalDuration = timedelta(hours=1)  # [h]
         self.intervalsToClear = 1  # postitive integer
-        self.marginalPrices = [[]]*len(measurementType)  # IntervalValue.empty  # values are [$/kWh]
+        self.marginalPrices = [[] for mt in measurementType]   # IntervalValue.empty  # values are [$/kWh]
         self.marketClearingInterval = timedelta(hours=1)  # [h]
         self.marketClearingTime = []  # datetime.empty  # when market clears
         self.measurementType = measurementType # types of energy that must be balanced on this market
         self.method = 2  # Calculation method {1: subgradient, 2: interpolation}
         self.marketOrder = 1  # ordering of sequential markets [pos. integer]
         self.name = ''
-        self.netPowers = [[]]*len(measurementType)  # IntervalValue.empty  # values are [avg.kW]
+        self.netPowers = [[] for mt in measurementType]   # IntervalValue.empty  # values are [avg.kW]
         self.nextMarketClearingTime = []  # datetime.empty  # start of pattern
-        self.productionCosts = [[]]*len(measurementType)  # IntervalValue.empty  # values are [$]
+        self.productionCosts = [[] for mt in measurementType]  # IntervalValue.empty  # values are [$]
         self.timeIntervals = []  # TimeInterval.empty  # struct TimeInterval
-        self.totalDemand = [[]]*len(measurementType)  # IntervalValue.empty  # [avg.kW]
-        self.totalDualCost = [0.0]*len(measurementType)  # [$]
-        self.totalGeneration = [[]]*len(measurementType)  # IntervalValue.empty  # [avg.kW]
-        self.totalProductionCost = [0.0]*len(measurementType)  # [$]
+        self.totalDemand = [[] for mt in measurementType]  # IntervalValue.empty  # [avg.kW]
+        self.totalDualCost = [0.0 for mt in measurementType]*len(measurementType)  # [$]
+        self.totalGeneration = [[] for mt in measurementType]   # IntervalValue.empty  # [avg.kW]
+        self.totalProductionCost = [[] for mt in measurementType]   # [$]
 
     def assign_system_vertices(self, mtn):
         # FUNCTION ASSIGN_SYSTEM_VERTICES() - Collect active vertices from neighbor
@@ -253,7 +253,7 @@ class Market:
                         #lower_av = av([av.power] <= 0)
                         #lower_av = lower_av(len(lower_av))
                         #lower_av = max([x for x in av if x.power <= 0])
-                        av2 = [x for x in av if x.power<=0]
+                        av2 = [x for x in av if x.power<=0 and x.marginalPrice != float('inf')]
                         lower_av = sort_vertices(av2, 'marginalPrice')
 
                         # Find the vertex that bookcases the balance point from the
@@ -261,7 +261,7 @@ class Market:
                         #upper_av = av([av.power] >= 0)
                         #upper_av = upper_av(1)
                         #upper_av = min([x for x in av if x.power >= 0])
-                        av2 = [x for x in av if x.power>=0]
+                        av2 = [x for x in av if x.power>0]
                         upper_av = sort_vertices(av2, 'marginalPrice')
                         
                         power_range = 0
@@ -1224,6 +1224,7 @@ class Market:
             if len(self.measurementType)>0:
                 for i_energy_type in range(len(self.measurementType)):
                     #check whether the total generation exists for the indexed time interval of this energy type
+                    totalGen = self.totalGeneration[:] #clone this to avoid aliasing the total generation
                     iv = find_obj_by_ti(self.totalGeneration[i_energy_type], ti[i])
 
                     if iv is None:

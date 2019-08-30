@@ -34,9 +34,9 @@ class NeighborModel(Model, object):
         self.convergenceThreshold = 0.01  # [0.01 = 1#]
         self.defaultVertices = [[Vertex(float("inf"), 0.0, 1)] for mt in measurementType]#[[IntervalValue(self, ti, mkt, MeasurementType.ActiveVertex, Vertex(float("inf"), 0.0, 1))] for mt in measurementType]#[[] for mt in measurementType]
         self.demandMonth = datetime.today().month  # used to re-set demand charges
-        self.demandRate = [10]*len(measurementType)  # [$ / kW (/h)]
-        self.demandThreshold = [1e9]*len(measurementType)  # power that causes demand charges [kW]
-        self.effectiveImpedance = [0.0]*len(measurementType)  # Ohms for future use
+        self.demandRate = [10 for mt in measurementType]  # [$ / kW (/h)]
+        self.demandThreshold = [1e9 for mt in measurementType]  # power that causes demand charges [kW]
+        self.effectiveImpedance = [0.0 for mt in measurementType] # Ohms for future use
         self.friend = False  # friendly Neighbors might get preferred rates
         self.mySignal = [[] for mt in measurementType]  # TransactiveRecord.empty  # current records ready to send
         self.receivedSignal = []  # TransactiveRecord.empty  # last records received
@@ -1009,7 +1009,7 @@ class NeighborModel(Model, object):
 
                 # Call on function that calculates production cost pc based on the
                 # vertices of the supply or demand curve.
-                production_cost = prod_cost_from_vertices(self, time_intervals[i], scheduled_power, market=mkt)  # interval production cost [$]
+                production_cost = prod_cost_from_vertices(self, time_intervals[i], scheduled_power, market=mkt, energy_type = this_energy_type)  # interval production cost [$]
 
                 # Check to see if the production cost value has been defined for the
                 # indexed time interval.

@@ -41,7 +41,7 @@ class LocalAssetModel(Model, object):
     def __init__(self, energy_types=[MeasurementType.PowerReal]):
         super(LocalAssetModel, self).__init__()
         self.activeVertices = [[] for et in energy_types]
-        self.defaultPower = [0.0]*len(energy_types)  # [avg. kW]
+        self.defaultPower = [0.0 for et in energy_types]  # [avg. kW]
         self.engagementCost = [0.0, 0.0, 0.0]  # [engagement, hold, disengagement][$]
         self.engagementSchedule = [[] for et in energy_types]  # IntervalValue.empty
         self.informationServices = []  # InformationService.empty

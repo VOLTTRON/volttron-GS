@@ -129,6 +129,7 @@ class FlexibleBuilding(LocalAssetModel):
             self.update_active_vertex(t, mkt)
         self.vertices = [self.activeVertices[0], self.activeVertices[1], self.activeVertices[2]]
         self.defaultVertices = [[self.activeVertices[0][0]], [self.activeVertices[1][0]], [self.activeVertices[2][0]]]
+        self.defaultPower = [self.activeVertices[0][0].value.power, self.activeVertices[1][0].value.power, self.activeVertices[2][0].value.power]
 
     def update_active_vertex(self, ti, mkt):
         # update active vertices based on the load forecast and the temperature setpoint
@@ -178,7 +179,7 @@ class FlexibleBuilding(LocalAssetModel):
         #use values to create new vertices
 
         # flexible buildings create atleast three vertices:one at neutral, one at the hot side of neutral, and one at the cold side
-        neutral_vertex_e = Vertex(marginal_price=float('inf'), prod_cost=0.0, power=neutral_load_e) # there is no flexibility in electrical
+        neutral_vertex_e = Vertex(marginal_price=float('inf'), prod_cost=0.0, power=-neutral_load_e) # there is no flexibility in electrical
         # the marginal price from the neutral point is the deviation cost
         neutral_vertex_h = Vertex(marginal_price=deviation_cost_h/neutral_load_h, prod_cost=0.0, power = -neutral_load_h)
         neutral_vertex_c = Vertex(marginal_price=deviation_cost_c/neutral_load_c, prod_cost=0.0, power = -neutral_load_c)
@@ -203,10 +204,10 @@ class FlexibleBuilding(LocalAssetModel):
         else:
             marginal_price_lower_c = lower_cost_c/lower_power_c
         #make verticies
-        upper_vertex_h = Vertex(marginal_price=upper_cost_h/upper_power_h, prod_cost= upper_cost_h, power = -upper_power_h)
-        upper_vertex_c = Vertex(marginal_price=upper_cost_c/upper_power_c, prod_cost= upper_cost_c, power = -upper_power_c)
-        lower_vertex_h = Vertex(marginal_price=marginal_price_lower_h, prod_cost= lower_cost_h, power = -lower_power_h)
-        lower_vertex_c = Vertex(marginal_price=marginal_price_lower_c, prod_cost= lower_cost_c, power = -lower_power_c)
+        upper_vertex_h = Vertex(marginal_price=0, prod_cost= upper_cost_h, power = -upper_power_h)#Vertex(marginal_price=upper_cost_h/upper_power_h, prod_cost= upper_cost_h, power = -upper_power_h)
+        upper_vertex_c = Vertex(marginal_price=0, prod_cost= upper_cost_c, power = -upper_power_c)#Vertex(marginal_price=upper_cost_c/upper_power_c, prod_cost= upper_cost_c, power = -upper_power_c)
+        lower_vertex_h = Vertex(marginal_price=float('inf'), prod_cost= lower_cost_h, power = -lower_power_h)#Vertex(marginal_price=marginal_price_lower_h, prod_cost= lower_cost_h, power = -lower_power_h)
+        lower_vertex_c = Vertex(marginal_price=float('inf'), prod_cost= lower_cost_c, power = -lower_power_c)#Vertex(marginal_price=marginal_price_lower_c, prod_cost= lower_cost_c, power = -lower_power_c)
 
         vertices_val = [[neutral_vertex_e],[neutral_vertex_h, lower_vertex_h, upper_vertex_h], [neutral_vertex_c, lower_vertex_c, upper_vertex_c]]
 

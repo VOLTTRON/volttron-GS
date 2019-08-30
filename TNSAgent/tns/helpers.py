@@ -124,9 +124,9 @@ def prod_cost_from_vertices(obj, ti, pwr, energy_type = MeasurementType.PowerRea
     #  We presume only generation and importation of electricity (i.e., p>0)
     #  contribute to production costs
     # power consumption may have a production cost if the asset is flexible
-    # if pwr < 0.0:
-    #     cost = 0.0
-    #     return cost
+    if pwr < 0.0:
+        cost = IntervalValue(obj, ti, market, MeasurementType.ProductionCost, 0.0)
+        return cost
 
     #  Find the active vertices for the object in the given time interval
     #v = findobj(obj.activeVertices, 'timeInterval', ti)  # IntervalValues
