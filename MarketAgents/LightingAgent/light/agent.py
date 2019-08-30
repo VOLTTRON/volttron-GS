@@ -59,8 +59,8 @@
 import sys
 import logging
 from volttron.platform.agent import utils
-from transactivecontrol.pnnl.models.light import Light
-from transactivecontrol.pnnl.transactive_base.transactive.transactive import TransactiveBase
+from volttron.pnnl.models.light import Light
+from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
 
 
 _log = logging.getLogger(__name__)

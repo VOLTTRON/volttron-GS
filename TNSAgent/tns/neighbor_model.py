@@ -770,10 +770,20 @@ class NeighborModel(Model, object):
                                     # Set a flag.
                                     demand_charge_flag = k
 
-                                if demand_charge_flag:
-                                    _log.debug("DEMAND CHARGE")
-                                else:
-                                    _log.debug("NO DEMAND CHARGE")
+                                # Publish to db
+                                dc_flag = "has demand charge"
+                                if not demand_charge_flag:
+                                    dc_flag = "no demand charge"
+                                dc_msg = {
+                                    'dc_flag': dc_flag,
+                                    'demand charge threshold': demand_charge_threshold,
+                                    'predicted power peak': predicted_prior_peak,
+                                    'est_power': power
+                                }
+                                self.mtn.vip.pubsub.publish(peer='pubsub',
+                                                            topic=self.dc_threshold_topic,
+                                                            message=dc_msg)
+
                                 # Debug negative price & demand charge
                                 _log.debug("power: {} - demand charge threshold: {} - predicted power peak: {}"
                                            .format(power, demand_charge_threshold, predicted_prior_peak))
