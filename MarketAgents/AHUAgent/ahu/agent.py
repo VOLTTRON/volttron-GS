@@ -59,11 +59,11 @@
 import sys
 import logging
 from volttron.platform.agent import utils
-from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregator
+from transactivecontrol.pnnl.transactive_base.transactive.aggregator_base import Aggregator
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from volttron.pnnl.models.ahuchiller import AHUChiller
+from transactivecontrol.pnnl.models.ahuchiller import AHUChiller
 
 # from pnnl.models.firstorderzone import FirstOrderZone
 
@@ -84,9 +84,9 @@ class AHUAgent(Aggregator, AHUChiller):
         except StandardError:
             config = {}
         self.agent_name = config.get("agent_name", "ahu")
-        model_config = config.get("model_parameters", {})
+
         Aggregator.__init__(self, config, **kwargs)
-        AHUChiller.__init__(self, model_config, **kwargs)
+        AHUChiller.__init__(self, config, **kwargs)
         self.init_markets()
 
     def translate_aggregate_demand(self, air_demand, index):
