@@ -20,7 +20,7 @@ class FlexibleBuilding(LocalAssetModel):
         self.cost_of_deviation = 0.0 # cost of allowing temperature to deviate
         self.datestamp = datetime(2010, 1, 1, 0, 0, 0)
         self.historicalProfile = None # historical load profiles from csv
-        self.internal_mass = 10# mCp portion of the mCp(T1-T0) equation representing the internall mass of the building
+        self.internal_mass = 1# mCp portion of the mCp(T1-T0) equation representing the internall mass of the building
         self.loadForecast = [[0.0]]*len(energy_types) # default electircal load profile before flexibility [kW avg.]
         self.mass_flowrate = [None, 0.0, 0.0] # mass flowrate of thermal fluids in same order
         self.name = None 
@@ -75,16 +75,16 @@ class FlexibleBuilding(LocalAssetModel):
             extra_heat = 1 #kWh of heat
             extra_cooling = 1# kWh of cooling
             #calculate the temperature if you had one less kWh of heat
-            Tactual_h = - extra_heat/self.internal_mass *3600 + Tset
-            Tactual_c = extra_cooling/self.internal_mass *3600 + Tset
+            Tactual_h = - extra_heat/self.internal_mass + Tset
+            Tactual_c = extra_cooling/self.internal_mass + Tset
         # you supplied an actual temperature of the building use that temp
         else: 
             Tactual_h = Tactual
             Tactual_c = Tactual
             # first figure out if you need more heating and cooling just to get to the setpoint
             # this will occur if you deviated in the last timestep and so are no longer at the setpoint
-            extra_heat = self.internal_mass * (Tset-Tactual)/3600 #[kWs to kWh]
-            extra_cooling = self.internal_mass * (Tactual-Tset)/3600 #[kWs to kWh]
+            extra_heat = self.internal_mass * (Tset-Tactual) #[kWs to kWh]
+            extra_cooling = self.internal_mass * (Tactual-Tset) #[kWs to kWh]
 
         T_deviation_c = Tactual_c-Tset
         T_deviation_h = Tset-Tactual_h
@@ -186,11 +186,11 @@ class FlexibleBuilding(LocalAssetModel):
 
         # make vertices at upper and lower limits
         # find power at upper limit
-        upper_power_h = Hsetpoint + (Tub-Tset)*internal_mass
-        upper_power_c = Csetpoint + (Tset-Tlb)*internal_mass
+        upper_power_h = neutral_load_h + (Tub-Tset)*internal_mass
+        upper_power_c = neutral_load_c + (Tset-Tlb)*internal_mass
         # find power at lower limit
-        lower_power_h = max(Hsetpoint - (Tset-Tlb)*internal_mass, 0)
-        lower_power_c = max(Csetpoint - (Tub-Tset)*internal_mass, 0)
+        lower_power_h = max(neutral_load_h - (Tset-Tlb)*internal_mass, 0)
+        lower_power_c = max(neutral_load_c - (Tub-Tset)*internal_mass, 0)
         #find costs of max deviation
         lower_cost_c, upper_cost_h = self.find_deviation_cost(Tactual=Tub, find_limit=True)
         upper_cost_c, lower_cost_h = self.find_deviation_cost(Tactual=Tlb, find_limit=True)

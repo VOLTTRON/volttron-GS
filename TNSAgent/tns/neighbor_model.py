@@ -356,6 +356,10 @@ class NeighborModel(Model, object):
 
                     # Then interpolate to find marginal price.
                     marginal_price = vertices[i].marginalPrice + (power - vertices[i].power) * slope  # [$/kWh]
+                    # catch 0 * inf cases
+                    if power == vertices[i].power:
+                        marginal_price = vertices[i].marginalPrice
+
                     return marginal_price
 
     def prep_transactive_signal(self, mkt, mtn):
@@ -491,7 +495,7 @@ class NeighborModel(Model, object):
                     # Create transactive record #1 to represent the minimum power, and
                     # populate its properties.
                     # NOTE: A TransactiveRecord constructor is being used.
-                    transactive_record = TransactiveRecord(time_intervals[i], 1, marginal_price_1, minimum_power + offset, this_energy_type)
+                    transactive_record = TransactiveRecord(time_intervals[i], 1, marginal_price_1, minimum_power + offset, e_type=this_energy_type)
 
                     # Append the transactive signal to those that are ready to be sent.
                     #tnm.mySignal = [tnm.mySignal, transactive_record]
@@ -512,7 +516,7 @@ class NeighborModel(Model, object):
 
                     # Create Transactive Record #2 and populate its properties.
                     # NOTE: A TransactiveRecord constructor is being used.
-                    transactive_record = TransactiveRecord(time_intervals[i], 2, marginal_price_2, maximum_power + offset, this_energy_type)
+                    transactive_record = TransactiveRecord(time_intervals[i], 2, marginal_price_2, maximum_power + offset, e_type =this_energy_type)
 
                     # Append the transactive signal to the list of transactive signals
                     # that are ready to be sent to the transactive neighbor.
@@ -549,7 +553,7 @@ class NeighborModel(Model, object):
                             transactive_record = TransactiveRecord(time_intervals[i], 
                                                                 index, 
                                                                 vertices[j].marginalPrice,
-                                                                vertices[j].power, this_energy_type)
+                                                                vertices[j].power, e_type=this_energy_type)
 
                             # Append the transactive record to the list of transactive
                             # records that are ready to send.
