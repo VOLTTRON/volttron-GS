@@ -63,7 +63,7 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from transactivecontrol.pnnl.models.ahuchiller import AHUChiller
+from volttron.pnnl.models.ahuchiller import AHUChiller
 
 # from pnnl.models.firstorderzone import FirstOrderZone
 
