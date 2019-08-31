@@ -16,6 +16,9 @@ from auction import Auction
 from inflexible_building import InflexibleBuilding
 #from solar_pv_resource import SolarPvResource
 from solar_pv_resource_model import SolarPvResourceModel
+from vertex import Vertex
+from helpers import prod_cost_from_vertices
+from interval_value import IntervalValue
 
 # create a neighbor model
 TUR117 = myTransactiveNode()
@@ -50,7 +53,7 @@ mTN.informationServiceModels = [PullmanTemperatureForecast]
 # this node does not transact thermal demands
 
 ## Day Ahead Market
-dayAhead = Market()
+dayAhead =  Market(measurementType = [MeasurementType.PowerReal])
 MKT = dayAhead
 MKT.name = 'T117_Market'
 MKT.commitment = False # start without having commited any resources
@@ -67,7 +70,7 @@ MKT.initialMarketState = MarketState.Inactive
 dayAhead = MKT
 dayAhead.check_intervals()
 
-ti = dayAhead.timeIntervals[0]
+ti = dayAhead.timeIntervals
 
 mTN.markets = [dayAhead]
 
@@ -77,7 +80,7 @@ mTN.markets = [dayAhead]
 # this node is only neighbors with AVISTA
 Avista = Neighbor()
 NB = Avista
-NB.lossFactor = 0.01
+NB.lossFactor = 0.01 # one percent loss at full power (only 99% is seen by TUR111 but you're paying for 100%, increasing effective price)
 NB.mechanism = 'consensus'
 NB.description = 'Avista electricity supplier node'
 NB.maximumPower = 100000
@@ -86,11 +89,25 @@ NB.name = 'Avista'
 
 AvistaModel = NeighborModel()
 NBM = AvistaModel
+NBM.name = 'Avista_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
 NBM.friend = False
 NBM.transactive = True
+# set default vertices using integration method, production_cost_from_vertices() helper function which does square law for losses
+default_vertices = [Vertex(marginal_price=0.029, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.031, prod_cost = 300.0, power=100000, continuity=True, power_uncertainty=0.0)]
+NBM.defaultVertices = [default_vertices]
+NBM.activeVertices = [[]]
+for t in ti:
+    NBM.activeVertices[0].append(IntervalValue(NBM, t, Avista, MeasurementType.ActiveVertex, default_vertices[0]))
+    NBM.activeVertices[0].append(IntervalValue(NBM, t, Avista, MeasurementType.ActiveVertex, default_vertices[1]))
+# NBM.defaultVertices = [[]]
+# for t in ti:
+#     NBM.defaultVertices[0].append(IntervalValue(NBM, t, Avista, MeasurementType.ActiveVertex, default_vertices[0]))
+#     NBM.defaultVertices[0].append(IntervalValue(NBM, t, Avista, MeasurementType.ActiveVertex, default_vertices[1]))
+# NBM.activeVertices = NBM.defaultVertices
+NBM.productionCosts = [[prod_cost_from_vertices(NBM, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti]]
 NBM.object = NB
 NB.model = NBM
 Avista = NB

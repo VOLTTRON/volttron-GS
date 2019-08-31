@@ -71,11 +71,7 @@ dayAhead.check_intervals()
 
 ti = dayAhead.timeIntervals
 
-# # Heat auction
-# cooling_auction = Auction(energy_type='cooling')
-# cooling_auction.name = 'coldwater_loop'
-# heat_auction = Auction(energy_type='heat')
-# heat_auction.name = 'steam_loop'
+
 
 mTN.markets = [dayAhead]#, cooling_auction, heat_auction]
 

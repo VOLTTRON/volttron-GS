@@ -16,6 +16,10 @@ from auction import Auction
 from inflexible_building import InflexibleBuilding
 from gas_turbine import GasTurbine
 from boiler import Boiler
+from vertex import Vertex
+from helpers import prod_cost_from_vertices
+from interval_value import IntervalValue
+
 
 # create a neighbor model
 SPU122 = myTransactiveNode()
@@ -67,7 +71,7 @@ MKT.initialMarketState = MarketState.Inactive
 dayAhead = MKT
 dayAhead.check_intervals()
 
-ti = dayAhead.timeIntervals[0]
+ti = dayAhead.timeIntervals
 
 # Thermal Auctions are seen as neighbor nodes
 
@@ -77,7 +81,7 @@ mTN.markets = [dayAhead]
 ## Instantiate Neighbors and NeighborModels
 Avista = Neighbor()
 NB = Avista
-NB.lossFactor = 0.01
+NB.lossFactor = 0.01 # one percent loss at full power (only 99% is seen by TUR111 but you're paying for 100%, increasing effective price)
 NB.mechanism = 'consensus'
 NB.description = 'Avista electricity supplier node'
 NB.maximumPower = 100000
@@ -86,19 +90,28 @@ NB.name = 'Avista'
 
 AvistaModel = NeighborModel()
 NBM = AvistaModel
+NBM.name = 'Avista_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
 NBM.friend = False
 NBM.transactive = True
+# set default vertices using integration method, production_cost_from_vertices() helper function which does square law for losses
+default_vertices = [Vertex(marginal_price=0.029, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.031, prod_cost = 300.0, power=100000, continuity=True, power_uncertainty=0.0)]
+NBM.defaultVertices = [default_vertices]
+NBM.activeVertices = [[]]
+for t in ti:
+    NBM.activeVertices[0].append(IntervalValue(NBM, t, Avista, MeasurementType.ActiveVertex, default_vertices[0]))
+    NBM.activeVertices[0].append(IntervalValue(NBM, t, Avista, MeasurementType.ActiveVertex, default_vertices[1]))
+NBM.productionCosts = [[prod_cost_from_vertices(NBM, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti]]
 NBM.object = NB
 NB.model = NBM
 Avista = NB
 AvistaModel = NBM 
 
-# define thermal loops here
-# thermal loops are neighbors which only interact with thermal energy
-# steam loop
+# define thermal auctions here
+# thermal auctions are neighbors which only interact with thermal energy
+# steam auction
 SteamLoop = Neighbor()
 NB = SteamLoop
 NB.lossFactor = 0.01
@@ -113,18 +126,22 @@ NB.naturalGasPrice = 0.01
 
 HeatAuctionModel = NeighborModel(measurementType=[MeasurementType.Heat])
 NBM = HeatAuctionModel
+NBM.name = 'steam_loop_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = [0.0]
 NBM.friend = True
 NBM.transactive = True
+default_vertices =[Vertex(marginal_price=-0.01, prod_cost = 0, power=-10000, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.01, prod_cost = 100.0, power=10000, continuity=True, power_uncertainty=0.0)]
+NBM.defaultVertices =  [default_vertices]#[[IntervalValue(NBM, t, HeatAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
+NBM.activeVertices =  [[IntervalValue(NBM, t, HeatAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
+NBM.productionCosts = [[prod_cost_from_vertices(NBM, t, 0, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 
 NBM.object = NB
 NB.model = NBM
 SteamLoop = NB
 HeatAuctionModel = NBM
 
-# cold water loop
 # cold water auction
 ColdWaterLoop = Neighbor()
 NB = ColdWaterLoop
@@ -139,11 +156,16 @@ NB.Treturn = 15
 
 CoolAuctionModel = NeighborModel(measurementType=[MeasurementType.Cooling])
 NBM = CoolAuctionModel
+NBM.name = 'water_loop_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
-NBM.effectiveImpedance = 0.0
+NBM.effectiveImpedance = [0.0]
 NBM.friend = True
 NBM.transactive = True
+default_vertices = [Vertex(marginal_price=-0.02, prod_cost = 0, power=-10000, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.02, prod_cost = 200.0, power=10000, continuity=True, power_uncertainty=0.0)]
+NBM.defaultVertices =  [default_vertices]#[[IntervalValue(NBM, t, CoolAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]#, Vertex(marginal_price=0.02, prod_cost = 300.0, power=10000, continuity=True, power_uncertainty=0.0)]]
+NBM.activeVertices = [[IntervalValue(NBM, t, CoolAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
+NBM.productionCosts = [[prod_cost_from_vertices(NBM, t, 0, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 
 NBM.object = NB
 NB.model = NBM
