@@ -210,8 +210,8 @@ carrierchiller1.minimumPower = [0, -7.27/2]
 
 carrierchiller1Model = Chiller(name='carrierchiller1', size = 7.279884675000000e+03)
 carrierchiller1Model.ramp_rate = 4.8533e3
-carrierchiller1Model.create_default_vertices()
-
+carrierchiller1Model.create_default_vertices(ti, dayAhead)
+carrierchiller1Model.productionCosts = [[prod_cost_from_vertices(carrierchiller1Model, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti],[prod_cost_from_vertices(carrierchiller1Model, t, -1, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti]]
 carrierchiller1.model = carrierchiller1Model
 carrierchiller1Model.object = carrierchiller1
 
@@ -224,8 +224,8 @@ yorkchiller1.minimumPower = [0, -5.27/2]
 
 yorkchiller1Model = Chiller(name='yorkchiller1',size=5.268245045000001e+03)
 yorkchiller1Model.ramp_rate = 3.5122e3
-yorkchiller1Model.create_default_vertices()
-
+yorkchiller1Model.create_default_vertices(ti, dayAhead)
+yorkchiller1Model.productionCosts = [[prod_cost_from_vertices(yorkchiller1Model, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti], [prod_cost_from_vertices(yorkchiller1Model, t, -1, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti]]
 yorkchiller1Model.object = yorkchiller1
 yorkchiller1.model = yorkchiller1Model
 
@@ -238,8 +238,8 @@ yorkchiller3.minimumPower = [0, -5.27/2]
 
 yorkchiller3Model = Chiller(name='yorkchiller3', size=5.268245045000001e+03)
 yorkchiller3Model.ramp_rate = 3.5122e3
-yorkchiller3Model.create_default_vertices()
-
+yorkchiller3Model.create_default_vertices(ti, dayAhead)
+yorkchiller3Model.productionCosts = [[prod_cost_from_vertices(yorkchiller3Model, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti], [prod_cost_from_vertices(yorkchiller3Model, t, -1, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti]]
 yorkchiller3Model.object = yorkchiller3
 yorkchiller3.model = yorkchiller3Model
 
@@ -251,8 +251,8 @@ boiler1.minimumPower = [0]
 
 boiler1Model = Boiler(name = 'boiler1', size = 20000)
 boiler1Model.ramp_rate = 1333.3
-boiler1Model.create_default_vertices()
-
+boiler1Model.create_default_vertices(ti, dayAhead)
+boiler1Model.productionCosts = [[prod_cost_from_vertices(boiler1Model, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 boiler1Model.object = boiler1
 boiler1.model = boiler1Model
 

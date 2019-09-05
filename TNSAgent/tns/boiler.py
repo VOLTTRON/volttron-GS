@@ -16,6 +16,7 @@ class Boiler(LocalAssetModel):
     def __init__(self, name = None, size=0.0, energy_types=[MeasurementType.Heat]):
         super(Boiler, self).__init__(energy_types = energy_types)
         self.name = name
+        self.activeVertices = [[] for et in energy_types]
         self.coefs = [] # dictionary of fit curves for each thermal output
         self.cost = 0.0 #float of cost to produce heat in $
         self.datafilename = None
@@ -39,7 +40,8 @@ class Boiler(LocalAssetModel):
         # self.vertices: set of default vertices defining the system generally
 
         # start by making an efficiency fit curve
-        self.make_fit_curve()
+        if self.coefs == []:
+            self.make_fit_curve()
         coefs = self.coefs
         max_power = self.size
         min_power = self.min_capacity
@@ -59,14 +61,16 @@ class Boiler(LocalAssetModel):
         min_marginal_cost = self.use_fit_curve(min_power+1, fuel_price)-min_prod_cost
         vertex_min = Vertex(marginal_price= min_marginal_cost, prod_cost=min_prod_cost, power=self.min_capacity)
         
-        # convert vertices to time intervaled values
-        vertex_max = IntervalValue(self, ti, mkt, MeasurementType.ActiveVertex, vertex_max)
-        vertex_min = IntervalValue(self, ti, mkt, MeasurementType.ActiveVertex, vertex_min)
+        for t in ti:
+            # convert vertices to time intervaled values
+            vmax = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_max)
+            vmin = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_min)
+            self.vertices[0].append(vmax)
+            self.vertices[0].append(vmin)
 
-        #save values
-        self.vertices = [[vertex_min, vertex_max]]
         # initialize active vertices
         self.activeVertices = self.vertices
+        self.defaultVertices = self.vertices
 
 
 
@@ -137,7 +141,7 @@ class Boiler(LocalAssetModel):
         cost = cost*fuel_price
         return cost
 
-    def update_active_vertex(self,Hsetpoint,Tamb,fuel_price, auc):
+    def update_active_vertex(self,Hsetpoint,Tamb,fuel_price, auc, ti):
         #find the vertics that are active given the heat setpoints
         #INPUTS:
         #-Hsetpoint: setpoint from auction
@@ -160,10 +164,12 @@ class Boiler(LocalAssetModel):
         #make vertex
         central_vertex = Vertex(marginal_price=marginal_price, prod_cost=nominal_cost, power=Hsetpoint)
         # put together all vertices
-        active_vertices = [[central_vertex, self.vertices[0], self.vertices[1]]]
+        active_vertices = [central_vertex, self.vertices[0], self.vertices[1]]
 
         # update agent state
-        self.activeVertices = active_vertices
+        for av in active_vertices:
+            iv = IntervalValue(self, ti, mkt, MeasurementType.ActiveVertex, av)
+            self.activeVertices.append(iv)
 
     def find_fuel_use(self, Tambient=None, fuel_price=0.55907/29.3001):
         # find the fuel use based on the setpoint and environmental temperatures

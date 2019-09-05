@@ -148,7 +148,7 @@ groundPV.minimumPower = [0.0]
 
 GPVModel = SolarPvResourceModel()
 GPVModel.name = 'groundPV'
-GPVModel.defaultVertices = [100, 0, 0]
+#GPVModel.defaultVertices = [100, 0, 0]
 
 groundPV.model = GPVModel
 GPVModel.object = groundPV
@@ -162,7 +162,7 @@ rooftopPV.minimumPower = [0]
 
 RPVModel = SolarPvResourceModel()
 RPVModel.name = 'rooftopPV'
-RPVModel.defaultVertices = [100, 0, 0]
+#RPVModel.defaultVertices = [100, 0, 0]
 
 rooftopPV.model = RPVModel
 RPVModel.object = rooftopPV

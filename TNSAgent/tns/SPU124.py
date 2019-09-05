@@ -240,13 +240,14 @@ JHModel.name = 'JohnsonHall'
 JHModel.default_power = [-500, 0, 0]
 JHModel.thermalAuction = [SteamLoop, ColdWaterLoop]
 JHModel.create_default_vertices(ti, dayAhead)
-LAM.productionCosts = [[prod_cost_from_vertices(JHModel, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
-    [prod_cost_from_vertices(JHModel, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti],\
+JHModel.productionCosts = [[prod_cost_from_vertices(JHModel, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(JHModel, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
         [prod_cost_from_vertices(JHModel, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 
+LA.model = JHModel
+JHModel.object = LA
 JohnsonHall = LA
-JHModel.object = JohnsonHall
-JohnsonHall.model = JHModel
+
 
 # add gas turbine 2
 gt2 = LocalAsset()
@@ -260,8 +261,8 @@ gt2Model.name = 'GT2'
 gt2Model.thermalAuction = SteamLoop
 gt2Model.size = 1500
 gt2Model.ramp_rate = 1.3344e3
-gt2Model.create_default_vertices()
-
+gt2Model.create_default_vertices(ti, dayAhead)
+gt2Model.productionCosts = [[prod_cost_from_vertices(gt2Model, t, 1, energy_type=MeasurementType.PowerReal, market =dayAhead) for t in ti], [prod_cost_from_vertices(gt2Model, t, 0.6, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 gt2.model = gt2Model
 gt2Model.object = gt2
 
@@ -277,7 +278,8 @@ boiler2Model = Boiler(name = 'Boiler2')
 boiler2Model.size = 20000
 boiler2Model.ramp_rate = 1333.3
 boiler2Model.thermalAuction = SteamLoop
-boiler2Model.create_default_vertices()
+boiler2Model.create_default_vertices(ti, dayAhead)
+boiler2Model.productionCosts = [[prod_cost_from_vertices(boiler2Model, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 boiler2.model = boiler2Model
 boiler2Model.object = boiler2
 
@@ -292,7 +294,8 @@ boiler3Model = Boiler(name='Boiler3')
 boiler3Model.size = 20000
 boiler3Model.ramp_rate = 1333.3
 boiler3Model.thermalAuction = SteamLoop
-boiler3Model.create_default_vertices()
+boiler3Model.create_default_vertices(ti, dayAhead)
+boiler3Model.productionCosts = [[prod_cost_from_vertices(boiler3Model, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 boiler3.model = boiler3Model
 boiler3Model.object = boiler3
 

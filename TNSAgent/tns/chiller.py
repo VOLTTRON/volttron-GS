@@ -25,19 +25,19 @@ class Chiller(LocalAssetModel):
         self.min_capacity = 0.0 # minimum operating capacity of chillers
         self.energy_type = ['cooling', 'electricity']
         self.thermalFluid = 'water' #string: this is almost always 'water' for a chiller
-        self.vertices = [[]]*len(energy_types) # list of vertex class instances defining the efficiency curve
-        self.activeVertices = [[]]*len(energy_types) #list of Vertex class instances defining the cost vs. power used
+        self.vertices = [[] for et in energy_types] # list of vertex class instances defining the efficiency curve
+        self.activeVertices = [[] for et in energy_types] #list of Vertex class instances defining the cost vs. power used
         #self.thermalAgentModel = None #thermal agent model object
         #self.neighborModel = None #neighbor agent model object
         self.electrical_use = 0.0 # float indicating the electrical demand to run the chiller
-        self.scheduledPowers = [[]]*len(energy_types) # float indicating the cooling power setpoint
+        self.scheduledPowers = [[] for et in energy_types]# float indicating the cooling power setpoint
         self.mass_flowrate = 0.0 # float indicating mass flowrate of cold water through chiller
         self.coefs = [] # fit coefficients for fit curves in format c[0] + c[1]x + c[2]x**2 . . .
         self.datafilename = None
         self.thermalAuction = None
         self.measurementType = energy_types
         #self.defaultPower = [[]]*len(energy_type)
-        self.engagementSchedule = [[]]*len(energy_types)
+        self.engagementSchedule = [[] for et in energy_types]
         # fit curves may map to range of temperatures, so they also contain mins and maxs    
     
     def create_default_vertices(self, ti, mkt):
@@ -51,7 +51,8 @@ class Chiller(LocalAssetModel):
         # self.vertices: set of default vertices defining the system generally
 
         # start by making an efficiency fit curve
-        self.make_fit_curve()
+        if self.coefs == []:
+            self.make_fit_curve()
         coefs = self.coefs
         max_power = self.size
         min_power = self.min_capacity
@@ -73,13 +74,18 @@ class Chiller(LocalAssetModel):
             min_marginal_cost = min_prod_cost/min_power
         vertex_min = Vertex(marginal_price= min_marginal_cost, prod_cost=min_prod_cost, power=min_power)
         # convert vertices to time intervaled values
-        vertex_max = IntervalValue(self, ti, mkt, MeasurementType.ActiveVertex, vertex_max)
-        vertex_min = IntervalValue(self, ti, mkt, MeasurementType.ActiveVertex, vertex_min)
+        
+        for t in ti:
+            vmax = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_max)
+            vmin = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_min)
 
-        #save values
-        self.vertices = [vertex_min, vertex_max]
+            #save values
+            self.vertices[0].append(vmax)
+            self.vertices[0].append(vmin)
+        
         # initialize active vertices
         self.activeVertices = self.vertices
+        self.defaultVertices = self.vertices
 
 
     def make_fit_curve(self):

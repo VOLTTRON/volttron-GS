@@ -200,7 +200,7 @@ LAM.defaultPower = [-100.0, -100.0, -100.0]
 LAM.thermalAuction = [SteamLoop, ColdWaterLoop]
 LAM.create_default_vertices(ti, dayAhead)# when creating flexibility, the first vertex should be largest demand
 LAM.productionCosts = [[prod_cost_from_vertices(LAM, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
-    [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
         [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 LA.model = LAM 
 LAM.object = LA 

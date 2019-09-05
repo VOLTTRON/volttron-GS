@@ -195,12 +195,12 @@ LA = WestCampusBuildings
 LA.name = 'WestCampus'
 LA.description = 'Inflexible buildings with electric, heating, and cooling loads'
 LA.maximumPower = [0,0,0]
-LA.minimumPower = [-10000,-10000,-10000]
+LA.minimumPower = [-1000,-1000,-1000]
 
 WCBModel = InflexibleBuilding()
 LAM = WCBModel
 LAM.name = 'WestCampus'
-LAM.defaultPower = [-1000.0, 0, 0]
+LAM.defaultPower = [-100.0, -100.0, 0.0]
 LAM.thermalAuction = [SteamLoop, ColdWaterLoop]
 LAM.update_active_vertex(ti, dayAhead)
 

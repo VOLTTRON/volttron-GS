@@ -13,6 +13,9 @@ from temperature_forecast_model import TemperatureForecastModel
 from market import Market
 from market_state import MarketState
 from auction import Auction
+from vertex import Vertex
+from helpers import prod_cost_from_vertices
+from interval_value import IntervalValue
 
 # create a neighbor model 
 water_loop = myTransactiveNode()
@@ -64,7 +67,7 @@ MKT.initialMarketState = MarketState.Inactive
 dayAhead = MKT
 dayAhead.check_intervals()
 
-ti = dayAhead.timeIntervals[0]
+ti = dayAhead.timeIntervals
 # Thermal Loops are seen as neighbor nodes
 
 mTN.markets = [dayAhead]

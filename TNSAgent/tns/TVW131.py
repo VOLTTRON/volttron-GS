@@ -235,8 +235,8 @@ LA.minimumPower = [0, -4.85/2]
 
 cc2Model = Chiller(name='carrierchiller2', size=4.853256450000000e+03)
 cc2Model.ramp_rate = 3.2355e3
-cc2Model.create_default_vertices()
-
+cc2Model.create_default_vertices(ti, dayAhead)
+cc2Model.productionCosts = [[prod_cost_from_vertices(cc2Model, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti], [prod_cost_from_vertices(cc2Model, t, -1, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti]]
 LA.model = cc2Model
 carrierchiller2 = LA
 cc2Model.object = carrierchiller2
@@ -251,8 +251,8 @@ LA.minimumPower = [0, -4.85/2]
 
 cc3Model = Chiller(name='carrierchiller3', size=4.853256450000000e+03)
 cc3Model.ramp_rate = 3.2355e3
-cc3Model.create_default_vertices()
-
+cc3Model.create_default_vertices(ti, dayAhead)
+cc3Model.productionCosts = [[prod_cost_from_vertices(cc3Model, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti], [prod_cost_from_vertices(cc3Model, t, -1, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti]]
 LA.model = cc3Model
 carrierchiller3 = LA
 cc3Model.object = carrierchiller3

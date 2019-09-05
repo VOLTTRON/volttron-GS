@@ -62,6 +62,7 @@ from measurement_type import MeasurementType
 from local_asset import LocalAsset
 from local_asset_model import LocalAssetModel
 from interval_value import IntervalValue
+from measurement_type import MeasurementType
 
 
 class SolarPvResourceModel(LocalAssetModel, object):
@@ -77,6 +78,7 @@ class SolarPvResourceModel(LocalAssetModel, object):
     def __init__(self):
         super(SolarPvResourceModel, self).__init__()
         self.cloudFactor = 1.0
+        self.measurementType = [MeasurementType.PowerReal]
 
     def schedule_power(self, mkt):
         # Estimate stochastic generation from a solar
@@ -113,17 +115,17 @@ class SolarPvResourceModel(LocalAssetModel, object):
                 # A sinusoidal function is used to forecast solar generation
                 # during the normally sunny part of a day.
                 p = 0.5 * (1 + math.cos((h - 12) * 2.0 * math.pi / 12))
-                p = self.object.maximumPower * p
+                p = self.object.maximumPower[0] * p
                 p = self.cloudFactor * p  # [avg.kW]
 
             # Check whether a scheduled power exists in the indexed time interval.
-            iv = find_obj_by_ti(self.scheduledPowers, ti)
+            iv = find_obj_by_ti(self.scheduledPowers[0], ti)
             if iv is None:
                 # No scheduled power value is found in the indexed time interval.
                 # Create and store one.
                 iv = IntervalValue(self, ti, mkt, MeasurementType.ScheduledPower, p)
                 # Append the scheduled power to the list of scheduled powers.
-                self.scheduledPowers.append(iv)
+                self.scheduledPowers[0].append(iv)
 
             else:
                 # A scheduled power already exists in the indexed time interval.
@@ -136,7 +138,7 @@ class SolarPvResourceModel(LocalAssetModel, object):
             # demonstrated here.
 
             # Check whether an engagement schedule exists in the indexed time interval
-            iv = find_obj_by_ti(self.engagementSchedule, ti)
+            iv = find_obj_by_ti(self.engagementSchedule[0], ti)
 
             # NOTE: this template assigns engagement value as true (i.e., engaged).
             val = True  # Asset is committed or engaged
@@ -147,7 +149,7 @@ class SolarPvResourceModel(LocalAssetModel, object):
                 iv = IntervalValue(self, ti, mkt, MeasurementType.EngagementSchedule, val)  # an IntervalValue
 
                 # Append the interval value to the list of active interval values
-                self.engagementSchedule.append(iv)
+                self.engagementSchedule[0].append(iv)
 
             else:
                 # An engagement schedule was found in the indexed time interval.
@@ -155,10 +157,10 @@ class SolarPvResourceModel(LocalAssetModel, object):
                 iv.value = val  # [$]
 
         # Remove any extra scheduled powers
-        self.scheduledPowers = [x for x in self.scheduledPowers if x.timeInterval in tis]
+        self.scheduledPowers[0] = [x for x in self.scheduledPowers[0] if x.timeInterval in tis]
 
         # Remove any extra engagement schedule values
-        self.engagementSchedule = [x for x in self.engagementSchedule if x.timeInterval in tis]
+        self.engagementSchedule[0] = [x for x in self.engagementSchedule[0] if x.timeInterval in tis]
 
 
 if __name__ == '__main__':

@@ -21,7 +21,7 @@ class FlexibleBuilding(LocalAssetModel):
         self.datestamp = datetime(2010, 1, 1, 0, 0, 0)
         self.historicalProfile = None # historical load profiles from csv
         self.internal_mass = 1# mCp portion of the mCp(T1-T0) equation representing the internall mass of the building
-        self.loadForecast = [[0.0]]*len(energy_types) # default electircal load profile before flexibility [kW avg.]
+        self.loadForecast = [[0.0] for et in energy_types] # default electircal load profile before flexibility [kW avg.]
         self.mass_flowrate = [None, 0.0, 0.0] # mass flowrate of thermal fluids in same order
         self.name = None 
         self.Tactual = 23 # actual temperature in building in degrees C

@@ -230,12 +230,12 @@ gt1.maximumPower = [1000, 600]
 gt1.minimumPower = [0, 0]
 
 gt1Model = GasTurbine()
-gt1Model.name = 'GasTurbine1'
+gt1Model.name = 'gt1_model'
 #gt1Model.thermalAuction = heat_auction
 gt1Model.size = 1000
 gt1Model.ramp_rate = 1.3344e3
-gt1Model.create_default_vertices()
-
+gt1Model.create_default_vertices(ti, dayAhead)
+gt1Model.productionCosts = [[prod_cost_from_vertices(gt1Model, t, 1, energy_type=MeasurementType.PowerReal, market =dayAhead) for t in ti], [prod_cost_from_vertices(gt1Model, t, 0.6, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 gt1.model = gt1Model
 gt1Model.object = gt1
 
@@ -248,8 +248,8 @@ boiler1.minimumPower = [0]
 
 boiler1Model = Boiler(name ='boiler1', size =20000)
 boiler1Model.ramp_rate = 1333.3
-boiler1Model.create_default_vertices()
-
+boiler1Model.create_default_vertices(ti, dayAhead)
+boiler1Model.productionCosts = [[prod_cost_from_vertices(boiler1Model, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 boiler1.model = boiler1Model
 boiler1Model.object = boiler1
 

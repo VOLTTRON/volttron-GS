@@ -13,6 +13,9 @@ from temperature_forecast_model import TemperatureForecastModel
 from market import Market
 from market_state import MarketState
 from auction import Auction
+from vertex import Vertex
+from helpers import prod_cost_from_vertices
+from interval_value import IntervalValue
 
 # create a neighbor model 
 steam_loop = myTransactiveNode()
@@ -64,7 +67,7 @@ MKT.initialMarketState = MarketState.Inactive
 dayAhead = MKT
 dayAhead.check_intervals()
 
-ti = dayAhead.timeIntervals[0]
+ti = dayAhead.timeIntervals
 # Thermal Loops are seen as neighbor nodes
 
 mTN.markets = [dayAhead]
@@ -84,6 +87,7 @@ NB.name = 'T111'
 
 TUR111Model = NeighborModel(measurementType=[MeasurementType.PowerReal, MeasurementType.Heat, MeasurementType.Cooling])
 NBM = TUR111Model
+NBM.name = 'TUR111_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
@@ -106,6 +110,7 @@ NB.name = 'T115'
 
 TUR115Model = NeighborModel(measurementType=[MeasurementType.PowerReal, MeasurementType.Heat, MeasurementType.Cooling])
 NBM = TUR115Model
+NBM.name = 'TUR115_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
@@ -153,6 +158,7 @@ NB.name = 'S122'
 
 SPU122Model = NeighborModel(measurementType=[MeasurementType.PowerReal, MeasurementType.Heat, MeasurementType.Cooling])
 NBM = SPU122Model
+NBM.name = 'SPU122_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
@@ -176,6 +182,7 @@ NB.name = 'S124'
 
 SPU124Model = NeighborModel(measurementType=[MeasurementType.PowerReal, MeasurementType.Heat, MeasurementType.Cooling])
 NBM = SPU124Model
+NBM.name = 'SPU124_model'
 NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0

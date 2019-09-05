@@ -95,6 +95,9 @@ class InflexibleBuilding(LocalAssetModel):
                 # Otherwise, simply reassign the active vertex value to the
                 iv.value = vertices_val
 
+        self.vertices = self.activeVertices
+        self.defaultVertices = self.activeVertices
+        #self.defaultVertices = self.activeVertices
         #save the active vertices
         # self.activeVertices = [[active_vertices_e], [active_vertices_h], [active_vertices_c]]
 
