@@ -16,7 +16,8 @@ class Light(object):
 
     def __init__(self, config, **kwargs):
         model_type = config.get("model_type", "simple")
-        module = importlib.import_module("transactivecontrol.pnnl.models.light")
+        _log.debug("Light Agent Model: {}".format(model_type))
+        module = importlib.import_module("volttron.pnnl.models.light")
         model_class = getattr(module, model_type)
         self.model = model_class(config, self)
 

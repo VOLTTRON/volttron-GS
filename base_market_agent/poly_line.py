@@ -80,12 +80,12 @@ class PolyLine:
                     return
         doSort = False
         # if len(self.points) > 0 and point.y < self.points[-1].y:
-        if len(self.points) > 0 and point.x < self.points[-1].x:
+        if len(self.points) > 0:
             doSort = True
 
         self.points.append(point)
         if doSort:
-            self.points.sort()
+            self.points.sort(key=lambda tup: tup[1], reverse=True)
         self.xs = None
         self.ys = None
         if point.x is not None and point.y is not None:
@@ -289,12 +289,12 @@ class PolyLine:
         p1_pmin = min([point[1] for point in pl_1])
         p2_pmin = min([point[1] for point in pl_2])
         # The lines don't intersect, add the auxillary information
-        if p1_pmax <= p2_pmax and p1_pmax <= p2_pmin:
+        if p1_pmax < p2_pmax and p1_pmax < p2_pmin:
             quantity = p1_qmin
-            price = p2_pmax
-        elif p2_pmin <= p1_pmin and p2_pmax <= p1_pmin:
+            price = p1_qmax
+        elif p2_pmin < p1_pmin and p2_pmax < p1_pmin:
             quantity = p1_qmax
-            price = p2_pmin
+            price = p1_pmin
         else:
             quantity = None
             price = None
@@ -366,5 +366,4 @@ class PolyLine:
         aux['SPx,DPn'] = cmp(supply_max_price, demand_min_price)
         aux['SPx,DPx'] = cmp(supply_max_price, demand_max_price)
         return aux
-
 
