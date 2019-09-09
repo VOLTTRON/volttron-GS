@@ -216,8 +216,10 @@ CCBModel = InflexibleBuilding()
 CCBModel.name = 'CentralCampus'
 CCBModel.defaultPower = [-1000.0, 0, 0]
 CCBModel.thermalAuction = [SteamLoop, ColdWaterLoop]
-CCBModel.update_active_vertex(ti, dayAhead)
-
+CCBModel.create_default_vertices(ti, dayAhead)
+CCBModel.productionCosts = [[prod_cost_from_vertices(CCBModel, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(CCBModel, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
+        [prod_cost_from_vertices(CCBModel, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 LA.model = CCBModel
 CentralCampusBuildings = LA
 CCBModel.object = CentralCampusBuildings

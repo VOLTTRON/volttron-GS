@@ -60,7 +60,7 @@ MKT = dayAhead
 MKT.name = 'T115_Market'
 MKT.commitment = False # start without having commited any resources
 MKT.converged = False # start without having converged
-MKT.defaultPrice = [0.04, 0.02, 0.03] # [$/kWh]
+MKT.defaultPrice = [0.03, 0.01, 0.02] # [$/kWh]
 MKT.dualityGapThreshold = 0.001 #optimal convergence within 0.1Wh
 MKT.futureHorizon = timedelta(hours=24)
 MKT.intervalDuration = timedelta(hours=1)
@@ -141,7 +141,7 @@ NBM.friend = True
 NBM.transactive = True
 default_vertices =[Vertex(marginal_price=-0.01, prod_cost = 0, power=-10000, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.01, prod_cost = 100.0, power=10000, continuity=True, power_uncertainty=0.0)]
 NBM.defaultVertices =  [default_vertices]#[[IntervalValue(NBM, t, HeatAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
-NBM.activeVertices =  [[IntervalValue(NBM, t, HeatAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
+NBM.activeVertices =  [[IntervalValue(NBM, t, dayAhead, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
 NBM.productionCosts = [[prod_cost_from_vertices(NBM, t, 0, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti]]
 
 NBM.object = NB
@@ -171,7 +171,7 @@ NBM.friend = True
 NBM.transactive = True
 default_vertices = [Vertex(marginal_price=-0.02, prod_cost = 0, power=-10000, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.02, prod_cost = 200.0, power=10000, continuity=True, power_uncertainty=0.0)]
 NBM.defaultVertices =  [default_vertices]#[[IntervalValue(NBM, t, CoolAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]#, Vertex(marginal_price=0.02, prod_cost = 300.0, power=10000, continuity=True, power_uncertainty=0.0)]]
-NBM.activeVertices = [[IntervalValue(NBM, t, CoolAuctionModel, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
+NBM.activeVertices = [[IntervalValue(NBM, t, dayAhead, MeasurementType.ActiveVertex, vert) for t in ti] for vert in default_vertices]
 NBM.productionCosts = [[prod_cost_from_vertices(NBM, t, 0, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 
 NBM.object = NB
@@ -200,10 +200,12 @@ LA.minimumPower = [-1000,-1000,-1000]
 WCBModel = InflexibleBuilding()
 LAM = WCBModel
 LAM.name = 'WestCampus'
-LAM.defaultPower = [-100.0, -100.0, 0.0]
+LAM.defaultPower = [-100.0, -100.0, -100.0]
 LAM.thermalAuction = [SteamLoop, ColdWaterLoop]
-LAM.update_active_vertex(ti, dayAhead)
-
+LAM.create_default_vertices(ti, dayAhead)
+LAM.productionCosts = [[prod_cost_from_vertices(LAM, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
+        [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 LA.model = LAM
 LAM.object = LA
 WestCampusBuildings = LA

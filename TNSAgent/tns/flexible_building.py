@@ -32,7 +32,7 @@ class FlexibleBuilding(LocalAssetModel):
         self.Tub = 25 # temperature upper limit before incurring extreme deviation costs
         self.vertices = [] # vertices describing marginal cost pricing
                 
-    def find_deviation_cost(self, Tactual=None, find_limit=False):
+    def find_deviation_cost(self, Tactual=None, find_limit=False, ti=None):
         #make the curves that describe the cost of deviating from the original load
         # this function should be run once after object initiation and again
         # any time the loads from the historical profile ("historicLoad") are updated
@@ -60,8 +60,10 @@ class FlexibleBuilding(LocalAssetModel):
         # the same c[0] and c[1] are used for both equations, because
         # the cost is symmetric. Being too hot is considered equally harmful as being too cold
         #update inputs:
-        
-        self.update_load_forecast()
+        if ti == None:
+            ti = self.datestamp
+
+        self.update_load_forecast(ti)
         Tset = self.Tset
         Tub = self.Tub
         Tlb = self.Tlb
@@ -148,11 +150,11 @@ class FlexibleBuilding(LocalAssetModel):
         Tub = self.Tub
         Tlb = self.Tlb
         # update the agent's values
-        self.update_load_forecast()
+        self.update_load_forecast(ti)
         neutral_load_e = self.loadForecast[0]
         neutral_load_h = self.loadForecast[1]
         neutral_load_c = self.loadForecast[2]
-        deviation_cost_c, deviation_cost_h = self.find_deviation_cost()
+        deviation_cost_c, deviation_cost_h = self.find_deviation_cost(ti=ti)
         # if setpoints haven't been established yet, assume they are the neutral load
         if self.scheduledPowers[0] == None:
             Esetpoint = neutral_load_e
@@ -192,8 +194,8 @@ class FlexibleBuilding(LocalAssetModel):
         lower_power_h = max(neutral_load_h - (Tset-Tlb)*internal_mass, 0)
         lower_power_c = max(neutral_load_c - (Tub-Tset)*internal_mass, 0)
         #find costs of max deviation
-        lower_cost_c, upper_cost_h = self.find_deviation_cost(Tactual=Tub, find_limit=True)
-        upper_cost_c, lower_cost_h = self.find_deviation_cost(Tactual=Tlb, find_limit=True)
+        lower_cost_c, upper_cost_h = self.find_deviation_cost(Tactual=Tub, find_limit=True, ti = ti)
+        upper_cost_c, lower_cost_h = self.find_deviation_cost(Tactual=Tlb, find_limit=True, ti = ti)
         # find marginal cost
         if lower_power_h==0:
             marginal_price_lower_h = lower_cost_h
@@ -232,7 +234,7 @@ class FlexibleBuilding(LocalAssetModel):
         pass
 
 
-    def update_load_forecast(self):
+    def update_load_forecast(self, ti):
         # find the historical load profiles associated with today to predict today's loads
         # 
         # INPUTS:
@@ -249,7 +251,7 @@ class FlexibleBuilding(LocalAssetModel):
         # which has historical load data in the format: 
         # date, Temperature, electric load, heat load, cooling load
 
-        datestamp = self.datestamp
+        datestamp = ti.timeStamp.toordinal()-365*10-2#self.datestamp
 
         # load historical data if you are on the first timestep
         if self.historicalProfile == None:
@@ -270,7 +272,7 @@ class FlexibleBuilding(LocalAssetModel):
             self.historicalProfile = hist_profile
         
         # need to interpolate if dates and times don't exactly line up
-        datestamp = datestamp.toordinal()
+        # datestamp = datestamp.toordinal()
         if 'e_load' in self.historicalProfile:
             loadForecast_e = np.interp(datestamp, self.historicalProfile['timestamp'], self.historicalProfile['e_load'])
             self.loadForecast[0] = loadForecast_e   

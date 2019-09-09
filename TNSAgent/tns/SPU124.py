@@ -221,8 +221,10 @@ ECBModel = InflexibleBuilding()
 ECBModel.name = 'EastCampus'
 ECBModel.defaultPower = [-1000.0, 0, 0]
 ECBModel.thermalAuction = [SteamLoop, ColdWaterLoop]
-ECBModel.update_active_vertex(ti, dayAhead)
-
+ECBModel.create_default_vertices(ti, dayAhead)
+ECBModel.productionCosts = [[prod_cost_from_vertices(ECBModel, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(ECBModel, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
+        [prod_cost_from_vertices(ECBModel, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 LA.model = ECBModel
 EastCampusBuildings = LA
 ECBModel.object = EastCampusBuildings

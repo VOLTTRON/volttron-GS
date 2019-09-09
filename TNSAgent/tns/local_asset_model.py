@@ -736,11 +736,11 @@ class LocalAssetModel(Model, object):
 
                     # Append the interval value to the list of active vertices
                     self.activeVertices[my_energy_type].append(iv)
-                else:
+                # else:
 
-                    # Otherwise, simply reassign the active vertex value to the
-                    # existing listed interval value. (NOTE that this base local
-                    # asset model unnecessarily reassigns constant values, but the
-                    # reassignment is allowed because it teaches how a more dynamic
-                    # assignment may be maintained.
-                    iv.value = value
+                #     # Otherwise, simply reassign the active vertex value to the
+                #     # existing listed interval value. (NOTE that this base local
+                #     # asset model unnecessarily reassigns constant values, but the
+                #     # reassignment is allowed because it teaches how a more dynamic
+                #     # assignment may be maintained.
+                #     iv.value = value

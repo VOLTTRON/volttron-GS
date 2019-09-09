@@ -59,10 +59,10 @@ class GasTurbine(LocalAssetModel):
             # find production price at the limit
             max_prod_cost = self.use_fit_curve(coefs, max_power, fuel_price)
             # find marginal price by taking difference for price just below limit
-            max_marginal_cost = self.use_fit_curve(coefs, max_power+1, fuel_price)-max_prod_cost
+            max_marginal_cost = max_prod_cost/self.size#self.use_fit_curve(coefs, max_power+1, fuel_price)-max_prod_cost
             # make max vertex
             vertex_max = Vertex(marginal_price=max_marginal_cost, prod_cost=max_prod_cost, power=self.size, continuity=True)
-            heat_v_max = Vertex(marginal_price=max_marginal_cost, prod_cost=0.0, power=self.size*0.6, continuity=True)
+            heat_v_max = Vertex(marginal_price=max_marginal_cost, prod_cost=max_prod_cost, power=self.size*0.6, continuity=True)
             
             # the power goes to zero at the marginal cost at the lower limit, make (0,0) vertex
             vertex_zero = Vertex(marginal_price=0.0, prod_cost=0.0, power=0.0, continuity=False)

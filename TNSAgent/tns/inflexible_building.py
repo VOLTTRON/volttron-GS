@@ -32,6 +32,18 @@ class InflexibleBuilding(LocalAssetModel):
         self.vertices = [] # vertices always describe infinite cost of not meeting demand
 
 
+    def create_default_vertices(self, ti, mkt):
+        # creaate vertices that are use on instantiation and whenever communication is lost
+        # INPUTS:
+        # 
+        # OUTPUTS:
+        # vertices: the default minimum and maximum limit vertices
+        for t in ti:
+            self.update_active_vertex(t, mkt)
+        self.vertices = [self.activeVertices[0], self.activeVertices[1], self.activeVertices[2]]
+        self.defaultVertices = [[self.activeVertices[0][0]], [self.activeVertices[1][0]], [self.activeVertices[2][0]]]
+        self.defaultPower = [self.activeVertices[0][0].value.power, self.activeVertices[1][0].value.power, self.activeVertices[2][0].value.power]
+    
     def update_active_vertex(self, ti, mkt):
         # update the active vertices based on the load forecast
         # INPUTS:
@@ -46,7 +58,7 @@ class InflexibleBuilding(LocalAssetModel):
         # self.activeVertices_c: active vertices associated with cooling load
 
         # update the agent's values
-        self.update_load_forecast()
+        self.update_load_forecast(ti)
         if MeasurementType.Heat in self.measurementType:
             self.find_massflow_steam()
         if MeasurementType.Cooling in self.measurementType:
@@ -95,17 +107,17 @@ class InflexibleBuilding(LocalAssetModel):
                 # Otherwise, simply reassign the active vertex value to the
                 iv.value = vertices_val
 
-        self.vertices = self.activeVertices
-        self.defaultVertices = self.activeVertices
-        #self.defaultVertices = self.activeVertices
-        #save the active vertices
+        # self.vertices = self.activeVertices
+        # self.defaultVertices = self.activeVertices
+        # self.defaultVertices = self.activeVertices
+        # save the active vertices
         # self.activeVertices = [[active_vertices_e], [active_vertices_h], [active_vertices_c]]
 
         # # if this is the initialization, create defaults
         # if self.vertices == []:
         #     self.vertices = [[active_vertices_e], [active_vertices_h], [active_vertices_c]]
 
-    def update_load_forecast(self):
+    def update_load_forecast(self, ti):
         # find the historical load profiles associated with today to predict the horizon's loads
         #
         # INPUTS: 
@@ -122,6 +134,7 @@ class InflexibleBuilding(LocalAssetModel):
         # there is a csv with the same name as the building object which has historical
         # load data in the format:
         # date, temperature, electric load, heat load, cooling load
+        datestamp = ti.timeStamp.toordinal()-365*10-2 #self.datestamp.toordinal()
 
         # load historical data if you are on the first timestep
         if self.historicalProfile == None:
@@ -144,22 +157,25 @@ class InflexibleBuilding(LocalAssetModel):
             self.historicalProfile = hist_profile
 
         # need to interpolate if dates and times don't exactly line up
-        datestamp = self.datestamp.toordinal()
         if 'e_load' in self.historicalProfile and MeasurementType.PowerReal in self.measurementType:
             i_energy_type = self.measurementType.index(MeasurementType.PowerReal)
             loadForecast_e = np.interp(datestamp, self.historicalProfile['timestamp'], self.historicalProfile['e_load'])
             self.loadForecast[i_energy_type] = loadForecast_e   
+            self.defaultPower[i_energy_type] = -loadForecast_e
         if 'h_load' in self.historicalProfile and MeasurementType.Heat in self.measurementType:
             i_energy_type = self.measurementType.index(MeasurementType.Heat)
             loadForecast_h = np.interp(datestamp, self.historicalProfile['timestamp'], self.historicalProfile['h_load'])
             self.loadForecast[i_energy_type] = loadForecast_h
+            self.defaultPower[i_energy_type] = -loadForecast_h
         if 'c_load' in self.historicalProfile and MeasurementType.Cooling in self.measurementType:
             i_energy_type = self.measurementType.index(MeasurementType.Cooling)
             loadForecast_c = np.interp(datestamp, self.historicalProfile['timestamp'], self.historicalProfile['c_load'])
             self.loadForecast[i_energy_type] = loadForecast_c
+            self.defaultPower[i_energy_type] = -loadForecast_c
         if 'Tset' in self.historicalProfile:
             Tset = np.interp(datestamp, self.historicalProfile['timestamp'], self.historicalProfile['Tset'])
             self.Tset = Tset
+
 
 
 

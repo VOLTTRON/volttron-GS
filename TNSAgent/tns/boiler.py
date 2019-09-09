@@ -65,12 +65,16 @@ class Boiler(LocalAssetModel):
             # convert vertices to time intervaled values
             vmax = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_max)
             vmin = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_min)
-            self.vertices[0].append(vmax)
             self.vertices[0].append(vmin)
+            self.vertices[0].append(vmax)
+            self.activeVertices[0].append(vmin)
+            self.activeVertices[0].append(vmax)
+            self.defaultVertices[0].append(vmin)
+            self.defaultVertices[0].append(vmax)
 
         # initialize active vertices
-        self.activeVertices = self.vertices
-        self.defaultVertices = self.vertices
+        #self.activeVertices = self.vertices
+        #self.defaultVertices = self.vertices
 
 
 
@@ -164,7 +168,7 @@ class Boiler(LocalAssetModel):
         #make vertex
         central_vertex = Vertex(marginal_price=marginal_price, prod_cost=nominal_cost, power=Hsetpoint)
         # put together all vertices
-        active_vertices = [central_vertex, self.vertices[0], self.vertices[1]]
+        active_vertices = [central_vertex, self.vertices[0].value, self.vertices[1].value]
 
         # update agent state
         for av in active_vertices:

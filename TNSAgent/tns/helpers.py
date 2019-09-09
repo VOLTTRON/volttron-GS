@@ -166,8 +166,23 @@ def prod_cost_from_vertices(obj, ti, pwr, energy_type = MeasurementType.PowerRea
 
         # Sort the vertices in order of increasing marginal price and
         # power
-        v = sort_vertices(v, 'marginalPrice')  # sorted production vertices
+        v = order_vertices(v)  # sorted production vertices
         #v.sort()
+        # # if there are multiple vertices with the same marginal price, order them by power
+        # v2 = []
+        # i = 0
+        # while i < len(v)-1:
+        #     if v[i].marginalPrice == v[i+1].marginalPrice:
+        #         vpower = sort_vertices([v[i], v[i+1]],'power')
+        #         v2.append(v[i])
+        #         v2.append(v[i+1])
+        #         i = i+2
+        #     else:
+        #         v2.append(v[i])
+        #         if i+1 > len(v)-1:
+        #             v2.append(v[i+1])
+        #         i = i+1
+        # v = v2
 
 # Special case when neighbor is at its minimum power.
         if pwr <= v[0].power:
