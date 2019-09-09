@@ -99,6 +99,10 @@ class CityAgent(Agent, myTransactiveNode):
         self.market_cycle_in_min = int(self.config.get('market_cycle_in_min', 60))
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
         self.supplier_loss_factor = float(self.config.get('supplier_loss_factor'))
+
+        self.demand_threshold_coef = float(self.config.get('demand_threshold_coef'))
+        self.monthly_peak_power = float(self.config.get('monthly_peak_power'))
+
         self.neighbors = []
 
         self.db_topic = self.config.get("db_topic", "tnc")
@@ -341,7 +345,14 @@ class CityAgent(Agent, myTransactiveNode):
         supplierModel.convergenceThreshold = 0  # Not yet implemented
         supplierModel.effectiveImpedance = 0.0  # Not yet implemented
         supplierModel.friend = False  # Separate business entity from COR
+
         supplierModel.transactive = False  # Not a transactive neighbor
+        supplierModel.demand_threshold_coef = self.demand_threshold_coef
+        supplierModel.demandThreshold = self.monthly_peak_power
+        supplierModel.inject(self,
+                             system_loss_topic=self.system_loss_topic,
+                             dc_threshold_topic=self.dc_threshold_topic)
+
 
         # Add vertices
         # The first default vertex is, for now, based on the flat COR rate to

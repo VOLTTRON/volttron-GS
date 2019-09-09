@@ -11,8 +11,15 @@
   },
 
   "PV_max_kW": 120.0,
-  "city_loss_factor": 0.01,
+  # For balancing process
   "duality_gap_threshold": 0.001,
+
+  # For initial demand charge threshold
+  "demand_threshold_coef": 0.8,
+  "monthly_peak_power": 6000,
+
+  # For transmission loss
+  "city_loss_factor": 0.01,
 
   "ts_name": "Date",
   "weather_forecast": {

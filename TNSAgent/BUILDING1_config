@@ -7,6 +7,7 @@
   "duality_gap_threshold": 0.1,
   "max_deliver_capacity": 120,
   "demand_threshold_coef": 0.3,
+  "monthly_peak_power": 60,
   "campus_loss_factor": 0.01,
 
   "ts_name": "Date",
