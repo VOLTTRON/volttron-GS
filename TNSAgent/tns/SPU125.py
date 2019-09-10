@@ -194,8 +194,10 @@ LAM = WCBModel
 LAM.name = 'WestCampus'
 LAM.defaultPower = [-1000.0, 0, 0]
 LAM.thermalAuction = [SteamLoop, ColdWaterLoop]
-LAM.update_active_vertex(ti, dayAhead)
-
+LAM.create_default_vertices(ti, dayAhead)
+LAM.productionCosts = [[prod_cost_from_vertices(LAM, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
+        [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 LA.model = LAM
 LAM.object = LA
 WestCampusBuildings = LA

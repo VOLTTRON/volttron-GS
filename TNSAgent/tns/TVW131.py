@@ -199,7 +199,10 @@ LAM = ECModel
 LAM.name = 'EastCampus'
 LAM.defaultPower = [-500.0, 0, 0]
 LAM.thermalAuction = [SteamLoop, ColdWaterLoop]
-LAM.update_active_vertex(ti, dayAhead)
+LAM.create_default_vertices(ti, dayAhead)
+LAM.productionCosts = [[prod_cost_from_vertices(LAM, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
+        [prod_cost_from_vertices(LAM, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 
 LA.model = LAM
 LAM.object = LA
@@ -218,7 +221,10 @@ CHModel = InflexibleBuilding()
 CHModel.name = 'ClarkHall'
 CHModel.defaultPower = [-500, 0, 0]
 CHModel.thermalAuction = [SteamLoop, ColdWaterLoop]
-CHModel.update_active_vertex(ti, dayAhead)
+CHModel.create_default_vertices(ti, dayAhead)
+CHModel.productionCosts = [[prod_cost_from_vertices(CHModel, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(CHModel, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
+        [prod_cost_from_vertices(CHModel, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 
 LA.model = CHModel
 ClarkHall = LA

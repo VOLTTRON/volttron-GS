@@ -17,7 +17,9 @@ class InflexibleBuilding(LocalAssetModel):
     # only one vertex is ever signaled per load type
     def __init__(self, energy_types = [MeasurementType.PowerReal, MeasurementType.Heat, MeasurementType.Cooling]):
         super(InflexibleBuilding, self).__init__(energy_types=energy_types)
+        self.activeVertices = [[] for et in energy_types]
         self.datestamp = datetime(2010,1,1,0,0,0)
+        self.defaultVertices = [[] for et in energy_types]
         self.dualCosts = [[] for et in energy_types]
         self.historicalProfile = None # historical load profiles from xlsx
         self.internal_mass = 1000 # mCp portion of mCp(T1-T0) equation representing building internal mass
@@ -29,7 +31,7 @@ class InflexibleBuilding(LocalAssetModel):
         self.thermalAuction = None
         self.thermalFluid = [None, 'steam', 'water'] # thermal fluids assocated with the energy types
         self.Tset = 23 # temperature setpoint, this setpoint is always met
-        self.vertices = [] # vertices always describe infinite cost of not meeting demand
+        self.vertices = [[] for et in energy_types] # vertices always describe infinite cost of not meeting demand
 
 
     def create_default_vertices(self, ti, mkt):
@@ -40,9 +42,11 @@ class InflexibleBuilding(LocalAssetModel):
         # vertices: the default minimum and maximum limit vertices
         for t in ti:
             self.update_active_vertex(t, mkt)
-        self.vertices = [self.activeVertices[0], self.activeVertices[1], self.activeVertices[2]]
-        self.defaultVertices = [[self.activeVertices[0][0]], [self.activeVertices[1][0]], [self.activeVertices[2][0]]]
-        self.defaultPower = [self.activeVertices[0][0].value.power, self.activeVertices[1][0].value.power, self.activeVertices[2][0].value.power]
+
+        for i in range(len(self.measurementType)):
+            self.vertices[i] = self.activeVertices[i]
+            self.defaultVertices[i] = [self.activeVertices[i][0]]
+            self.defaultPower[i] = self.activeVertices[i][0].value.power
     
     def update_active_vertex(self, ti, mkt):
         # update the active vertices based on the load forecast

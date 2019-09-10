@@ -133,8 +133,10 @@ RPModel = InflexibleBuilding(energy_types=[MeasurementType.PowerReal])
 RPModel.name = 'ResearchPark'
 RPModel.defaultPower = [-100.0, 0, 0]
 RPModel.thermalAuction = []
-RPModel.update_active_vertex(ti, dayAhead)
-
+RPModel.create_default_vertices(ti, dayAhead)
+RPModel.productionCosts = [[prod_cost_from_vertices(RPModel, t, 0, energy_type=MeasurementType.PowerReal, market=dayAhead) for t in ti],\
+    [prod_cost_from_vertices(RPModel, t, 1, energy_type=MeasurementType.Heat, market=dayAhead) for t in ti],\
+        [prod_cost_from_vertices(RPModel, t, 1, energy_type=MeasurementType.Cooling, market=dayAhead) for t in ti]]
 ResearchPark = LA
 RPModel.object = ResearchPark
 ResearchPark.model = RPModel
