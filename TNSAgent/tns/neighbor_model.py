@@ -752,7 +752,9 @@ class NeighborModel(Model, object):
                                 power = power / factor2
                                 marginal_price = marginal_price * factor2
 
-                                if self.mtn is not None and self.system_loss_topic != '':
+                                if self.mtn is not None \
+                                    and self.system_loss_topic != '' \
+                                    and received_vertices[k].record == 0:
                                     msg = {
                                         'ts': received_vertices[k].timeInterval,
                                         'power': power,
