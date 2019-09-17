@@ -108,6 +108,8 @@ class CityAgent(Agent, myTransactiveNode):
         self.db_topic = self.config.get("db_topic", "tnc")
         self.campus_demand_topic = "{}/campus/city/demand".format(self.db_topic)
         self.city_supply_topic = "{}/city/campus/supply".format(self.db_topic)
+        self.system_loss_topic = "{}/{}/system_loss".format(self.db_topic, self.name)
+        self.dc_threshold_topic = "{}/{}/dc_threshold_topic".format(self.db_topic, self.name)
 
         self.reschedule_interval = timedelta(minutes=10, seconds=1)
 

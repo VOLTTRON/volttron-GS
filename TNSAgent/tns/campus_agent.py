@@ -101,6 +101,9 @@ class CampusAgent(Agent, myTransactiveNode):
         self.PV_max_kW = float(self.config.get("PV_max_kW"))
         self.city_loss_factor = float(self.config.get("city_loss_factor"))
 
+        self.demand_threshold_coef = float(self.config.get('demand_threshold_coef'))
+        self.monthly_peak_power = float(self.config.get('monthly_peak_power'))
+
         self.neighbors = []
 
         self.city_supply_topic = "{}/city/campus/supply".format(self.db_topic)
@@ -108,6 +111,8 @@ class CampusAgent(Agent, myTransactiveNode):
         self.campus_demand_topic = "{}/campus/city/demand".format(self.db_topic)
         self.campus_supply_topic = "/".join([self.db_topic, "campus/{}/supply"])
         self.solar_topic = "/".join([self.db_topic, "campus/pv"])
+        self.system_loss_topic = "{}/{}/system_loss".format(self.db_topic, self.name)
+        self.dc_threshold_topic = "{}/{}/dc_threshold_topic".format(self.db_topic, self.name)
 
         self.reschedule_interval = timedelta(minutes=10, seconds=1)
 
@@ -323,6 +328,11 @@ class CampusAgent(Agent, myTransactiveNode):
                                              160 + city.maximumPower * (0.046 + 0.5 * (0.048 - 0.046)),
                                              city.maximumPower, True)]
         city_model.costParameters = [0, 0, 0]
+        city_model.demand_threshold_coef = self.demand_threshold_coef
+        city_model.demandThreshold = self.monthly_peak_power
+        city_model.inject(self,
+                          system_loss_topic=self.system_loss_topic,
+                          dc_threshold_topic=self.dc_threshold_topic)
 
         # Cross-reference object & model
         city_model.object = city
