@@ -753,14 +753,14 @@ class NeighborModel(Model, object):
                                 marginal_price = marginal_price * factor2
 
                                 if self.mtn is not None \
-                                    and self.system_loss_topic != '' \
-                                    and received_vertices[k].record == 0:
+                                    and self.system_loss_topic != '':
                                     msg = {
                                         'ts': received_vertices[k].timeInterval,
                                         'power': power,
                                         'max_power': self.object.maximumPower,
                                         'factor1': factor1,
-                                        'factor2': factor2
+                                        'factor2': factor2,
+                                        'vertex_record': received_vertices[k].record
                                     }
                                     self.mtn.vip.pubsub.publish(peer='pubsub',
                                                                 topic=self.system_loss_topic,
