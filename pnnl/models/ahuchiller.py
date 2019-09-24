@@ -29,8 +29,8 @@ class ahuchiller(object):
 
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
-        equipment_conf = config.get("model_parameters").get("equipment_configuration")
-        model_conf = config.get("model_parameters").get("model_configuration")
+        equipment_conf = config.get("equipment_configuration")
+        model_conf = config.get("model_configuration")
         self.cpAir = model_conf["cpAir"]
         self.c0 = model_conf["c0"]
         self.c1 = model_conf["c1"]

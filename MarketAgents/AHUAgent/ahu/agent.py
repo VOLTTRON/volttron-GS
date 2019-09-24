@@ -83,10 +83,10 @@ class AHUAgent(Aggregator, AHUChiller):
             config = utils.load_config(config_path)
         except StandardError:
             config = {}
+        model_config = config.get("model_parameters")
         self.agent_name = config.get("agent_name", "ahu")
-
         Aggregator.__init__(self, config, **kwargs)
-        AHUChiller.__init__(self, config, **kwargs)
+        AHUChiller.__init__(self, model_config, **kwargs)
         self.init_markets()
 
     def translate_aggregate_demand(self, air_demand, index):
