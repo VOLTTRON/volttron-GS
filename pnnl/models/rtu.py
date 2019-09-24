@@ -40,6 +40,7 @@ class firstorderzone(object):
         self.c2 = config["c2"]
         self.c3 = config["c3"]
         self.c4 = config["c4"]
+        self.rated_power = config["rated_power"]
 
         self.on = [0]*parent.market_number
         self.off = [0]*parent.market_number
@@ -104,6 +105,7 @@ class firstorderzone(object):
         # might need to revisit this when doing both heating and cooling
         if occupied:
             q = clamp(q, min(self.parent.flexibility), max(self.parent.flexibility))
+            q = self.rated_power*q
         else:
             q = 0.0
         return q
