@@ -727,13 +727,6 @@ class NeighborModel(Model, object):
                     # Index through the vertices in the received transactive
                     # records for the indexed time interval.
                     for k in range(len(received_vertices)):
-                        # If there are multiple transactive records in the
-                        # indexed time interval, we don't need to create a vertex
-                        # for Record #0. Record #0 is the balance point, which
-                        # must lie on existing segments of the supply or demand curve.
-                        if len(received_vertices) >= 3 and received_vertices[k].record == 0:
-                            continue  # jumps out of for loop to next iteration
-
                         # Create working values of power and marginal price from
                         # the received vertices.
                         power = received_vertices[k].power
@@ -752,8 +745,9 @@ class NeighborModel(Model, object):
                                 power = power / factor2
                                 marginal_price = marginal_price * factor2
 
-                                if self.mtn is not None \
-                                    and self.system_loss_topic != '':
+                                if (self.mtn is not None
+                                    and self.system_loss_topic != ''
+                                    and received_vertices[k].record == 0):
                                     msg = {
                                         'ts': received_vertices[k].timeInterval,
                                         'power': power,
@@ -765,6 +759,15 @@ class NeighborModel(Model, object):
                                     self.mtn.vip.pubsub.publish(peer='pubsub',
                                                                 topic=self.system_loss_topic,
                                                                 message=msg)
+
+                                # If there are multiple transactive records in the
+                                # indexed time interval, we don't need to create a vertex
+                                # for Record #0. Record #0 is the balance point, which
+                                # must lie on existing segments of the supply or demand curve.
+                                # This is moved here instead of staying at the beginning of the loop
+                                # is because we want to log system loss
+                                if len(received_vertices) >= 3 and received_vertices[k].record == 0:
+                                    continue  # jumps out of for loop to next iteration
 
                                 if power > demand_charge_threshold:
                                     # The power is greater than the anticipated
