@@ -291,7 +291,7 @@ class PolyLine:
         # The lines don't intersect, add the auxillary information
         if p1_pmax < p2_pmax and p1_pmax < p2_pmin:
             quantity = p1_qmin
-            price = p1_qmax
+            price = p1_pmax
         elif p2_pmin < p1_pmin and p2_pmax < p1_pmin:
             quantity = p1_qmax
             price = p1_pmin
