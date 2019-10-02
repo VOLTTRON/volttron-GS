@@ -85,8 +85,9 @@ class TransactiveBase(MarketAgent):
             self.market_name.append('_'.join([market_name, str(i)]))
 
         self.update_flag = []
-        self.demand_curve = []
         self.prices = []
+        self.reserve_market_prices = None
+        self.demand_curve = []
 
     @Core.receiver('onstart')
     def setup(self, sender, **kwargs):
@@ -354,6 +355,7 @@ class TransactiveBase(MarketAgent):
                                                                           market_index,
                                                                           sched_index))
         demand_curve = PolyLine()
+        reserve_demand_curve = PolyLine()
         prices = self.determine_prices()
         ct_flx = []
         for i in range(len(prices)):
@@ -367,7 +369,9 @@ class TransactiveBase(MarketAgent):
 
         ct_flx = [min(ct_flx), max(ct_flx)] if ct_flx else []
         topic_suffix = "/".join([self.agent_name, "DemandCurve"])
-        message = {"MarketIndex": market_index, "Curve": demand_curve.tuppleize(), "Commodity": self.commodity}
+        message = {"MarketIndex": market_index,
+                   "Curve": demand_curve.tuppleize(),
+                   "Commodity": self.commodity}
         _log.debug("{} debug demand_curve - curve: {}".format(self.agent_name, demand_curve.points))
         self.publish_record(topic_suffix, message)
         return demand_curve
@@ -421,6 +425,7 @@ class TransactiveBase(MarketAgent):
 
         self.oat_predictions = oat_predictions
         self.market_prices = message['prices']  # Array of prices
+        self.reserve_market_prices = message.get('reserve_prices', None)
 
     def determine_control(self, sets, prices, price):
         control = np.interp(price, prices, sets)
@@ -445,6 +450,21 @@ class TransactiveBase(MarketAgent):
             price_max = self.default_max_price
         _log.debug("Prices: {} - avg: {} - std: {}".format(self.market_prices, avg_price, std_price))
         price_array = np.linspace(price_min, price_max, 11)
+        return price_array
+
+    def determine_reserve_prices(self):
+        """
+        Determine minimum and maximum reserve price from 24-hour look ahead prices.  If the TNS
+        market architecture is not utilized, this function must be overwritten in the child class.
+        :return:
+        """
+        price_array = None
+        if self.reserve_market_prices:
+            avg_price = mean(self.reserve_market_prices)
+            std_price = stdev(self.reserve_market_prices)
+            price_min = avg_price - self.price_multiplier * std_price
+            price_max = avg_price + self.price_multiplier * std_price
+            price_array = np.linspace(price_min, price_max, 11)
         return price_array
 
     def update_input_data(self, peer, sender, bus, topic, headers, message):

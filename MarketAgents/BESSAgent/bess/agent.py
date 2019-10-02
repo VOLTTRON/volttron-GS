@@ -60,20 +60,19 @@ import sys
 import logging
 from volttron.platform.agent import utils
 from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
+from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregator
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
-from volttron.pnnl.models.bess import BESS
-
-# from pnnl.models.firstorderzone import FirstOrderZone
+from volttron.pnnl.models import Model
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
-__version__ = "0.2"
+__version__ = "0.1"
 
 
-class BESSAgent(TransactiveBase, BESS):
+class BESSAgent(Aggregator, Model):
     """
-    The BESS Agent participates in Electricity Market as consumer of electricity.
+    The BESS Agent participates in Electricity Market as supplier of electricity.
     """
 
     def __init__(self, config_path, **kwargs):
@@ -83,16 +82,21 @@ class BESSAgent(TransactiveBase, BESS):
             config = {}
         self.agent_name = config.get("agent_name", "bess_agent")
         model_config = config.get("model_parameters", {})
-        BESS.__init__(self, model_config, **kwargs)
+        Model.__init__(self, model_config, **kwargs)
         self.init_markets()
 
     def translate_aggregate_demand(self, air_demand, index):
         electric_demand_curve = PolyLine()
+        reserve_demand_curve = PolyLine()
         oat = self.oat_predictions[index] if self.oat_predictions else None
-        for point in air_demand.points:
-            electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
-        _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
-        return electric_demand_curve
+        bess_power_inject, bess_power_reserve, bess_soc = self.model.run_bess_optimization(self.market_prices,
+                                                                                           self.reserve_market_prices)
+        for i in range(0, len(self.market_prices)):
+            electric_demand_curve.add(Point(price=self.market_prices[i], quantity=bess_power_inject[i]))
+        self.consumer_demand_curve['electric'][index] = electric_demand_curve
+        for i in range(0, len(self.reserve_market_prices)):
+            reserve_demand_curve.add(Point(price=self.reserve_market_prices[i], quantity=bess_power_reserve[i]))
+        self.consumer_reserve_demand_curve['electric'][index] = reserve_demand_curve
 
 
 def main():

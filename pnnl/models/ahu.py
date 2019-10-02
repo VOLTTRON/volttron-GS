@@ -6,26 +6,13 @@ from volttron.platform.agent import utils
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 
-
-class AHU(object):
+class ahu(object):
     SFS = "sfs"
     MAT = "mat"
     DAT = "dat"
     SAF = "saf"
     OAT = "oat"
     RAT = "rat"
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "ahu")
-        module = importlib.import_module("volttron.pnnl.models.ahu")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-    def get_q(self, _set, sched_index, market_index, occupied):
-        pass
-
-
-class ahu(object):
 
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
@@ -135,3 +122,6 @@ class ahu(object):
             _log.debug("AHUChiller building does not have chiller or no oat!")
             coil_load = 0.0
         return abs(coil_load)
+
+    def predict(self, set, sched_index, market_index, occupied):
+        return None

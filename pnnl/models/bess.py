@@ -32,7 +32,7 @@ class bess(object):
         self.init_soc = config.get("init_soc", 0.8)
         self.final_soc = config.get("final_soc", -1.0)
 
-    def build_bess_constraints(self, energy_price, reserve_price, p_max, init_soc, final_soc):
+    def build_bess_constraints(self, energy_price, reserve_price):
         """
         Build constraints and objective function for BESS
         :param energy_price: Energy price from city market
@@ -48,9 +48,9 @@ class bess(object):
 
         print("EnergyPrice: {}".format(energy_price))
         print("ReservePrice: {}".format(reserve_price))
-        print("p_max: {}".format(p_max))
-        print("init_soc: {}".format(init_soc))
-        print("final_soc: {}".format(final_soc))
+        print("p_max: {}".format(self.p_max))
+        print("init_soc: {}".format(self.init_soc))
+        print("final_soc: {}".format(self.final_soc))
 
         numHours_range = (range(numHours),)
         n2_range = (range(numHours + 1),)

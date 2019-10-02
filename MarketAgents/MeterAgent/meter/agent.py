@@ -63,7 +63,7 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from volttron.pnnl.models.meter import Meter
+from volttron.pnnl.models import Model
 
 # from pnnl.models.firstorderzone import FirstOrderZone
 
@@ -72,7 +72,7 @@ utils.setup_logging()
 __version__ = "0.2"
 
 
-class MeterAgent(Aggregator, Meter):
+class MeterAgent(Aggregator, Model):
     """
     The SampleElectricMeterAgent serves as a sample of an electric meter that
     sells electricity for a single building at a fixed price.

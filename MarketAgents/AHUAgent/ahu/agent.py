@@ -63,7 +63,7 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from volttron.pnnl.models.ahu import AHU
+from volttron.pnnl.models import Model
 
 # from pnnl.models.firstorderzone import FirstOrderZone
 
@@ -75,7 +75,7 @@ __version__ = "0.2"
 # https://stash.pnnl.gov/users/ngoh511/repos/transactivecontrol/raw/MarketAgents/AHUAgent/ahu/agent.py?at=refs%2Fheads%2Fahu_chiller_split
 
 
-class AHUAgent(Aggregator, AHU):
+class AHUAgent(Aggregator, Model):
     """
     The AHUAgent participates in 3 markets:
     1. Electricity Market: Consumer of electricity
@@ -105,8 +105,8 @@ class AHUAgent(Aggregator, AHU):
             coil_load_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_coil_load(oat)))
 
         # Hard-coding the market names is not ideal.  Need to come up with more robust solution
-        self.consumer_market["electric"][index] = electric_demand_curve
-        self.consumer_market["chilled_water"][index] = coil_load_demand_curve
+        self.consumer_demand_curve["electric"][index] = electric_demand_curve
+        self.consumer_demand_curve["chilled_water"][index] = coil_load_demand_curve
 
 
 def main():

@@ -59,7 +59,7 @@
 import sys
 import logging
 from volttron.platform.agent import utils
-from volttron.pnnl.models.light import Light
+from volttron.pnnl.models import Model
 from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
 
 
@@ -71,7 +71,7 @@ LTL = "light"
 OCC = "occ"
 
 
-class LightAgent(TransactiveBase, Light):
+class LightAgent(TransactiveBase, Model):
     """
     Transactive control lighting agent.
     """

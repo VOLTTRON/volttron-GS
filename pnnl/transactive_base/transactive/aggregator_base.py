@@ -28,6 +28,7 @@ class Aggregator(TransactiveBase):
             for market_name in self.consumer_market:
                 self.consumer_market[market_name] = ['_'.join([market_name, str(i)]) for i in range(len(self.market_number))]
                 self.consumer_demand_curve[market_name] = [None]*self.market_number
+                self.consumer_reserve_demand_curve[market_name] = [None]*self.market_number
         self.supplier_curve = []
 
     def init_markets(self):
@@ -58,6 +59,8 @@ class Aggregator(TransactiveBase):
                         "Curve": self.consumer_demand_curve[market_base][market_index].tuppleize(),
                         "Commodity": market_base
                     }
+                    if self.consumer_reserve_demand_curve[market_base][market_index]:
+                        message['Reserve_Curve'] = self.consumer_reserve_demand_curve[market_base][market_index].tuppleize()
                     _log.debug("{} debug demand_curve - curve: {}".format(self.agent_name,
                                                                           self.consumer_demand_curve[market_base][market_index].points))
                     self.publish_record(topic_suffix, message)

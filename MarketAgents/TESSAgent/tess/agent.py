@@ -62,15 +62,15 @@ from volttron.platform.agent import utils
 from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregator
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
-
-from volttron.pnnl.models.tess import TESS
+from volttron.platform.vip.agent import Agent, Core
+from volttron.pnnl.models import Model
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
-__version__ = "0.2"
+__version__ = "0.1"
 
 
-class TESSAgent(Aggregator, TESS):
+class TESSAgent(Aggregator, Model):
     """
     The TESS Agent participates in Electricity Market as consumer of electricity at fixed price.
     It participates in internal Chilled Water market as supplier of chilled water at fixed price.
@@ -84,32 +84,54 @@ class TESSAgent(Aggregator, TESS):
         self.agent_name = config.get("agent_name", "tess_agent")
         model_config = config.get("model_parameters", {})
         Aggregator.__init__(self, config, **kwargs)
-        TESS.__init__(self, model_config, **kwargs)
+        Model.__init__(self, model_config, **kwargs)
         self.init_markets()
-        self.agg_demand = []
+    #
+    # @Core.receiver('onstart')
+    # def setup(self, sender, **kwargs):
+    #     """
+    #     On start.
+    #     :param sender:
+    #     :param kwargs:
+    #     :return:
+    #     """
+    #     self.vip.pubsub.subscribe(peer='pubsub',
+    #                               prefix='mixmarket/start_new_cycle',
+    #                               callback=self.update_prices)
+    #
+    # def update_prices(self, peer, sender, bus, topic, headers, message):
+    #     _log.debug("Get prices prior to market start.")
+    #     self.energy_prices = message['prices']  # Array of prices
+    #     self.reserve_prices = message.get('reserve_prices', None)
+
 
     def translate_aggregate_demand(self, chilled_water_demand, index):
         electric_demand_curve = PolyLine()
+        reserve_demand_curve = PolyLine()
         oat = self.oat_predictions[index] if self.oat_predictions else None
         cooling_load = []
-        energy_price = []
-        reserve_price = []
 
         if len(chilled_water_demand) == self.numHours:
+            #point.x = quantity, point.y = price
             # Assuming points.x is cooling load, points.y is price (what about reserve price???)
             for point in chilled_water_demand:
                 cooling_load.append(point.x)
-                energy_price.append(point.y)
 
-            tess_power_inject, tess_power_reserve, tess_soc = self.model.run_optimization(energy_price,
-                                                                                        reserve_price,
+            tess_power_inject, tess_power_reserve, tess_soc = self.model.run_optimization(self.market_prices,
+                                                                                        self.reserve_market_prices,
                                                                                         self.oat_predictions,
                                                                                         cooling_load)
-            # Need to convert power, reserve power electric points
+            for i in range(0, len(self.market_prices)):
+                electric_demand_curve.add(Point(self.energy_prices[i], tess_power_inject[i]))
 
-        # I don't think this is correct
+            for i in range(0, len(self.reserve_market_prices)):
+                reserve_demand_curve.add(Point(self.reserve_prices[i], tess_power_reserve[i]))
+
+            self.consumer_demand_curve['electric'][index] = electric_demand_curve
+            self.consumer_reserve_demand_curve['electric'][index] = reserve_demand_curve
+
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
-        return electric_demand_curve
+        _log.debug("{}: reserve demand : {}".format(self.agent_name, reserve_demand_curve.points))
 
 
 def main():

@@ -4,21 +4,10 @@ import pandas
 import pulp
 import logging
 import importlib
-import variable_group
 from variable_group import VariableGroup, RANGE
-from volttron.platform.agent import utils
+from volttron.pnnl.model import Model
 
-
-class TESS(object):
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "tess")
-        module = importlib.import_module("volttron.pnnl.models.tess")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-
-class tess(object):
+class Tess(Model):
     def __init__(self, config, parent, **kwargs):
         self.a_coef = config.get("a_coef", [0.257986, 0.0389016, -0.00021708, 0.0468684, -0.00094284, -0.00034344])
         self.b_coef = config.get("b_coef", [0.933884, -0.058212, 0.00450036, 0.00243, 0.000486, -0.001215])

@@ -7,7 +7,19 @@ _log = logging.getLogger(__name__)
 utils.setup_logging()
 
 
-class VAV(object):
+# class VAV(object):
+#     def __init__(self, config, **kwargs):
+#         model_type = config.get("model_type", "firstorderzone")
+#         module = importlib.import_module("volttron.pnnl.models.vav")
+#         model_class = getattr(module, model_type)
+#         self.model = model_class(config, self)
+#
+#     def get_q(self,  _set, sched_index, market_index, occupied):
+#         q = self.model.predict(_set, sched_index, market_index, occupied)
+#         return q
+
+
+class firstorderzone(object):
     OAT = "oat"
     SFS = "sfs"
     ZT = "zt"
@@ -15,19 +27,6 @@ class VAV(object):
     ZAF = "zaf"
     CSP = "csp"
     HSP = "hsp"
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "firstorderzone")
-        module = importlib.import_module("volttron.pnnl.models.vav")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-    def get_q(self,  _set, sched_index, market_index, occupied):
-        q = self.model.predict(_set, sched_index, market_index, occupied)
-        return q
-
-
-class firstorderzone(object):
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
         self.a1 = config.get("a1", 0)
