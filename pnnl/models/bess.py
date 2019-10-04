@@ -13,15 +13,6 @@ BESS_AVAILABLE = True
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 
-
-class BESS(object):
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "bess")
-        module = importlib.import_module("volttron.pnnl.models.bess")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-
 class bess(object):
     def __init__(self, config, parent, **kwargs):
         # BESS CONSTANTS --- should be config parameters

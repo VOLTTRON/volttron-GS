@@ -199,9 +199,13 @@ class Tess(Model):
 
                 constraints.append((c, name))
 
-        name = 'tess_conInitSoc_0'
-        checkInitSoC = tess_l[0] == init_soc
-        constraints.append((checkInitSoC, name))
+        name = 'tess_conInitSoc'
+
+        def checkInitSoC(index):
+            return tess_l[index] == init_soc
+
+        c = checkInitSoC(0)
+        constraints.append((c, name))
 
         if final_soc >= 0:
             name = 'tess_conFinalSoc_0'
@@ -250,7 +254,7 @@ class Tess(Model):
 
         def tess_ab6_func(index):
             k = index[0]
-            return tess_u_p[k] <= tess_b[k] * 1e10
+            return tess_u_p[k] <= tess_b[k] * 1e9
 
         add_constraint("tess_ab6", numHours_index, tess_ab6_func)  # u_UB(l[k])
 
@@ -287,7 +291,7 @@ class Tess(Model):
 
         def tess_bc1_func(index):
             k = index[0]
-            return tess_u_n[k] >= -(1 - tess_b[k]) * 1e10
+            return tess_u_n[k] >= -(1 - tess_b[k]) * 1e9
 
         add_constraint("tess_bc1", numHours_index, tess_bc1_func)
 
@@ -350,8 +354,7 @@ class Tess(Model):
         def tess_conPowConsumption_func(index):
             k = index[0]
 
-            chill = self.P_chiller(q_cool[k], self.T_cw_ch, t_out[k])
-            xx = (1 - tess_b[k]) * chill
+            xx = (1 - tess_b[k]) * self.P_chiller(q_cool[k], self.T_cw_ch, t_out[k])
             yy = tess_b[k] * self.P_chiller(q_cool[k], self.T_cw_norm, t_out[k])
             a = a_Pch_p[:, k] * tess_q_p[RANGE, k]
             b = b_Pch_p[:, k] * tess_S_p[RANGE, k]
@@ -373,22 +376,22 @@ class Tess(Model):
 
         add_constraint("conReserveThermalChargingUB", numHours_index, tess_conReserveThermalChargingUB)
 
-        def tess_conReserveThermalCharginge10_func(index):
+        def tess_conReserveThermalCharginge9_func(index):
             k = index[0]
-            return tess_u_p_r[k] <= tess_b_r[k] * 1e10
+            return tess_u_p_r[k] <= tess_b_r[k] * 1e9
 
-        add_constraint("tess_conReserveThermalCharginge10", numHours_index, tess_conReserveThermalCharginge10_func)
+        add_constraint("tess_conReserveThermalCharginge9", numHours_index, tess_conReserveThermalCharginge9_func)
 
         def tess_conReserveThermalChargingLB(index):
             k = index[0]
             return tess_u_n_r[k] >= -pulp.lpSum(a_LB * tess_l_LB[RANGE, k] + b_LB * tess_S_LB[RANGE, k])
         add_constraint("tess_conReserveThermalChargingLB", numHours_index, tess_conReserveThermalChargingLB) # u_LB(l[k])
 
-        def tess_conReserveThermalChargingLBe10_func(index):
+        def tess_conReserveThermalChargingLBe9_func(index):
             k = index[0]
-            return tess_u_n_r[k] >= (1 - tess_b_r[k]) * -1e10
+            return tess_u_n_r[k] >= (1 - tess_b_r[k]) * -1e9
 
-        add_constraint("tess_conReserveThermalChargingLBe10", numHours_index, tess_conReserveThermalChargingLBe10_func)
+        add_constraint("tess_conReserveThermalChargingLBe9", numHours_index, tess_conReserveThermalChargingLBe9_func)
 
         def tess_ab10_func(index):
             k = index[0]
@@ -418,7 +421,7 @@ class Tess(Model):
             i, k = index
             return tess_q_p_r[i, k] <= tess_S_p_r[i, k] * t_PLR[i + 1] * self.Q_avail(self.T_cw_ch, t_out[k])
 
-        add_constraint("ab14", t_PLR_index, tess_ab14_func)
+        add_constraint("tess_ab14", t_PLR_index, tess_ab14_func)
 
         def tess_ab15_func(index):
             k = index[0]
@@ -473,7 +476,7 @@ class Tess(Model):
 
     def run_tess_optimization(self, energy_price, reserve_price, t_out, q_cool, init_soc, final_soc):
         """
-
+        Run optimization for TESS
         :param energy_price:
         :param reserve_price:
         :param t_out:
