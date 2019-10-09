@@ -249,15 +249,14 @@ class PubSubAgent(Agent):
             if obj['fields'] is not None:
                 out = obj['fields']
                 log.info('Sending: ' + topic + ' ' + str(out))
-                for i in range(0, 100):
-                    while True:
-                        try:
-                            self.vip.pubsub.publish('pubsub', topic, headers, out).get()
-                        except:
-                            log.debug("Again ERROR: retrying publish")
-                            gevent.sleep(0.1)
-                            continue
-                        break
+                while True:
+                    try:
+                        self.vip.pubsub.publish('pubsub', topic, headers, out).get()
+                    except:
+                        log.debug("Again ERROR: retrying publish")
+                        gevent.sleep(0.1)
+                        continue
+                    break
             self.num_of_pub += 1
 
     def on_match_topic(self, peer, sender, bus, topic, headers, message):
