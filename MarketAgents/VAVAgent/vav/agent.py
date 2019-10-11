@@ -86,7 +86,7 @@ class VAVAgent(TransactiveBase, Model):
         self.agent_name = config.get("agent_name", "vav")
         TransactiveBase.__init__(self, config, **kwargs)
         model_config = config.get("model_parameters", {})
-        VAV.__init__(self, model_config, **kwargs)
+        Model.__init__(self, model_config, **kwargs)
         self.init_markets()
 
     def init_predictions(self, output_info):

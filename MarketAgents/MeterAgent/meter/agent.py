@@ -86,7 +86,7 @@ class MeterAgent(Aggregator, Model):
         self.agent_name = config.get("agent_name", "meter")
         Aggregator.__init__(self, config, **kwargs)
         model_parms = config.get("model_parameters", {})
-        Meter.__init__(self, model_parms, **kwargs)
+        Model.__init__(self, model_parms, **kwargs)
         self.price = None
         self.init_markets()
 

@@ -83,7 +83,7 @@ class RTUAgent(TransactiveBase, RTU):
             config = {}
         TransactiveBase.__init__(self, config, **kwargs)
         model_config = config.get("model_parameters", {})
-        RTU.__init__(self, model_config, **kwargs)
+        Model.__init__(self, model_config, **kwargs)
         self.agent_name = config.get("agent_name")
         self.init_markets()
 

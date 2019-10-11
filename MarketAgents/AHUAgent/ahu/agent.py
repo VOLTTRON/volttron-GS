@@ -91,7 +91,7 @@ class AHUAgent(Aggregator, Model):
         self.agent_name = config.get("agent_name", "ahu")
         model_config = config.get("model_parameters", {})
         Aggregator.__init__(self, config, **kwargs)
-        AHU.__init__(self, model_config, **kwargs)
+        Model.__init__(self, model_config, **kwargs)
 
         self.init_markets()
 
