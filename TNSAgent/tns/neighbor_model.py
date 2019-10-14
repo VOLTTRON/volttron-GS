@@ -754,7 +754,8 @@ class NeighborModel(Model, object):
                                         'max_power': self.object.maximumPower,
                                         'factor1': factor1,
                                         'factor2': factor2,
-                                        'vertex_record': received_vertices[k].record
+                                        'vertex_record': received_vertices[k].record,
+                                        'demand_charge_threshold': demand_charge_threshold
                                     }
                                     self.mtn.vip.pubsub.publish(peer='pubsub',
                                                                 topic=self.system_loss_topic,
@@ -776,19 +777,19 @@ class NeighborModel(Model, object):
                                     demand_charge_flag = k
 
                                 # Publish to db
-                                if self.mtn is not None and self.dc_threshold_topic != '':
-                                    dc_flag = "has demand charge"
-                                    if not demand_charge_flag:
-                                        dc_flag = "no demand charge"
-                                    dc_msg = {
-                                        'dc_flag': dc_flag,
-                                        'demand charge threshold': demand_charge_threshold,
-                                        'predicted power peak': predicted_prior_peak,
-                                        'est_power': power
-                                    }
-                                    self.mtn.vip.pubsub.publish(peer='pubsub',
-                                                                topic=self.dc_threshold_topic,
-                                                                message=dc_msg)
+                                # if self.mtn is not None and self.dc_threshold_topic != '':
+                                #     dc_flag = "has demand charge"
+                                #     if not demand_charge_flag:
+                                #         dc_flag = "no demand charge"
+                                #     dc_msg = {
+                                #         'dc_flag': dc_flag,
+                                #         'demand_charge_threshold': demand_charge_threshold,
+                                #         'predicted_power_peak': predicted_prior_peak,
+                                #         'est_power': power
+                                #     }
+                                #     self.mtn.vip.pubsub.publish(peer='pubsub',
+                                #                                 topic=self.dc_threshold_topic,
+                                #                                 message=dc_msg)
 
                                 # Debug negative price & demand charge
                                 _log.debug("power: {} - demand charge threshold: {} - predicted power peak: {}"
