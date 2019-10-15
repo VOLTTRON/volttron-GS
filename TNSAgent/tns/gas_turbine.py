@@ -51,40 +51,39 @@ class GasTurbine(LocalAssetModel):
         min_power = self.min_capacity
         fuel_price = 0.55907/29.3001 #price of natural gas in pullman per therm * (1/29.3001 therms/kwh)
 
-        #auc = self.thermalAuction[0]
-        #fuel_price = auc.naturalGasPrice
-        for t in ti:
-
-            # The cost goes to infinity at the upper limit
-            # find production price at the limit
-            max_prod_cost = self.use_fit_curve(coefs, max_power, fuel_price)
-            # find marginal price by taking difference for price just below limit
-            max_marginal_cost = max_prod_cost/self.size#self.use_fit_curve(coefs, max_power+1, fuel_price)-max_prod_cost
-            # make max vertex
-            vertex_max = Vertex(marginal_price=max_marginal_cost, prod_cost=max_prod_cost, power=self.size, continuity=True)
-            heat_v_max = Vertex(marginal_price=max_marginal_cost, prod_cost=max_prod_cost, power=self.size*0.6, continuity=True)
+        # The cost goes to infinity at the upper limit
+        # find production price at the limit
+        max_prod_cost = self.use_fit_curve(coefs, max_power, fuel_price)
+        # find marginal price by taking difference for price just below limit
+        max_marginal_cost = max_prod_cost/self.size#self.use_fit_curve(coefs, max_power+1, fuel_price)-max_prod_cost
+        # make max vertex
+        vertex_max = Vertex(marginal_price=max_marginal_cost, prod_cost=max_prod_cost, power=self.size, continuity=True)
+        heat_v_max = Vertex(marginal_price=0.01, prod_cost=self.size*0.6*0.01, power=self.size*0.6, continuity=True)
             
-            # the power goes to zero at the marginal cost at the lower limit, make (0,0) vertex
-            vertex_zero = Vertex(marginal_price=0.0, prod_cost=0.0, power=0.0, continuity=False)
-            # find production price at the lower limit
-            min_prod_cost = self.use_fit_curve(coefs, min_power, fuel_price)
-            min_marginal_cost = self.use_fit_curve(coefs, min_power+1, fuel_price)-min_prod_cost
-            vertex_min = Vertex(marginal_price= min_marginal_cost, prod_cost=min_prod_cost, power=self.min_capacity)
-            heat_v_min = Vertex(marginal_price= min_marginal_cost, prod_cost=0.0, power=self.min_capacity*0.6)
+        # the power goes to zero at the marginal cost at the lower limit, make (0,0) vertex
+        vertex_zero = Vertex(marginal_price=0.0, prod_cost=0.0, power=0.0, continuity=False)
+        # find production price at the lower limit
+        min_prod_cost = self.use_fit_curve(coefs, min_power, fuel_price)
+        min_marginal_cost = self.use_fit_curve(coefs, min_power+1, fuel_price)-min_prod_cost-0.001
+        vertex_min = Vertex(marginal_price= min_marginal_cost, prod_cost=min_prod_cost, power=self.min_capacity)
+        heat_v_min = Vertex(marginal_price= 0.0, prod_cost=0.0, power=self.min_capacity*0.6)
 
-            vertex_max = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_max)
-            vertex_min = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_min)
-            heat_v_max = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, heat_v_max)
-            heat_v_min = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, heat_v_min)
+        for t in ti:
+            vertex_max_i = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_max)
+            vertex_min_i = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, vertex_min)
+            heat_v_max_i = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, heat_v_max)
+            heat_v_min_i = IntervalValue(self, t, mkt, MeasurementType.ActiveVertex, heat_v_min)
 
             #save values
-            self.vertices[0].append(vertex_min)
-            self.vertices[0].append(vertex_max)
-            self.vertices[1].append(heat_v_min)
-            self.vertices[1].append(heat_v_max)
+            self.activeVertices[0].append(vertex_min_i)
+            self.activeVertices[0].append(vertex_max_i)
+            self.activeVertices[1].append(heat_v_min_i)
+            self.activeVertices[1].append(heat_v_max_i)
 
-        self.activeVertices =  self.vertices
-        self.defaultVertices = self.vertices
+        self.vertices =  [self.activeVertices[0], self.activeVertices[1]]
+        self.defaultVertices = [[self.activeVertices[0][0]],[self.activeVertices[1][0]]]
+        self.defaultPower = [self.activeVertices[0][0].value.power, self.activeVertices[1][0].value.power]
+        #self.scheduledPowers = [[IntervalValue(self, ti[0], mkt, MeasurementType.ScheduledPower, self.min_capacity)],[IntervalValue(self, ti[0], mkt, MeasurementType.ScheduledPower, self.min_capacity*0.6)]]
 
     def make_fit_curve(self):
         #find the coefficients that describe a fit function of the fuel use vs. electric generation and max heat recoverable
@@ -183,7 +182,7 @@ class GasTurbine(LocalAssetModel):
         # - activeVertices_h: list of active vertices for this dispatch associated with the heat auction
 
         # update the agent's values
-        self.scheduledPowers = [Esetpoint]
+        #self.scheduledPowers = [Esetpoint, Hsetpoint]
         self.Hsetpoint = Hsetpoint
         self.find_max_heatrecovered(self)
         self.find_massflow(self)
@@ -299,7 +298,7 @@ class GasTurbine(LocalAssetModel):
 
         #read in inputs
         if e_setpoint == None:
-            e_setpoint = self.scheduledPowers[0]
+            e_setpoint = self.scheduledPowers[0][0].value.power
         max_heat_recovered = 0.0
         coefs_h = self.fit_curve['coefs_h']
         # use quadratic formula

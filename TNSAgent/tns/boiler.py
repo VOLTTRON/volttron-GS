@@ -69,8 +69,8 @@ class Boiler(LocalAssetModel):
             self.vertices[0].append(vmax)
             self.activeVertices[0].append(vmin)
             self.activeVertices[0].append(vmax)
-            self.defaultVertices[0].append(vmin)
-            self.defaultVertices[0].append(vmax)
+        self.defaultVertices[0].append(vertex_min)
+        self.defaultVertices[0].append(vertex_max)
 
         # initialize active vertices
         #self.activeVertices = self.vertices

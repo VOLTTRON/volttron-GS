@@ -77,6 +77,9 @@ def is_heavyloadhour(datetime_value):
 def order_vertices(uv):
     return sorted(uv, key=lambda x: (x.marginalPrice, x.power))
 
+def order_vertices_power(uv):
+    return sorted(uv, key=lambda x: (x.power))
+
 
 def prod_cost_from_vertices(obj, ti, pwr, energy_type = MeasurementType.PowerReal, market=[]):
     #  PROD_COST_FROM_VERTICES - Infer production cost for a power from the
@@ -166,7 +169,7 @@ def prod_cost_from_vertices(obj, ti, pwr, energy_type = MeasurementType.PowerRea
 
         # Sort the vertices in order of increasing marginal price and
         # power
-        v = order_vertices(v)  # sorted production vertices
+        v = order_vertices_power(v)  # sorted production vertices
         #v.sort()
         # # if there are multiple vertices with the same marginal price, order them by power
         # v2 = []

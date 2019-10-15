@@ -59,7 +59,7 @@ MKT = dayAhead
 MKT.name = 'S125_Market'
 MKT.commitment = False
 MKT.converged = False
-MKT.defaultPrice = [0.04, 0.02, 0.03]
+MKT.defaultPrice = [0.0551, 0.02, 0.03]
 MKT.dualityGapThreshold = 0.001 # optimal convergence within 0.1Wh
 MKT.futureHorizon = timedelta(hours=24)
 MKT.intervalDuration = timedelta(hours=1)
@@ -95,9 +95,9 @@ NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
 NBM.friend = False
-NBM.transactive = True
+NBM.transactive = False
 # set default vertices using integration method, production_cost_from_vertices() helper function which does square law for losses
-default_vertices = [Vertex(marginal_price=0.029, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.031, prod_cost = 300.0, power=100000, continuity=True, power_uncertainty=0.0)]
+default_vertices = [Vertex(marginal_price=0.0551, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.05511, prod_cost = 551.1, power=100000, continuity=True, power_uncertainty=0.0)]
 NBM.defaultVertices = [default_vertices]
 NBM.activeVertices = [[]]
 for t in ti:
@@ -294,7 +294,7 @@ CoolAuctionModel.prep_transactive_signal(dayAhead, SPU125)
 
 # Finally, the prepared TransactiveRecords are sent to their corresponding
 # TransactiveNeighbor.
-AvistaModel.send_transactive_signal(SPU125)
+#AvistaModel.send_transactive_signal(SPU125)
 HeatAuctionModel.send_transactive_signal(SPU125)
 CoolAuctionModel.send_transactive_signal(SPU125)
 

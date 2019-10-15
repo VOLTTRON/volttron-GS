@@ -58,7 +58,7 @@ MKT = dayAhead
 MKT.name = 'T117_Market'
 MKT.commitment = False # start without having commited any resources
 MKT.converged = False # start without having converged
-MKT.defaultPrice = [0.04] # [$/kWh]
+MKT.defaultPrice = [0.0551] # [$/kWh]
 MKT.dualityGapThreshold = 0.001 #optimal convergence within 0.1Wh
 MKT.futureHorizon = timedelta(hours=24)
 MKT.intervalDuration = timedelta(hours=1)
@@ -94,9 +94,9 @@ NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
 NBM.friend = False
-NBM.transactive = True
+NBM.transactive = False
 # set default vertices using integration method, production_cost_from_vertices() helper function which does square law for losses
-default_vertices = [Vertex(marginal_price=0.029, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.031, prod_cost = 300.0, power=100000, continuity=True, power_uncertainty=0.0)]
+default_vertices = [Vertex(marginal_price=0.05, prod_cost = 0, power=-1000, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.0551, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.05511, prod_cost = 551.1, power=100000, continuity=True, power_uncertainty=0.0)]
 NBM.defaultVertices = [default_vertices]
 NBM.activeVertices = [[]]
 for t in ti:
@@ -201,7 +201,7 @@ AvistaModel.prep_transactive_signal(dayAhead, TUR117)
 
 # Finally, the prepared TransactiveRecords are sent to their corresponding
 # TransactiveNeighbor.
-AvistaModel.send_transactive_signal(TUR117)
+#AvistaModel.send_transactive_signal(TUR117)
 
 # invoke the market object to sum all powers as will be needed by the 
 # net supply/demand curve

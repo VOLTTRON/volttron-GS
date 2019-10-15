@@ -95,9 +95,9 @@ NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
 NBM.friend = False
-NBM.transactive = True
+NBM.transactive = False
 # set default vertices using integration method, production_cost_from_vertices() helper function which does square law for losses
-default_vertices = [Vertex(marginal_price=0.029, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.031, prod_cost = 300.0, power=100000, continuity=True, power_uncertainty=0.0)]
+default_vertices = [Vertex(marginal_price=0.0551, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.05511, prod_cost = 551.1, power=100000, continuity=True, power_uncertainty=0.0)]
 NBM.defaultVertices = [default_vertices]
 NBM.activeVertices = [[]]
 for t in ti:
@@ -244,7 +244,7 @@ HeatAuctionModel.prep_transactive_signal(dayAhead, TUR111)
 
 # Finally, the prepared TransactiveRecords are sent to their corresponding
 # TransactiveNeighbor.
-AvistaModel.send_transactive_signal(TUR111)
+#AvistaModel.send_transactive_signal(TUR111)
 CoolAuctionModel.send_transactive_signal(TUR111)
 HeatAuctionModel.send_transactive_signal(TUR111)
 

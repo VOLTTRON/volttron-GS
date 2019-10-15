@@ -59,7 +59,7 @@ MKT = dayAhead
 MKT.name = 'S122_Market'
 MKT.commitment = False # start without having commited any resources
 MKT.converged = False # start without having converged
-MKT.defaultPrice = [0.04, 0.02, 0.03] # [$/kWh]
+MKT.defaultPrice = [0.0551, 0.02, 0.03] # [$/kWh]
 MKT.dualityGapThreshold = 0.001 #optimal convergence within 0.1Wh
 MKT.futureHorizon = timedelta(hours=24)
 MKT.intervalDuration = timedelta(hours=1)
@@ -95,9 +95,9 @@ NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
 NBM.friend = False
-NBM.transactive = True
+NBM.transactive = False
 # set default vertices using integration method, production_cost_from_vertices() helper function which does square law for losses
-default_vertices = [Vertex(marginal_price=0.029, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.031, prod_cost = 300.0, power=100000, continuity=True, power_uncertainty=0.0)]
+default_vertices = [Vertex(marginal_price=0.0551, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.05511, prod_cost = 551.1, power=100000, continuity=True, power_uncertainty=0.0)]
 NBM.defaultVertices = [default_vertices]
 NBM.activeVertices = [[]]
 for t in ti:
@@ -271,7 +271,7 @@ PullmanTemperatureForecast.update_information(dayAhead)
 
 # recieve any transactive signals sent to myTransactiveNode from its
 # TransactiveNeighbors.
-AvistaModel.receive_transactive_signal(SPU122)
+#AvistaModel.receive_transactive_signal(SPU122)
 HeatAuctionModel.receive_transactive_signal(SPU122)
 CoolAuctionModel.receive_transactive_signal(SPU122)
 
@@ -285,9 +285,13 @@ dayAhead.balance(SPU122)
 # myTransactiveNode must prepare a set of TransactiveRecords for each of 
 # its TransactiveNeighbors. The records are updated and stored into the
 # property "mySignal" of the TransactiveNeighbor.
-AvistaModel.prep_transactive_signal(dayAhead, SPU122)
+#AvistaModel.prep_transactive_signal(dayAhead, SPU122)
 HeatAuctionModel.prep_transactive_signal(dayAhead, SPU122)
 CoolAuctionModel.prep_transactive_signal(dayAhead, SPU122)
+
+# send the prepped signal
+HeatAuctionModel.send_transactive_signal(TVW131)
+CoolAuctionModel.send_transactive_signal(TVW131)
 
 # invoke the market object to sum all powers as will be needed by the 
 # net supply/demand curve

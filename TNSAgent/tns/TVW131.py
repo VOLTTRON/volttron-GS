@@ -59,7 +59,7 @@ MKT = dayAhead
 MKT.name = 'T131_Market'
 MKT.commitment = False # start without having commited any resources
 MKT.converged = False # start without having converged
-MKT.defaultPrice = [0.04, 0.02, 0.03] # [$/kWh]
+MKT.defaultPrice = [0.0551, 0.02, 0.03] # [$/kWh]
 MKT.dualityGapThreshold = 0.001 #optimal convergence within 0.1Wh
 MKT.futureHorizon = timedelta(hours=24)
 MKT.intervalDuration = timedelta(hours=1)
@@ -95,9 +95,9 @@ NBM.converged = False
 NBM.convergenceThreshold = 0.02
 NBM.effectiveImpedance = 0.0
 NBM.friend = False
-NBM.transactive = True
+NBM.transactive = False
 # set default vertices using integration method, production_cost_from_vertices() helper function which does square law for losses
-default_vertices = [Vertex(marginal_price=0.029, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.031, prod_cost = 300.0, power=100000, continuity=True, power_uncertainty=0.0)]
+default_vertices = [Vertex(marginal_price=0.0551, prod_cost = 0, power=0, continuity=True, power_uncertainty=0.0), Vertex(marginal_price=0.05511, prod_cost = 551.1, power=100000, continuity=True, power_uncertainty=0.0)]
 NBM.defaultVertices = [default_vertices]
 NBM.activeVertices = [[]]
 for t in ti:
@@ -295,13 +295,13 @@ dayAhead.balance(TVW131)
 # myTransactiveNode must prepare a set of TransactiveRecords for each of 
 # its TransactiveNeighbors. The records are updated and stored into the
 # property "mySignal" of the TransactiveNeighbor.
-AvistaModel.prep_transactive_signal(dayAhead, TVW131)
+#AvistaModel.prep_transactive_signal(dayAhead, TVW131)
 HeatAuctionModel.prep_transactive_signal(dayAhead, TVW131)
 CoolAuctionModel.prep_transactive_signal(dayAhead, TVW131)
 
 # Finally, the prepared TransactiveRecords are sent to their corresponding
 # TransactiveNeighbor.
-AvistaModel.send_transactive_signal(TVW131)
+#AvistaModel.send_transactive_signal(TVW131)
 HeatAuctionModel.send_transactive_signal(TVW131)
 CoolAuctionModel.send_transactive_signal(TVW131)
 
