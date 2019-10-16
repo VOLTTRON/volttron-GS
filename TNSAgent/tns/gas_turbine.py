@@ -109,7 +109,7 @@ class GasTurbine(LocalAssetModel):
         size = self.size
         # read the efficiency data, if there is no data file, return None and a warning log
         try: 
-            datafile = pd.read_excel(os.getcwd()+'/Python/efficiency_curves/'+filename)
+            datafile = pd.read_excel(os.getcwd()+'/efficiency_curves/'+filename)
             capacity = datafile['cap']
             efficiency = datafile['elec']
             heat_recovered = datafile['heat']
@@ -117,8 +117,9 @@ class GasTurbine(LocalAssetModel):
             efficiency = efficiency[capacity!=0]
             heat_recovered = heat_recovered[capacity!=0]
             capacity = capacity[capacity!=0]
+            kWhtocft = 3.41 # 3.41 cubic feet of natural gas per kWh
             # convert efficiency to fuel use
-            fuel_use = 1/efficiency*capacity*size
+            fuel_use = 1/efficiency*capacity*size*kWhtocft #convert to cubic feet of natural gas 
             # un-normalize the capacity data and remove (0,0) points. We don't want to fit to 0,0, because it is discontinuous
             capacity = size*capacity[fuel_use!=0]
             self.min_capacity = min(capacity)
@@ -144,8 +145,8 @@ class GasTurbine(LocalAssetModel):
             #     coefs_e.append(coefs_e_binned)
             #     coefs_h.append(coefs_h_binned)
             regression_order = 4 # fourth oder regression should capture curve with high enough accuracy
-            coefs_e = np.flip(np.polyfit(capacity, fuel_use, regression_order))
-            coefs_h = np.flip(np.polyfit(heat_recovered, fuel_use, regression_order))
+            coefs_e = np.flip(np.polyfit(capacity, fuel_use, regression_order),0)
+            coefs_h = np.flip(np.polyfit(heat_recovered, fuel_use, regression_order),0)
         except:
             coefs_e = [0, 2] # if there is no data start with an assumed efficiency of 50%
             coefs_h = [0, 1/2] # if there is no data start with an assumed waste heat 2* power out
@@ -153,7 +154,7 @@ class GasTurbine(LocalAssetModel):
         self.fit_curve['coefs_e'] = coefs_e
         self.fit_curve['coefs_h'] = coefs_h
 
-    def use_fit_curve(self, coefs, power, fuel_price):
+    def use_fit_curve(self, coefs, power):
         # find the fuel use for the given power setting
         # INPUTS: 
         # coefs: coefficients for fuel use vs. power
@@ -165,7 +166,8 @@ class GasTurbine(LocalAssetModel):
         cost = 0
         for i in range(len(coefs)):
             cost = cost + coefs[i]*power**(i)
-        cost = cost*fuel_price
+        # cost = cost*fuel_price
+        cost = max(cost,0)
         return cost
 
     def update_active_vertex(self, Esetpoint, Hsetpoint, Tamb, e_cost, h_cost, fuel_price, ti, mkt):

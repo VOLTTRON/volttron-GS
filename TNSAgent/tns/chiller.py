@@ -104,7 +104,7 @@ class Chiller(LocalAssetModel):
         # this csv has entries of heat out and fuel consumed
 
         if self.datafilename == None:
-            filename = '/Python/efficiency_curves/'+self.name + '_efficiency.xlsx'
+            filename = '/efficiency_curves/'+self.name + '_efficiency.xlsx'
         else:
             filename = self.datafilename
         capacity = []
@@ -138,7 +138,7 @@ class Chiller(LocalAssetModel):
             #     elec = elec_binned[i]
             #     coefs_binned = np.flip(np.polyfit(cap, elec, regression_order))
             #     coefs.append(coefs_binned)
-            coefs = np.flip(np.polyfit(capacity, elec_use, regression_order))
+            coefs = np.flip(np.polyfit(capacity, elec_use, regression_order),0)
             #remove rounding errors/small stuff
             #coefs[np.abs(coefs)<1e-5] = 0.0
             self.datafilename = filename
@@ -147,17 +147,19 @@ class Chiller(LocalAssetModel):
         #save values
         self.coefs = coefs
 
-    def use_fit_curve(self, coefs, setpoint, other_asset_price):
+    def use_fit_curve(self, setpoint):
         # find the fuel use for the given power setting
         # INPUTS: coefficients for electricity vs. cooling power
         # setpoint: power setpoint in kW
         # other_asset_price: cost of electricity in units compatible with fit curve
         #
         # OUTPUTS: cost at power setpoint in [$/kWh]
+        coefs = self.coefs
         cost = 0
         for i in range(len(coefs)):
             cost = cost + coefs[i]*setpoint**(i)
-        cost = cost*other_asset_price
+        #cost = cost*other_asset_price
+        cost = max(cost,0)
         return cost
 
     def update_active_vertex(self, Csetpoint, Tamb, e_market_price, auc):

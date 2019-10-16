@@ -90,7 +90,7 @@ class Boiler(LocalAssetModel):
         # there is a csv with the same name as the boiler
         # this xlsx has entries of heat out and fuel consumed
         if self.datafilename == None:
-            filename = '/Python/efficiency_curves/'+self.name + '_efficiency.xlsx'
+            filename = '/efficiency_curves/'+self.name + '_efficiency.xlsx'
         else:
             filename = self.datafilename
         capacity = []
@@ -107,9 +107,10 @@ class Boiler(LocalAssetModel):
             capacity = capacity[capacity!=0]
             capacity = size*capacity[efficiency!=0]
             fuel_use = 1/efficiency[efficiency!=0]*size #make this in ternms of electricity use, not efficiency
+            kWhtocft = 3.41 # 3.41 cubic feet of natural gas per kWh
             # un-normalize the capacity data and remove (0,0) points. We don't want to fit to 0,0, because it is discontinuous
             capacity = size*capacity[efficiency!=0]
-            fuel_use = 1/efficiency[efficiency!=0]*size #make this in ternms of electricity use, not efficiency
+            fuel_use = 1/efficiency[efficiency!=0]*size*kWhtocft #make this in ternms of electricity use, not efficiency
             #bin the data according to temperature
             # n_bins = 3 # number of bins to separate sample data according to temperature
             # cap_binned, elec_binned, temp_min, temp_max = bin_data(capacity, elec_use, temperature, n_bins)
@@ -123,7 +124,7 @@ class Boiler(LocalAssetModel):
             #     elec = cap_binned[i]
             #     coefs_binned = np.flip(np.polyfit(cap, elec, regression_order))
             #     coefs.append(coefs_binned)
-            coefs = np.flip(np.polyfit(capacity, fuel_use, regression_order))
+            coefs = np.flip(np.polyfit(capacity, fuel_use, regression_order),0)
         except:
             coefs = [0, 1] # if there is no data start with an assumed efficiency of 1
             capacity = [0,1]
@@ -131,7 +132,7 @@ class Boiler(LocalAssetModel):
         self.min_capacity = min(capacity)
         self.coefs = coefs
 
-    def use_fit_curve(self, heat, fuel_price):
+    def use_fit_curve(self, heat):
         # find the fuel use for the given power setting
         # INPUTS: coefficients for fuel use vs. power
         # power: power setpoint in kW
@@ -142,7 +143,8 @@ class Boiler(LocalAssetModel):
         cost = 0
         for i in range(len(coefs)):
             cost = cost + coefs[i]*heat**(i)
-        cost = cost*fuel_price
+        #cost = cost*fuel_price
+        cost = max(cost,0)
         return cost
 
     def update_active_vertex(self,Hsetpoint,Tamb,fuel_price, auc, ti):
