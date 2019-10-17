@@ -623,8 +623,10 @@ class NeighborModel(Model, object):
         # prevents time intervals from accumulating indefinitely.
         self.activeVertices = [x for x in self.activeVertices if x.timeInterval.startTime in time_interval_values]
 
-        # Index through active time intervals
         for i in range(len(time_intervals)):
+            # Flag for logging demand charge 1st time only
+            dc_logged = False
+
             # Keep active vertices that are not in the indexed time interval, but
             # discard the one(s) in the indexed time interval. These shall be
             # recreated in this iteration.
@@ -677,7 +679,7 @@ class NeighborModel(Model, object):
                         # vertices.
                         # self.activeVertices = [self.activeVertices, interval_value]  # IntervalValue objects
                         self.activeVertices.append(interval_value)
-                else:
+                else:  # at least 1 vertex received
                     # One or more transactive records have been received
                     # concerning the indexed time interval. Use these to
                     # re-create active Vertices.
@@ -750,7 +752,7 @@ class NeighborModel(Model, object):
                                     and received_vertices[k].record == 0):
                                     msg = {
                                         'ts': received_vertices[k].timeInterval,
-                                        'power': power,
+                                        'predicted_clear_power': power,
                                         'max_power': self.object.maximumPower,
                                         'factor1': factor1,
                                         'factor2': factor2,
@@ -777,19 +779,20 @@ class NeighborModel(Model, object):
                                     demand_charge_flag = k
 
                                 # Publish to db
-                                # if self.mtn is not None and self.dc_threshold_topic != '':
-                                #     dc_flag = "has demand charge"
-                                #     if not demand_charge_flag:
-                                #         dc_flag = "no demand charge"
-                                #     dc_msg = {
-                                #         'dc_flag': dc_flag,
-                                #         'demand_charge_threshold': demand_charge_threshold,
-                                #         'predicted_power_peak': predicted_prior_peak,
-                                #         'est_power': power
-                                #     }
-                                #     self.mtn.vip.pubsub.publish(peer='pubsub',
-                                #                                 topic=self.dc_threshold_topic,
-                                #                                 message=dc_msg)
+                                if self.mtn is not None and self.dc_threshold_topic != '' \
+                                        and k == len(received_vertices)-1:
+                                    dc_flag = "has demand charge"
+                                    if not demand_charge_flag:
+                                        dc_flag = "no demand charge"
+                                    dc_msg = {
+                                        'dc_flag': dc_flag,
+                                        'demand_charge_threshold': demand_charge_threshold,
+                                        'predicted_power_peak': predicted_prior_peak,
+                                        'max_predicted_power': power
+                                    }
+                                    self.mtn.vip.pubsub.publish(peer='pubsub',
+                                                                topic=self.dc_threshold_topic,
+                                                                message=dc_msg)
 
                                 # Debug negative price & demand charge
                                 _log.debug("power: {} - demand charge threshold: {} - predicted power peak: {}"
