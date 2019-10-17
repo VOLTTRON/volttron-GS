@@ -65,7 +65,7 @@ from sympy.parsing.sympy_parser import parse_expr
 from volttron.platform.vip.agent import Agent, Core
 from volttron.platform.agent import utils
 from volttron.platform.agent.math_utils import mean, stdev
-from volttron.platform.messaging import topics
+from volttron.platform.messaging import topics, headers as headers_mod
 from volttron.platform.agent.base_market_agent import MarketAgent
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
@@ -115,14 +115,15 @@ def uncontrol_agent(config_path, **kwargs):
                                           path="",
                                           point="all")
     devices = config.get("devices")
+    record_topic = '/'.join(["tnc", config.get("campus", ""), config.get("building", "")])
     sim_flag = config.get("sim_flag", False)
     return UncontrolAgent(agent_name, market_name, verbose_logging, q_uc, building_topic, devices,
-                          price_multiplier, default_min_price, default_max_price, sim_flag, **kwargs)
+                          price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, **kwargs)
 
 
 class UncontrolAgent(MarketAgent):
     def __init__(self, agent_name, market_name, verbose_logging, q_uc, building_topic, devices,
-                 price_multiplier, default_min_price, default_max_price, sim_flag, **kwargs):
+                 price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, **kwargs):
         super(UncontrolAgent, self).__init__(verbose_logging, **kwargs)
         self.market_name = market_name
         self.q_uc = q_uc
@@ -141,6 +142,8 @@ class UncontrolAgent(MarketAgent):
         self.uc_load_array = []
         self.prices = []
         self.normalize_to_hour = 0.
+        self.record_topic = record_topic
+        self.current_datetime = None
         for market in self.market_name:
             self.join_market(market, BUYER, None, self.offer_callback,
                              None, self.price_callback, self.error_callback)
@@ -218,6 +221,7 @@ class UncontrolAgent(MarketAgent):
             current_time = current_time.astimezone(to_zone)
         else:
             current_time = parser.parse(headers["Date"])
+        self.current_datetime = current_time
         current_hour = current_time.hour
 
         try:
@@ -265,13 +269,15 @@ class UncontrolAgent(MarketAgent):
         try:
             qMin = self.q_uc[load_index]
             qMax = self.q_uc[load_index]
-            _log.debug("{}: demand curve for {} - {}".format(self.agent_name, self.market_name[index],
-                                                             [(qMin, price_max), (qMax, price_min)]))
             demand_curve.add(Point(price=max(price_min, price_max), quantity=min(qMin, qMax)))
             demand_curve.add(Point(price=min(price_min, price_max), quantity=max(qMin, qMax)))
         except:
             demand_curve.add(Point(price=max(price_min, price_max), quantity=0.1))
             demand_curve.add(Point(price=min(price_min, price_max), quantity=0.1))
+        topic_suffix = "/".join([self.agent_name, "DemandCurve"])
+        message = {"MarketIndex": index, "Curve": demand_curve.tuppleize(), "Commodity": "Electric"}
+        self.publish_record(topic_suffix, message)
+        _log.debug("{} debug demand_curve - curve: {}".format(self.agent_name, demand_curve.points))
         return demand_curve
 
     def determine_prices(self):
@@ -304,6 +310,12 @@ class UncontrolAgent(MarketAgent):
                                                                        buyer_seller,
                                                                        timestamp,
                                                                        error_message))
+
+    def publish_record(self, topic_suffix, message):
+        headers = {headers_mod.DATE: utils.format_timestamp(utils.get_aware_utc_now())}
+        message["TimeStamp"] = utils.format_timestamp(self.current_datetime)
+        topic = "/".join([self.record_topic, topic_suffix])
+        self.vip.pubsub.publish("pubsub", topic, headers, message).get()
 
 
 def main():
