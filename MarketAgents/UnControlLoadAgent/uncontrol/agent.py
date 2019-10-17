@@ -143,6 +143,7 @@ class UncontrolAgent(MarketAgent):
         self.prices = []
         self.normalize_to_hour = 0.
         self.record_topic = record_topic
+        self.current_datetime = None
         for market in self.market_name:
             self.join_market(market, BUYER, None, self.offer_callback,
                              None, self.price_callback, self.error_callback)
@@ -220,6 +221,7 @@ class UncontrolAgent(MarketAgent):
             current_time = current_time.astimezone(to_zone)
         else:
             current_time = parser.parse(headers["Date"])
+        self.current_datetime = current_time
         current_hour = current_time.hour
 
         try:
