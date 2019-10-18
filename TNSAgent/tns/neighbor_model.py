@@ -785,6 +785,7 @@ class NeighborModel(Model, object):
                                     if not demand_charge_flag:
                                         dc_flag = "no demand charge"
                                     dc_msg = {
+                                        'ts': received_vertices[k].timeInterval,
                                         'dc_flag': dc_flag,
                                         'demand_charge_threshold': demand_charge_threshold,
                                         'predicted_power_peak': predicted_prior_peak,
