@@ -8,7 +8,33 @@ _log = logging.getLogger(__name__)
 utils.setup_logging()
 
 
-class RTU(object):
+# class RTU(object):
+#     OAT = "oat"
+#     ZT = "zt"
+#     ZDAT = "zdat"
+#     MC = "mclg"
+#     MH = "mhtg"
+#     CSP = "csp"
+#     HSP = "hsp"
+#     ZTSP = "ztsp"
+#     OPS = {
+#     "csp": [(operator.gt, operator.add), (operator.lt, operator.sub)],
+#     "hsp": [(operator.lt, operator.sub), (operator.gt, operator.add)]
+#     }
+#
+#     def __init__(self, config, **kwargs):
+#         model_type = config.get("model_type", "firstorderzone")
+#         module = importlib.import_module("volttron.pnnl.models.rtu")
+#         model_class = getattr(module, model_type)
+#         self.prediction_array = []
+#         self.model = model_class(config, self)
+#
+#     def get_q(self,  _set, sched_index, market_index, occupied):
+#         q = self.model.predict(_set, sched_index, market_index, occupied)
+#         return q
+
+
+class firstorderzone(object):
     OAT = "oat"
     SFS = "sfs"
     ZT = "zt"
@@ -19,21 +45,8 @@ class RTU(object):
     OPS = {
     "csp": [(operator.gt, operator.add), (operator.lt, operator.sub)],
     "hsp": [(operator.lt, operator.sub), (operator.gt, operator.add)]
-}
+    }
 
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "firstorderzone")
-        module = importlib.import_module("volttron.pnnl.models.rtu")
-        model_class = getattr(module, model_type)
-        self.prediction_array = []
-        self.model = model_class(config, self)
-
-    def get_q(self,  _set, sched_index, market_index, occupied):
-        q = self.model.predict(_set, sched_index, market_index, occupied)
-        return q
-
-
-class firstorderzone(object):
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
         self.c1 = config["c1"]

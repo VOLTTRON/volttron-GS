@@ -59,7 +59,7 @@
 import sys
 import logging
 from volttron.platform.agent import utils
-from volttron.pnnl.models.light import Light
+from volttron.pnnl.models import Model
 from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
 
 
@@ -71,7 +71,7 @@ LTL = "light"
 OCC = "occ"
 
 
-class LightAgent(TransactiveBase, Light):
+class LightAgent(TransactiveBase, Model):
     """
     Transactive control lighting agent.
     """
@@ -84,7 +84,7 @@ class LightAgent(TransactiveBase, Light):
         self.agent_name = config.get("agent_name", "light_control")
         TransactiveBase.__init__(self, config, **kwargs)
         model_config = config.get("model_parameters", {})
-        Light.__init__(self, model_config, **kwargs)
+        Model.__init__(self, model_config, **kwargs)
         self.init_markets()
 
     def init_predictions(self, output_info):

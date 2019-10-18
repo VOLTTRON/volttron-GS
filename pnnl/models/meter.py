@@ -10,21 +10,23 @@ _log = logging.getLogger(__name__)
 utils.setup_logging()
 
 
-class Meter(object):
-    WBP = "wbp"
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type")
-        module = importlib.import_module("volttron.pnnl.models.meter")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-    def get_q(self, _set, sched_index, market_index, occupied):
-        q = self.model.predict(_set, sched_index, market_index, occupied)
-        return q
+# class Meter(object):
+#     WBP = "wbp"
+#
+#     def __init__(self, config, **kwargs):
+#         model_type = config.get("model_type")
+#         module = importlib.import_module("volttron.pnnl.models.meter")
+#         model_class = getattr(module, model_type)
+#         self.model = model_class(config, self)
+#
+#     def get_q(self, _set, sched_index, market_index, occupied):
+#         q = self.model.predict(_set, sched_index, market_index, occupied)
+#         return q
 
 
 class simple(object):
+    WBP = "wbp"
+
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
         self.inputs = parent.inputs
@@ -33,6 +35,6 @@ class simple(object):
         pass
 
     def predict(self, _set, sched_index, market_index, occupied):
-        pass
+        return None
 
 

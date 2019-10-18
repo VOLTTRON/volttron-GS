@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*- {{{
 # vim: set fenc=utf-8 ft=python sw=4 ts=4 sts=4 et:
 
-# Copyright (c) 2019, Battelle Memorial Institute
+# Copyright (c) 2016, Battelle Memorial Institute
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -16,7 +16,7 @@
 #    distribution.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# 'AS IS' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
 # A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
 # OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
@@ -56,63 +56,37 @@
 
 # }}}
 
-import sys
-import logging
-from datetime import timedelta as td
-from volttron.platform.agent import utils
+from os import path
+from setuptools import setup, find_packages
 
-from volttron.pnnl.models import Model
-from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
+MAIN_MODULE = 'agent'
 
-#from decorators import time_cls_methods
+# Find the agent package that contains the main module
+packages = find_packages('.')
+agent_package = ''
+for package in find_packages():
+    # Because there could be other packages such as tests
+    if path.isfile(package + '/' + MAIN_MODULE + '.py') is True:
+        agent_package = package
+if not agent_package:
+    raise RuntimeError('None of the packages under {dir} contain the file '
+                       '{main_module}'.format(main_module=MAIN_MODULE + '.py',
+                                              dir=path.abspath('.')))
 
-_log = logging.getLogger(__name__)
-utils.setup_logging()
-__version__ = '0.3'
+# Find the version number from the main module
+agent_module = agent_package + '.' + MAIN_MODULE
+_temp = __import__(agent_module, globals(), locals(), ['__version__'], -1)
+__version__ = _temp.__version__
 
-
-@time_cls_methods
-class VAVAgent(TransactiveBase, Model):
-    """
-    The SampleElectricMeterAgent serves as a sample of an electric meter that
-    sells electricity for a single building at a fixed price.
-    """
-
-    def __init__(self, config_path, **kwargs):
-        try:
-            config = utils.load_config(config_path)
-        except StandardError:
-            config = {}
-        self.agent_name = config.get("agent_name", "vav")
-        TransactiveBase.__init__(self, config, **kwargs)
-        model_config = config.get("model_parameters", {})
-        Model.__init__(self, model_config, **kwargs)
-        self.init_markets()
-
-    def init_predictions(self, output_info):
-        pass
-
-    def update_state(self, market_index, sched_index, price):
-        market_time = self.current_datetime + td(hours=market_index + 1)
-        occupied = self.check_future_schedule(market_time)
-        if occupied:
-            prices = self.determine_prices()
-            _set = self.determine_control(self.ct_flexibility, prices, price)
-        else:
-            _set = self.off_setpoint
-
-        self.model.update(_set, sched_index, market_index)
-        self.update_flag[market_index] = True
-
-
-def main():
-    """Main method called to start the agent."""
-    utils.vip_main(VAVAgent, version=__version__)
-
-
-if __name__ == '__main__':
-    # Entry point for script
-    try:
-        sys.exit(main())
-    except KeyboardInterrupt:
-        pass
+# Setup
+setup(
+    name=agent_package + 'agent',
+    version=__version__,
+    install_requires=['volttron'],
+    packages=packages,
+    entry_points={
+        'setuptools.installation': [
+            'eggsecutable = ' + agent_module + ':main',
+        ]
+    }
+)

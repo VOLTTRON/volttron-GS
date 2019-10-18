@@ -6,26 +6,13 @@ from volttron.platform.agent import utils
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 
-
-class AHUChiller(object):
+class ahu(object):
     SFS = "sfs"
     MAT = "mat"
     DAT = "dat"
     SAF = "saf"
     OAT = "oat"
     RAT = "rat"
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "ahuchiller")
-        module = importlib.import_module("volttron.pnnl.models.ahuchiller")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-    def get_q(self, _set, sched_index, market_index, occupied):
-        pass
-
-
-class ahuchiller(object):
 
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
@@ -37,10 +24,9 @@ class ahuchiller(object):
         self.c2 = model_conf["c2"]
         self.c3 = model_conf["c3"]
         self.power_unit = model_conf.get("unit_power", "kw")
-        self.cop = model_conf["COP"]
         self.mDotAir = model_conf.get("mDotAir", 0.0)
 
-        self.name = 'AhuChiller'
+        self.name = 'AHU'
 
         self.has_economizer = equipment_conf["has_economizer"]
         self.economizer_limit = equipment_conf["economizer_limit"]
@@ -90,51 +76,52 @@ class ahuchiller(object):
 
     def calculate_fan_power(self):
         if self.power_unit == 'W':
-            self.fan_power = (self.c0 + self.c1*self.mDotAir + self.c2*pow(self.mDotAir, 2) + self.c3*pow(self.mDotAir, 3))*1000.  # watts
+            fan_power = (self.c0 + self.c1 * self.mDotAir + self.c2 * pow(self.mDotAir, 2) + self.c3 * pow(self.mDotAir,
+                                                                                                           3)) * 1000.  # watts
         else:
-            self.fan_power = self.c0 + self.c1*self.mDotAir + self.c2*pow(self.mDotAir, 2) + self.c3*pow(self.mDotAir, 3)  # kW
+            fan_power = self.c0 + self.c1 * self.mDotAir + self.c2 * pow(self.mDotAir, 2) + self.c3 * pow(self.mDotAir,
+                                                                                                          3)  # kW
+        return fan_power
 
-    def calculate_coil_load(self, oat):
+    def calculate_cooling_load(self, oat):
         if self.has_economizer:
             if oat < self.tDis:
                 coil_load = 0.0
             elif oat < self.economizer_limit:
                 coil_load = self.mDotAir * self.cpAir * (self.tDis - oat)
             else:
-                mat = self.tset_avg*(1.0 - self.min_oaf) + self.min_oaf*oat
+                mat = self.tset_avg * (1.0 - self.min_oaf) + self.min_oaf * oat
                 coil_load = self.mDotAir * self.cpAir * (self.tDis - mat)
         else:
             mat = self.tset_avg * (1.0 - self.min_oaf) + self.min_oaf * oat
             coil_load = self.mDotAir * self.cpAir * (self.tDis - mat)
 
-        if coil_load > 0: #heating mode is not yet supported!
-            self.coil_load = 0.0
-        else:
-            self.coil_load = coil_load
+        if coil_load > 0:  # heating mode is not yet supported!
+            coil_load = 0.0
+        return coil_load
 
-    def calculate_load(self, q_load, oat):
-        self.input_zone_load(q_load)
-        return self.calculate_total_power(oat)
+    def calculate_electric_load(self):
+        return self.calculate_fan_power()
 
     def single_market_coil_load(self):
         try:
-            self.coil_load = self.mDotAir * self.cpAir * (self.dat - self.mat)
+            coil_load = self.mDotAir * self.cpAir * (self.dat - self.mat)
         except:
             _log.debug("AHU for single market requires dat and mat measurements!")
-            self.coil_load = 0.
+            coil_load = 0.
+        return coil_load
 
-    def calculate_total_power(self, oat):
-        self.calculate_fan_power()
+    def calculate_coil_load(self, oat):
         oat = oat if oat is not None else self.oat
         if self.building_chiller and oat is not None:
             if self.smc_interval is not None:
-                self.single_market_coil_load()
+                coil_load = self.single_market_coil_load()
             else:
-                self.calculate_coil_load(oat)
+                coil_load = self.calculate_cooling_load(oat)
         else:
             _log.debug("AHUChiller building does not have chiller or no oat!")
-            self.coil_load = 0.0
-        return abs(self.coil_load)/self.cop/0.9 + max(self.fan_power, 0)
+            coil_load = 0.0
+        return abs(coil_load)
 
     def predict(self, set, sched_index, market_index, occupied):
         return None

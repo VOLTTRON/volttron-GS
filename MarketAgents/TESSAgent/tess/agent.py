@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*- {{{
 # vim: set fenc=utf-8 ft=python sw=4 ts=4 sts=4 et:
 
-# Copyright (c) 2019, Battelle Memorial Institute
+# Copyright (c) 2018, Battelle Memorial Institute
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -16,7 +16,7 @@
 #    distribution.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# 'AS IS' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
 # A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
 # OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
@@ -58,56 +58,85 @@
 
 import sys
 import logging
-from datetime import timedelta as td
 from volttron.platform.agent import utils
-
+from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregator
+from volttron.platform.agent.base_market_agent.poly_line import PolyLine
+from volttron.platform.agent.base_market_agent.point import Point
+from volttron.platform.vip.agent import Agent, Core
 from volttron.pnnl.models import Model
-from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
-
-#from decorators import time_cls_methods
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
-__version__ = '0.3'
+__version__ = "0.1"
 
 
-@time_cls_methods
-class VAVAgent(TransactiveBase, Model):
+class TESSAgent(Aggregator, Model):
     """
-    The SampleElectricMeterAgent serves as a sample of an electric meter that
-    sells electricity for a single building at a fixed price.
+    The TESS Agent participates in Electricity Market as consumer of electricity at fixed price.
+    It participates in internal Chilled Water market as supplier of chilled water at fixed price.
     """
 
     def __init__(self, config_path, **kwargs):
         try:
             config = utils.load_config(config_path)
-        except StandardError:
+        except Exception.StandardError:
             config = {}
-        self.agent_name = config.get("agent_name", "vav")
-        TransactiveBase.__init__(self, config, **kwargs)
+        self.agent_name = config.get("agent_name", "tess_agent")
         model_config = config.get("model_parameters", {})
+        Aggregator.__init__(self, config, **kwargs)
         Model.__init__(self, model_config, **kwargs)
         self.init_markets()
+    #
+    # @Core.receiver('onstart')
+    # def setup(self, sender, **kwargs):
+    #     """
+    #     On start.
+    #     :param sender:
+    #     :param kwargs:
+    #     :return:
+    #     """
+    #     self.vip.pubsub.subscribe(peer='pubsub',
+    #                               prefix='mixmarket/start_new_cycle',
+    #                               callback=self.update_prices)
+    #
+    # def update_prices(self, peer, sender, bus, topic, headers, message):
+    #     _log.debug("Get prices prior to market start.")
+    #     self.energy_prices = message['prices']  # Array of prices
+    #     self.reserve_prices = message.get('reserve_prices', None)
 
-    def init_predictions(self, output_info):
-        pass
 
-    def update_state(self, market_index, sched_index, price):
-        market_time = self.current_datetime + td(hours=market_index + 1)
-        occupied = self.check_future_schedule(market_time)
-        if occupied:
-            prices = self.determine_prices()
-            _set = self.determine_control(self.ct_flexibility, prices, price)
-        else:
-            _set = self.off_setpoint
+    def translate_aggregate_demand(self, chilled_water_demand, index):
+        electric_demand_curve = PolyLine()
+        reserve_demand_curve = PolyLine()
+        oat = self.oat_predictions[index] if self.oat_predictions else None
+        cooling_load = []
 
-        self.model.update(_set, sched_index, market_index)
-        self.update_flag[market_index] = True
+        if len(chilled_water_demand) == self.numHours:
+            #point.x = quantity, point.y = price
+            # Assuming points.x is cooling load, points.y is price (what about reserve price???)
+            for point in chilled_water_demand:
+                cooling_load.append(point.x)
+
+            tess_power_inject, tess_power_reserve, tess_soc = self.model.run_optimization(self.market_prices,
+                                                                                        self.reserve_market_prices,
+                                                                                        self.oat_predictions,
+                                                                                        cooling_load)
+            for i in range(0, len(self.market_prices)):
+                electric_demand_curve.add(Point(self.energy_prices[i], tess_power_inject[i]))
+
+            for i in range(0, len(self.reserve_market_prices)):
+                reserve_demand_curve.add(Point(self.reserve_prices[i], tess_power_reserve[i]))
+
+            self.consumer_demand_curve['electric'][index] = electric_demand_curve
+            self.consumer_reserve_demand_curve['electric'][index] = reserve_demand_curve
+
+        _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
+        _log.debug("{}: reserve demand : {}".format(self.agent_name, reserve_demand_curve.points))
 
 
 def main():
     """Main method called to start the agent."""
-    utils.vip_main(VAVAgent, version=__version__)
+    utils.vip_main(TESSAgent, version=__version__)
 
 
 if __name__ == '__main__':
