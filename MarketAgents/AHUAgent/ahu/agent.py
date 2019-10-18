@@ -100,15 +100,10 @@ class AHUAgent(Aggregator, Model):
         coil_load_demand_curve = PolyLine()
         oat = self.oat_predictions[index] if self.oat_predictions else None
         for point in air_demand.points:
-# <<<<<<< HEAD
-#             electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
-#         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
-#         # Hard-coding the market names is not ideal.  Need to come up with more robust solution
-#         self.consumer_demand_curve["electric"][index] = electric_demand_curve
-# =======
-        self.model.input_zone_load(point.x)
-        electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_electric_load()))
-        coil_load_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_coil_load(oat)))
+            #electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
+            self.model.input_zone_load(point.x)
+            electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_electric_load()))
+            coil_load_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_coil_load(oat)))
 
         # Hard-coding the market names is not ideal.  Need to come up with more robust solution
         self.consumer_demand_curve["electric"][index] = electric_demand_curve
