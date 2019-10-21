@@ -86,6 +86,7 @@ class TransactiveBase(MarketAgent):
 
         self.update_flag = []
         self.demand_curve = []
+        self.actuation_price_range = None
         self.prices = []
 
     @Core.receiver('onstart')
@@ -289,7 +290,10 @@ class TransactiveBase(MarketAgent):
                 return
             price = self.current_price
         sets = self.outputs[name]["ct_flex"]
-        prices = self.determine_prices()
+        if self.actuation_price_range is not None:
+            prices = self.actuation_price_range
+        else:
+            prices = self.determine_prices()
         value = self.determine_control(sets, prices, price)
         self.outputs[name]["value"] = value
         point = self.outputs.get("point", name)
@@ -413,6 +417,7 @@ class TransactiveBase(MarketAgent):
 
         # Store received prices so we can use it later when doing clearing process
         if self.market_prices:
+            self.actuation_price_range = self.determine_prices()
             if current_hour != self.current_hour:
                 self.current_price = self.market_prices[0]
         self.current_hour = current_hour
