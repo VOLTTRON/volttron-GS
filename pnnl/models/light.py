@@ -30,13 +30,32 @@ class simple(object):
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
         self.inputs = parent.inputs
-        if "rated_power" in config: 
-           self.rated_power = config["rated_power"]
-        else:
-           self.rated_power = config["model_parameters"]["rated_power"]
+        self.rated_power = config["rated_power"]
 
     def update_data(self):
         pass
 
     def predict(self, _set, sched_index, market_index, occupied):
         return _set*self.rated_power
+
+
+class simple_profile(object):
+    def __init__(self, config, parent, **kwargs):
+        self.parent = parent
+        self.inputs = parent.inputs
+        self.rated_power = config["rated_power"]
+        try:
+            self.lighting_schedule = config["default_lighting_schedule"]
+        except KeyError:
+            _log.warn("No no default lighting schedule!")
+            self.lighting_schedule = [1.0]*24
+
+    def update_data(self):
+        pass
+
+    def predict(self, _set, sched_index, market_index, occupied):
+        if not occupied:
+            power = self.lighting_schedule[sched_index]*self.rated_power
+        else:
+            power = _set*self.rated_power
+        return power
