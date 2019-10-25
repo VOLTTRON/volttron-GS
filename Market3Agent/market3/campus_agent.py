@@ -126,14 +126,16 @@ class CampusAgent(MarketAgent):
         # self.start_mixmarket(converged, price, price_reserved, start_of_cycle)
 
     def start_mixmarket(self, converged, price, price_reserved, start_of_cycle):
-        _log.info("Starting mixmarket...")
+        now = Timer.get_cur_time()
+        _log.info("Starting mixmarket at {}...".format(now))
         self.vip.pubsub.publish(peer='pubsub',
                                 topic='mixmarket/start_new_cycle',
                                 message={
                                     "converged": converged,
                                     "prices": price,
                                     "reserved_prices": price_reserved,
-                                    "start_of_cycle": start_of_cycle
+                                    "start_of_cycle": start_of_cycle,
+                                    "hour": now.hour
                                 })
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
