@@ -107,7 +107,7 @@ class TransactiveIlcCoordinator(Agent):
         config = utils.load_config(config_path)
         campus = config.get("campus", "")
         building = config.get("building", "")
-        tz = config.get("timezone", "US/Pacific")
+        self.tz = config.get("timezone", "US/Pacific")
         logging_topic = config.get("logging_topic", "tnc")
         self.target_topic = '/'.join(['record', 'target_agent', campus, building, 'goal'])
         self.logging_topic = '/'.join([logging_topic, campus, building, "TCILC"])
@@ -145,7 +145,7 @@ class TransactiveIlcCoordinator(Agent):
         self.power_point = power_token["point"]
         # this is local aware datetime, need to start query from historian at midnight
         # local time but the historian requires UTC.  Need to be careful here.
-        self.current_datetime = config.get("start_date", dt.now(pytz.timezone(tz)))
+        self.current_datetime = config.get("start_date", dt.now(pytz.timezone(self.tz)))
         if type(self.current_datetime) is not dt:
             self.current_datetime = parse(self.current_datetime)
         self.power_meter_topic = topics.RPC_DEVICE_PATH(campus=campus,
@@ -170,12 +170,14 @@ class TransactiveIlcCoordinator(Agent):
         self.comfort_to_dollar = config.get('comfort_to_dollar', 1.0)
         self.market_name = []
         self.market_number = 24
-        for i in range(self.market_number):
-            self.market_name.append('_'.join([market_name, str(i)]))
-            self.join_market(self.market_name[i], BUYER, None, self.offer_callback, None, self.price_callback, self.error_callback)
+        # for i in range(self.market_number):
+            # self.market_name.append('_'.join([market_name, str(i)]))
+            # self.join_market(self.market_name[i], BUYER, None, self.offer_callback, None, self.price_callback, self.error_callback)
 
 
         self.bldg_power_point = "WholeBuildingPower"
+        self.ts_name = config.get("timestamp_column", "ts")
+        self.bday_us = CustomBusinessDay(calendar=USFederalHolidayCalendar())
 
     @Core.receiver("onstart")
     def starting_base(self, sender, **kwargs):
@@ -188,10 +190,10 @@ class TransactiveIlcCoordinator(Agent):
         :return:
         """
         self.make_baseline()
-        _log.debug("Subscribing to " + self.power_meter_device)
-        _log.debug("Subscribing to " + self.prices_topic)
-        self.vip.pubsub.subscribe(peer="pubsub", prefix=self.power_meter_device, callback=self.update_time)
-        self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
+        #_log.debug("Subscribing to " + self.power_meter_device)
+        #_log.debug("Subscribing to " + self.prices_topic)
+        #self.vip.pubsub.subscribe(peer="pubsub", prefix=self.power_meter_device, callback=self.update_time)
+        #self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
 
     def make_baseline(self):
         self.get_business_days()
@@ -201,23 +203,34 @@ class TransactiveIlcCoordinator(Agent):
         rows_list = []
         for start_dt in self.business_days:
             end_dt = start_dt.replace(hour=23, minute=59, second=59)
-            device_data = self.query_device_data(start_dt, end_dt)
-            power_df = self.query_power(start_dt, end_dt)
+            start = start_dt.astimezone(pytz.utc)
+            end = end_dt.astimezone(pytz.utc)
+            device_data = self.query_device_data(format_timestamp(start), format_timestamp(end))
+            power_df = self.query_power(format_timestamp(start), format_timestamp(end))
 
             # Pass data min-by-min
             for index, row in power_df.iterrows():
+                _log.debug("POWER :{}".format(row))
                 #3.  pass one minute of data for each device to new_data() [inner loop]
                 for device in device_data:
                     df = device_data[device]
-                    value = df[self.device_query_dict[device]]
-                    self.new_data(device, value)
+                    device_row =  df.loc[index,:]
+                    device_row = device_row.to_dict()
+                    data = {}
+                    for key, value in device_row.items():
+                        point = key.split("/")[-1]
+                        data[point] = value
+    
+                    self.new_data(device, data)
 
                 #4.  pass one minute of power meter data to load_message_handler()
-                q_min, q_max = self.load_message_handler(row[self.bldg_power_point])
+                power_data = row[self.power_point]
+                _log.debug("POWER DATA: {}".format(power_data))
+                q_min, q_max = self.load_message_handler(power_data)
 
                 # Store q_min & q_max
                 dict1 = {
-                    'ts': row[self.ts_name],
+                    'ts': index,
                     'q_min': q_min,
                     'q_max': q_max
                 }
@@ -227,39 +240,47 @@ class TransactiveIlcCoordinator(Agent):
 
         # Now we have q_min & q_max for each minute for the last 10 days:
         #   - Aggregate q_min & q_max for each hour in the last 10 days
+        df.set_index('ts', inplace=True)
         df = df.resample('H').mean()
 
         #   - Query adjustment data for last 4 hours: similar process like above
         cur_dt = self.current_datetime.replace(minute=0, second=0)
-        start_adj_dt = cur_dt - td(hours=4)
-        end_adj_dt = cur_dt - td(seconds=1)
+        start_adj_dt = format_timestamp((cur_dt - td(hours=4)).astimezone(pytz.utc))
+        end_adj_dt = format_timestamp((cur_dt - td(seconds=1)).astimezone(pytz.utc))
         adj_device_data = self.query_device_data(start_adj_dt, end_adj_dt)
         adj_power_df = self.query_power(start_adj_dt, end_adj_dt)
         rows_list = []
         for index, row in adj_power_df.iterrows():
             for device in adj_device_data:
                 adj_df = adj_device_data[device]
-                value = adj_df[self.device_query_dict[device]]
-                self.new_data(device, value)
-            q_min, q_max = self.load_message_handler(row[self.bldg_power_point])
+                adj_row =  adj_df.loc[index,:]
+                adj_row = adj_row.to_dict()
+                data = {}
+                for key, value in adj_row.items():
+                    point = key.split("/")[-1]
+                    data[point] = value
+                self.new_data(device, data)
+            q_min, q_max = self.load_message_handler(row[self.power_point])
 
             dict1 = {
-                'ts': row[self.ts_name],
+                'ts': index,
                 'q_min': q_min,
                 'q_max': q_max
             }
             rows_list.append(dict1)
 
         adj_df = pd.DataFrame(rows_list)
+        adj_df.set_index('ts', inplace=True)
         adj_df = adj_df.resample('H').mean()
 
         # Estimate q_min & q_max for 24 hours of the last day
         estimates = {}
         for hour in range(1,25):
-            q_min_est, q_max_est = self.estimate(df, adj_df)
+            q_min_est, q_max_est = self.estimate(df, adj_df, hour)
             estimates[hour] = {'min': q_min_est, 'max': q_max_est}
+            _log.debug("BASELINE: {} - qmin: {} - qmax: {}".format(hour, q_min_est, q_max_est))
 
-    def estimate(self, df_baseline, df_adj):
+    def estimate(self, df_baseline, df_adj, hr):
         """
         Estimate using hourly profile for last X business day
         """
@@ -267,20 +288,23 @@ class TransactiveIlcCoordinator(Agent):
         # Baseline
         q_min = []
         q_max = []
-        for hr in range(0, 24):
-            cur_df = df_baseline[df_baseline[self.ts_name].dt.hour == hr]
-            q_min.append(cur_df['Qmin'].mean())
-            q_max.append(cur_df['Qmax'].mean())
-
+        # for hr in range(0, 24):
+        cur_df = df_baseline[df_baseline.index.hour == hr]
+        _log.debug("CUR: {}".format(cur_df))
+        q_min.append(cur_df['q_min'].mean())
+        q_max.append(cur_df['q_max'].mean())
+        _log.debug("QMIN: {}".format(q_min))
+        _log.debug("QMax: {}".format(q_max))
+        sys.exit()
         # Caculate adjustment
         now = dt.now()
-        adj_1 = now - td(hours=4)
-        adj_2 = now - td(hours=3)
-        adj_3 = now - td(hours=2)
+        adj_1 = (now - td(hours=4)).hour
+        adj_2 = (now - td(hours=3)).hour
+        adj_3 = (now - td(hours=2)).hour
         sum_qmin = q_min[adj_1] + q_min[adj_2] + q_min[adj_3]
         sum_qmax = q_max[adj_1] + q_max[adj_2] + q_max[adj_3]
-        sum_c_qmin = df_adj['Qmin'].mean()
-        sum_c_qmax = df_adj['Qmax'].mean()
+        sum_c_qmin = df_adj['q_min'].mean()
+        sum_c_qmax = df_adj['q_max'].mean()
         adj_qmin = sum_c_qmin / sum_qmin
         adj_qmax = sum_c_qmax / sum_qmax
 
@@ -297,38 +321,65 @@ class TransactiveIlcCoordinator(Agent):
     def get_business_days(self):
         self.business_days = []
         # Get 10 business days
-        for i in range(11, 1, -1):
-            business_day = (self.current_datetime - BDay()).replace(hour=0, minute=0, second=0)
+        for i in range(2, 1, -1):
+            business_day = (self.current_datetime - self.bday_us*i).replace(hour=0, minute=0, second=0, month=7)
             self.business_days.append(business_day)
+        _log.debug("BUSINESS: {}".format(self.business_days))
 
     def query_device_data(self, start, end, timeout=10000):
         device_data = {}
         for device, point_topic in self.device_query_dict.items():
-
-            result = self.vip.rpc.call('platform.historian',
+            _log.debug("QUERY DEVICE DATA - {} - {} - {}".format(point_topic, start, end))
+            result = self.vip.rpc.call('crate.prod',
                                        'query',
                                        topic=point_topic,
                                        start=start,
                                        end=end,
-                                       order="FIRST_TO_LAST").get(timeout=timeout)
+                                       order="FIRST_TO_LAST",
+                                       count=20000,
+                                       external_platform="vc").get(timeout=timeout)
+            df = None
+            data = result["values"]
+            for key, value in data.iteritems():
+                cur_df = pd.DataFrame(data[key], columns=['ts', key])
+                if df is None:
+                    df = cur_df
+                else:
+                    df = pd.merge(df, cur_df, on='ts')
+
             # need hungs help here assume df returns data in format we need to process though new_data
-            df = pd.DataFrame(result['values'], columns=[self.ts_name, point_topic])
             df[self.ts_name] = pd.to_datetime(df[self.ts_name])
+            
+            df.set_index('ts', inplace=True)
+            df.index = df.index.tz_convert(self.tz)
+            _log.debug("size {}".format(len(df)))
+            tpc = device.split("/")
+            tpc = "_".join([tpc[0], tpc[1]])
+            df.to_csv(tpc)
             df = df.resample('1Min').mean()
             device_data[device] = df
+            #tpc=device
+            #df.to_csv(device)
 
         return device_data
 
     def query_power(self, start, end, timeout=10000):
-        result = self.vip.rpc.call('platform.historian',
+        result = self.vip.rpc.call('crate.prod',
                                    'query',
                                    topic=self.power_meter_topic,
                                    start=start,
                                    end=end,
-                                   order="FIRST_TO_LAST").get(timeout=timeout)
-        # need hungs help here assume df returns data in format we need to process though new_data
-        df = pd.DataFrame(result['values'], columns=[self.ts_name, self.bldg_power_point])
+                                   order="FIRST_TO_LAST",
+                                   count=2000,
+                                   external_platform="vc").get(timeout=timeout)
+        data = result["values"]
+        df = pd.DataFrame(data, columns=[self.ts_name, self.bldg_power_point])
         df[self.ts_name] = pd.to_datetime(df[self.ts_name])
+        df.set_index('ts', inplace=True)
+        df.index = df.index.tz_convert(self.tz)
+        # need hungs help here assume df returns data in format we need to process though new_data
+        #df = pd.DataFrame(result['values'], columns=[self.ts_name, self.bldg_power_point])
+        #df[self.ts_name] = pd.to_datetime(df[self.ts_name])
         df = df.resample('1Min').mean()
 
         return df
@@ -361,7 +412,7 @@ class TransactiveIlcCoordinator(Agent):
                     }
             },
             {
-                "value": {"tz": "UTC"}
+                "value": {"tz": "US/Pacfic"}
             }
         ]
         self.vip.pubsub.publish('pubsub', self.target_topic, headers, target_msg).get(timeout=15)
@@ -376,6 +427,7 @@ class TransactiveIlcCoordinator(Agent):
         """
         # parsed_data needs to be a dictionary of key value pairs
         # device name is the same device name from self.device_query_dict
+        _log.debug("DATA : {}".format(type(data)))
         parsed_data = parse_sympy(data)
         self.clusters.get_device(device_name).ingest_data(parsed_data)
 
@@ -423,6 +475,7 @@ class TransactiveIlcCoordinator(Agent):
         """
         # Current power should be float
         power_max, power_min = self.generate_power_points(current_power)
+        return power_max, power_min
         # power_max and power_min are the qmin and qmax respectively
         # log to db for later processing
 
