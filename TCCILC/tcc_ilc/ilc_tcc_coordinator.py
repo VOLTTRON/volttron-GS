@@ -275,48 +275,65 @@ class TransactiveIlcCoordinator(Agent):
 
         # Estimate q_min & q_max for 24 hours of the last day
         estimates = {}
-        for hour in range(1,25):
-            q_min_est, q_max_est = self.estimate(df, adj_df, hour)
-            estimates[hour] = {'min': q_min_est, 'max': q_max_est}
-            _log.debug("BASELINE: {} - qmin: {} - qmax: {}".format(hour, q_min_est, q_max_est))
 
-    def estimate(self, df_baseline, df_adj, hr):
-        """
-        Estimate using hourly profile for last X business day
-        """
+        q_min_est, q_max_est = self.estimate(df)
+        for hr in q_min_est:
+            estimates[hr] = {
+                'min': q_min_est[hr],
+                'max': q_max_est[hr]
+            }
+        _log.debug("BASELINE: {} - qmin: {} - qmax: {}".format(q_min_est, q_max_est))
 
-        # Baseline
+    def estimate(self, df_baseline):
+        """
+        Estimate Qmin & Qmax for next 24 hours using hourly profile of last X business day(s)
+        """
+        from datetime import timedelta
+
+        # Arrays to store next 24-hour predictions
         q_min = []
         q_max = []
-        # for hr in range(0, 24):
-        cur_df = df_baseline[df_baseline.index.hour == hr]
-        _log.debug("CUR: {}".format(cur_df))
-        q_min.append(cur_df['q_min'].mean())
-        q_max.append(cur_df['q_max'].mean())
-        _log.debug("QMIN: {}".format(q_min))
-        _log.debug("QMax: {}".format(q_max))
-        sys.exit()
-        # Caculate adjustment
-        now = dt.now()
-        adj_1 = (now - td(hours=4)).hour
-        adj_2 = (now - td(hours=3)).hour
-        adj_3 = (now - td(hours=2)).hour
-        sum_qmin = q_min[adj_1] + q_min[adj_2] + q_min[adj_3]
-        sum_qmax = q_max[adj_1] + q_max[adj_2] + q_max[adj_3]
-        sum_c_qmin = df_adj['q_min'].mean()
-        sum_c_qmax = df_adj['q_max'].mean()
-        adj_qmin = sum_c_qmin / sum_qmin
-        adj_qmax = sum_c_qmax / sum_qmax
 
-        # Apply day-of adjustment
-        qmin_est = [x * adj_qmin for x in q_min]
-        qmax_est = [x * adj_qmax for x in q_max]
+        # Initiate next 24 hours
+        next_24_hrs = []
+        last_ts = df_baseline.index.iloc[-1]
+        for hr in range(1, 25):
+            next_24_hrs.append(last_ts + timedelta(hours=hr))
 
+        # Calculate baseline for 24 hours
+        baseline_q_min = []
+        baseline_q_max = []
+        for ts in next_24_hrs:
+            cur_df = df_baseline[df_baseline.index.hour == ts.hour]
+            baseline_q_min.append(cur_df['q_min'].mean())
+            baseline_q_max.append(cur_df['q_max'].mean())
 
-        # Pubhslish the whole qmin and qmax on tnc topic
+        # Use baseline as pre-adjustment prediction
+        q_min = baseline_q_min.copy()
+        q_max = baseline_q_max.copy()
 
-        return qmin_est, qmax_est
+        # Initiate adjustment arrays
+        adj_q_min = []
+        adj_q_max = []
+        for hr in range(3,-1,-1):  # prediction for last_time+1hour => last_time+1hour-4hour=last_time-3hour
+            cur_ts = last_ts - timedelta(hours=hr)
+            cur_df = df_baseline[df_baseline.index == cur_ts]
+            adj_q_min.append(cur_df['q_min'].mean())
+            adj_q_max.append(cur_df['q_max'].mean())
 
+        # Adjust one by one
+        for i in len(q_min):
+            # Calculate adjustment ratios
+            cur_adj_q_min = adj_q_min[i] + adj_q_min[i+1] + adj_q_min[i+2]
+            cur_adj_q_max = adj_q_max[i] + adj_q_max[i+1] + adj_q_max[i+2]
+            cur_adj_q_min /= (baseline_q_min[i-4] + baseline_q_min[i-3] + baseline_q_min[i-2])
+            cur_adj_q_max /= (baseline_q_max[i-4] + baseline_q_max[i-3] + baseline_q_max[i-2])
+
+            # Adjust current qmin and qmax
+            q_min[i] *= cur_adj_q_min
+            q_max[i] *= cur_adj_q_max
+
+        return q_min, q_max
 
     def get_business_days(self):
         self.business_days = []
