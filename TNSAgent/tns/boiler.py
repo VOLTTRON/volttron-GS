@@ -49,7 +49,7 @@ class Boiler(LocalAssetModel):
 
         # The cost goes to infinity at the upper limit
         # find production price at the limit
-        max_prod_cost = self.use_fit_curve(max_power, fuel_price)
+        max_prod_cost = self.use_fit_curve(max_power)*fuel_price
         # max marginal price is infinite, because you can't go past that
         # make max vertex
         vertex_max = Vertex(marginal_price=max_prod_cost/max_power, prod_cost=max_prod_cost, power=self.size, continuity=True)
@@ -57,8 +57,8 @@ class Boiler(LocalAssetModel):
         # the power goes to zero at the marginal cost at the lower limit, make (0,0) vertex
         vertex_zero = Vertex(marginal_price=0.0, prod_cost=0.0, power=0.0, continuity=False)
         # find production price at the lower limit
-        min_prod_cost = self.use_fit_curve(min_power, fuel_price)
-        min_marginal_cost = self.use_fit_curve(min_power+1, fuel_price)-min_prod_cost
+        min_prod_cost = self.use_fit_curve(min_power)*fuel_price
+        min_marginal_cost = self.use_fit_curve(min_power+1)*fuel_price-min_prod_cost
         vertex_min = Vertex(marginal_price= min_marginal_cost, prod_cost=min_prod_cost, power=self.min_capacity)
         
         for t in ti:
@@ -164,8 +164,8 @@ class Boiler(LocalAssetModel):
 
         # use those values to create new vertices
         # calculate fuel use and fuel cost if you had to produce one more kw
-        nominal_cost = self.use_fit_curve(Hsetpoint,fuel_price)
-        plus_one_cost = self.use_fit_curve(Hsetpoint+1, fuel_price)
+        nominal_cost = self.use_fit_curve(Hsetpoint)*fuel_price
+        plus_one_cost = self.use_fit_curve(Hsetpoint+1)*fuel_price
         marginal_price = plus_one_cost-nominal_cost
         #make vertex
         central_vertex = Vertex(marginal_price=marginal_price, prod_cost=nominal_cost, power=Hsetpoint)

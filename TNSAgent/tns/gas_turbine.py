@@ -53,7 +53,7 @@ class GasTurbine(LocalAssetModel):
 
         # The cost goes to infinity at the upper limit
         # find production price at the limit
-        max_prod_cost = self.use_fit_curve(coefs, max_power, fuel_price)
+        max_prod_cost = self.use_fit_curve(coefs, max_power)*fuel_price
         # find marginal price by taking difference for price just below limit
         max_marginal_cost = max_prod_cost/self.size#self.use_fit_curve(coefs, max_power+1, fuel_price)-max_prod_cost
         # make max vertex
@@ -63,8 +63,8 @@ class GasTurbine(LocalAssetModel):
         # the power goes to zero at the marginal cost at the lower limit, make (0,0) vertex
         vertex_zero = Vertex(marginal_price=0.0, prod_cost=0.0, power=0.0, continuity=False)
         # find production price at the lower limit
-        min_prod_cost = self.use_fit_curve(coefs, min_power, fuel_price)
-        min_marginal_cost = self.use_fit_curve(coefs, min_power+1, fuel_price)-min_prod_cost-0.001
+        min_prod_cost = self.use_fit_curve(coefs, min_power)*fuel_price
+        min_marginal_cost = self.use_fit_curve(coefs, min_power+1)*fuel_price-min_prod_cost-0.001
         vertex_min = Vertex(marginal_price= min_marginal_cost, prod_cost=min_prod_cost, power=self.min_capacity)
         heat_v_min = Vertex(marginal_price= 0.0, prod_cost=0.0, power=self.min_capacity*0.6)
 
@@ -205,18 +205,18 @@ class GasTurbine(LocalAssetModel):
         # one vertex at the max heat recovery setpoint with cost only assocaited with heat
         #
         # make the vertex at the electrical setpoint
-        cost_dn_e = self.use_fit_curve(power = Esetpoint, fuel_price=fuel_price, coefs=coefs_e)
-        cost_up_e = self.use_fit_curve(power=Esetpoint+1, fuel_price=fuel_price, coefs=coefs_e)
+        cost_dn_e = self.use_fit_curve(power = Esetpoint, coefs=coefs_e)*fuel_price
+        cost_up_e = self.use_fit_curve(power=Esetpoint+1, coefs=coefs_e)*fuel_price
         marginal_eset = cost_up_e-cost_dn_e
         e_setpoint_vertex = Vertex(marginal_price=marginal_eset, prod_cost=cost_dn_e, power = Esetpoint)
         
         # find the marginal price at the lower bound of the generator online
-        lb_cost = self.use_fit_curve(power=self.min_capacity, fuel_price=fuel_price, coefs=coefs_e)
-        lb_cost_up = self.use_fit_curve(power=self.min_capacity, fuel_price=fuel_price, coefs=coefs_e)
+        lb_cost = self.use_fit_curve(power=self.min_capacity, coefs=coefs_e)*fuel_price
+        lb_cost_up = self.use_fit_curve(power=self.min_capacity, coefs=coefs_e)*fuel_price
         lb_marginal = lb_cost_up-lb_cost
 
         # find the marginal price at the upper bound of the generator
-        ub_cost = self.use_fit_curve(power=self.size, fuel_price=fuel_price, coefs=coefs_e)
+        ub_cost = self.use_fit_curve(power=self.size, coefs=coefs_e)*fuel_price
         heat_ub = self.find_max_heatrecovered(e_setpoint=self.size)
         ub_marginal = float('inf') # the marginal price is infinite because you can't go above this
         
@@ -225,7 +225,7 @@ class GasTurbine(LocalAssetModel):
         # find out the heat you can recover from this electric setpoint
         max_heat_recovered = self.find_max_heatrecovered()
         #find the lower bound output in terms of heat
-        heat_lb = self.use_fit_curve(power=self.min_capacity, fuel_price=1, coefs=coefs_h)
+        heat_lb = self.use_fit_curve(power=self.min_capacity, coefs=coefs_h)
         #make the vertex such that that amount of heat has no cost if you are already using it for electricity
         if Esetpoint>self.min_capacity:
             # find lower bound vertices and assign all cost to electric
@@ -244,15 +244,15 @@ class GasTurbine(LocalAssetModel):
             # if the heat required is more than what can be recovered, make another vertex to assign cost to heat
             # if the heat required is less than what can be recovered, leave cost with electric
             if Hsetpoint> max_heat_recovered:
-                capacity_Hsetpoint = self.use_fit_curve(power=Hsetpoint, fuel_price=1, coefs = coefs_h)
+                capacity_Hsetpoint = self.use_fit_curve(power=Hsetpoint, coefs = coefs_h)
                 # check to see if that setpoint is possible
                 if capacity_Hsetpoint > self.size:
                     capacity_Hsetpoint = self.size
                     Hsetpoint=heat_ub
                 # find the marginal cost of outputting at that capacity
-                capacity_Hsetpoint_up = self.use_fit_curve(power=Hsetpoint+1, fuel_price=1, coefs=coefs_h)
-                cost_dn_h = self.use_fit_curve(power=capacity_Hsetpoint, fuel_price=fuel_price, coefs=coefs_e)
-                cost_up_h = self.use_fit_curve(power=capacity_Hsetpoint_up, fuel_price=fuel_price, coefs=coefs_e)
+                capacity_Hsetpoint_up = self.use_fit_curve(power=Hsetpoint+1, coefs=coefs_h)
+                cost_dn_h = self.use_fit_curve(power=capacity_Hsetpoint, coefs=coefs_e)*fuel_price
+                cost_up_h = self.use_fit_curve(power=capacity_Hsetpoint_up, coefs=coefs_e)*fuel_price
                 marginal_hset = cost_up_h-cost_dn_h
                 # make vertices at this marginal cost
                 heat_set_vertex = Vertex(marginal_price=marginal_hset, prod_cost=cost_dn_h-cost_dn_e, power=Hsetpoint)

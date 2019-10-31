@@ -20,6 +20,8 @@ from vertex import Vertex
 from helpers import prod_cost_from_vertices
 from interval_value import IntervalValue
 
+import pickle
+
 
 # create a neighbor model
 SPU122 = myTransactiveNode()
@@ -257,6 +259,9 @@ boiler1Model.object = boiler1
 
 # make a list of local assets at SPU122
 mTN.localAssets = [CentralCampusBuildings, gt1, boiler1]
+
+# pickle the mytransactive node object to capture all nodal properties
+pickle.dump(mTN, open('SPU122_TN.pickle','wb'))
 
 ##########################################################################################################
 ## Additional setup script here
