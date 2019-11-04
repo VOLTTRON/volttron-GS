@@ -70,6 +70,7 @@ from volttron.platform.agent.base_market_agent.buy_sell import BUYER
 from volttron.platform.agent.base_market_agent.buy_sell import SELLER
 
 from timer import Timer
+from weather_service import WeatherService
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -98,6 +99,10 @@ class CampusAgent(MarketAgent):
         for i in range(self.T):
             self.market_names.append('_'.join([self.base_market_name, str(i)]))
 
+        # Weather prediction
+        self.weather_file = self.config.get('weather_file')
+        self.weather_service = WeatherService(weather_file=self.weather_file)
+
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
         # Subscriptions
@@ -109,6 +114,11 @@ class CampusAgent(MarketAgent):
         for market in self.market_names:
             self.join_market(market, SELLER, self.reservation_callback, self.offer_callback,
                              self.aggregate_callback, self.price_callback, self.error_callback)
+
+        # Join reserved market
+        self.vip.pubsub.subscribe(peer='pubsub',
+                                  prefix="mixmarket/reserve_demand",
+                                  callback=self.new_reserved_demands)
 
     def new_supply_signal(self, peer, sender, bus, topic, headers, message):
         price = message['price']
@@ -125,8 +135,18 @@ class CampusAgent(MarketAgent):
                           map(lambda x: x+5, price_reserved))
         # self.start_mixmarket(converged, price, price_reserved, start_of_cycle)
 
+    def new_reserved_demands(self, peer, sender, bus, topic, headers, message):
+        self.reserves = message['value']
+
+        self.mix_market_running = False
+        self.send_to_city(self.quantities, self.reserves)
+
     def start_mixmarket(self, converged, price, price_reserved, start_of_cycle):
         now = Timer.get_cur_time()
+
+        _log.info("Getting weather prediction at {}...".format(now))
+        temps = self.get_weather_next_day(now)
+
         _log.info("Starting mixmarket at {}...".format(now))
         self.vip.pubsub.publish(peer='pubsub',
                                 topic='mixmarket/start_new_cycle',
@@ -135,7 +155,8 @@ class CampusAgent(MarketAgent):
                                     "prices": price,
                                     "reserved_prices": price_reserved,
                                     "start_of_cycle": start_of_cycle,
-                                    "hour": now.hour
+                                    "hour": now.hour,
+                                    "temp": temps
                                 })
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
@@ -215,10 +236,11 @@ class CampusAgent(MarketAgent):
 
         # If all markets (ie. exclude 1st value) are done then update demands.
         # Otherwise do nothing
-        mix_market_done = all([False if q is None else True for q in self.quantities])
-        if mix_market_done:
-            self.mix_market_running = False
-            self.send_to_city(self.quantities, self.reserves)
+        # CHANGE: market now is done when received reserved demand
+        # mix_market_done = all([False if q is None else True for q in self.quantities])
+        # if mix_market_done:
+        #     self.mix_market_running = False
+        #     self.send_to_city(self.quantities, self.reserves)
 
     def send_to_city(self, power_demand, committed_reserves):
         self.vip.pubsub.publish(peer='pubsub',
@@ -234,6 +256,18 @@ class CampusAgent(MarketAgent):
                                                                        buyer_seller,
                                                                        timestamp,
                                                                        error_message))
+
+    def get_weather_next_day(self, now):
+        from datetime import timedelta
+
+        next_day = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        times = []
+        for i in range(0, 24):
+            times.append(next_day + timedelta(hours=i))
+
+        temps = self.weather_service.predict(times)
+
+        return temps
 
 
 def main(argv=sys.argv):
