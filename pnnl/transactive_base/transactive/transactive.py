@@ -38,7 +38,8 @@ class TransactiveBase(MarketAgent):
         self.occupied = False
         self.mapped = None
         self.oat_predictions = []
-        self.market_prices = []
+        self.market_prices = {}
+        self.day_ahead_prices = []
         self.input_topics = []
         self.inputs = {}
         self.outputs = {}
@@ -47,7 +48,9 @@ class TransactiveBase(MarketAgent):
 
         campus = config.get("campus", "")
         building = config.get("building", "")
-        self.record_topic = '/'.join(["tnc", campus, building])
+        base_record_list = ["tnc", campus, building]
+        base_record_list = list(filter(lambda a: a != "", base_record_list))
+        self.record_topic = '/'.join(base_record_list)
         # set actuation parameters for device control
         actuate_topic = config.get("actuation_enable_topic", "default")
         if actuate_topic == "default":
@@ -144,8 +147,8 @@ class TransactiveBase(MarketAgent):
             # This is the flexibility of the control point, by default the same as the
             # market commodity but not necessarily
             ct_flex = output_info.get("control_flexibility", flex)
-            ct_flex = np.linspace(ct_flex[0], ct_flex[1], 11)
-            flex = np.linspace(flex[0], flex[1], 11)
+            ct_flex, flex = self.set_control(ct_flex, flex)
+
             fallback = output_info.get("fallback", mean(ct_flex))
             # TODO:  Use condition to determine multiple output scenario
             condition = output_info.get("condition", True)
@@ -174,6 +177,11 @@ class TransactiveBase(MarketAgent):
                 "ct_flex": ct_flex,
                 "condition": condition
             }
+
+    def set_control(self, ct_flex, flex):
+        ct_flex = np.linspace(ct_flex[0], ct_flex[1], 11)
+        flex = np.linspace(flex[0], flex[1], 11)
+        return ct_flex, flex
 
     def init_input_subscriptions(self):
         for topic in self.input_topics:
@@ -320,7 +328,7 @@ class TransactiveBase(MarketAgent):
         try:
             self.vip.rpc.call(actuator,
                               'set_point',
-                              "",
+                              self.agent_name,
                               point_topic,
                               value).get(timeout=10)
         except (RemoteError, gevent.Timeout, errors.VIPError) as ex:
@@ -413,19 +421,31 @@ class TransactiveBase(MarketAgent):
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
         _log.debug("Get prices prior to market start.")
-        current_hour = message['hour']
+        current_date = parse(message['Date']) + td(hours=1)
+        current_hour = parse(message['Date']).hour
+        if self.market_prices:
+            market_prices_start_date = self.market_prices.keys()[0]
+            if current_date - market_prices_start_date > td(hours=24, minutes=50):
+                prices = self.market_prices.values()[0]
+                prices.pop(0)
+                prices.append(self.current_price)
+                self.market_prices = {}
+                new_start_date = market_prices_start_date + td(hours=1)
+                self.market_prices[new_start_date] = prices
+        else:
+            self.market_prices[current_date] = message['prices']
 
         # Store received prices so we can use it later when doing clearing process
-        if self.market_prices:
+        if self.day_ahead_prices:
             self.actuation_price_range = self.determine_prices()
             if current_hour != self.current_hour:
-                self.current_price = self.market_prices[0]
+                self.current_price = self.day_ahead_prices[0]
         self.current_hour = current_hour
         self.oat_predictions = []
         oat_predictions = message.get("temp", [])
 
         self.oat_predictions = oat_predictions
-        self.market_prices = message['prices']  # Array of prices
+        self.day_ahead_prices = message['prices']  # Array of prices
 
     def determine_control(self, sets, prices, price):
         control = np.interp(price, prices, sets)
@@ -439,8 +459,8 @@ class TransactiveBase(MarketAgent):
         :return:
         """
         if self.market_prices:
-            avg_price = mean(self.market_prices)
-            std_price = stdev(self.market_prices)
+            avg_price = np.mean(self.market_prices.values()[0])
+            std_price = np.std(self.market_prices.values()[0])
             price_min = avg_price - self.price_multiplier * std_price
             price_max = avg_price + self.price_multiplier * std_price
         else:
