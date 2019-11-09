@@ -40,6 +40,7 @@ class TransactiveBase(MarketAgent):
         self.oat_predictions = []
         self.market_prices = {}
         self.day_ahead_prices = []
+        self.last_24_hour_prices = []
         self.input_topics = []
         self.inputs = {}
         self.outputs = {}
@@ -421,25 +422,24 @@ class TransactiveBase(MarketAgent):
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
         _log.debug("Get prices prior to market start.")
-        current_date = parse(message['Date']) + td(hours=1)
         current_hour = parse(message['Date']).hour
-        if self.market_prices:
-            market_prices_start_date = self.market_prices.keys()[0]
-            if current_date - market_prices_start_date > td(hours=24, minutes=50):
-                prices = self.market_prices.values()[0]
-                prices.pop(0)
-                prices.append(self.current_price)
-                self.market_prices = {}
-                new_start_date = market_prices_start_date + td(hours=1)
-                self.market_prices[new_start_date] = prices
-        else:
-            self.market_prices[current_date] = message['prices']
 
         # Store received prices so we can use it later when doing clearing process
         if self.day_ahead_prices:
             self.actuation_price_range = self.determine_prices()
             if current_hour != self.current_hour:
                 self.current_price = self.day_ahead_prices[0]
+                self.last_24_hour_prices.append(self.current_price)
+                if len(self.last_24_hour_prices) > 24:
+                    self.last_24_hour_prices.pop(0)
+                    self.market_prices = self.last_24_hour_prices
+                elif len(self.last_24_hour_prices) == 24:
+                    self.market_prices = self.last_24_hour_prices
+                else:
+                    self.market_prices = message['prices']
+        else:
+            self.market_prices = message["prices"]
+
         self.current_hour = current_hour
         self.oat_predictions = []
         oat_predictions = message.get("temp", [])
@@ -459,8 +459,8 @@ class TransactiveBase(MarketAgent):
         :return:
         """
         if self.market_prices:
-            avg_price = np.mean(self.market_prices.values()[0])
-            std_price = np.std(self.market_prices.values()[0])
+            avg_price = np.mean(self.market_prices)
+            std_price = np.std(self.market_prices)
             price_min = avg_price - self.price_multiplier * std_price
             price_max = avg_price + self.price_multiplier * std_price
         else:
