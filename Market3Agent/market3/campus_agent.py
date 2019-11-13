@@ -103,6 +103,19 @@ class CampusAgent(MarketAgent):
         self.weather_file = self.config.get('weather_file')
         self.weather_service = WeatherService(weather_file=self.weather_file)
 
+        self.simulation = self.config.get('simulation', False)
+        try:
+            self.simulation_start_time = parser.parse(self.config.get('simulation_start_time'))
+            self.simulation_one_hour_in_seconds = int(self.config.get('simulation_one_hour_in_seconds'))
+        except:
+            self.simulation_start_time = datetime.now()
+            self.simulation_one_hour_in_seconds = 3600
+
+        Timer.created_time = datetime.now()
+        Timer.simulation = self.simulation
+        Timer.sim_start_time = self.simulation_start_time
+        Timer.sim_one_hr_in_sec = self.simulation_one_hour_in_seconds
+
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
         # Subscriptions
