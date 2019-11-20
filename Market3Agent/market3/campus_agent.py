@@ -256,6 +256,13 @@ class CampusAgent(MarketAgent):
         #     self.send_to_city(self.quantities, self.reserves)
 
     def send_to_city(self, power_demand, committed_reserves):
+        # Note: in practice, supply should be positive and consumption should be negative
+        # However, because AHU, VAV, etc. agents return their consumption as negative values,
+        #   I need to reverse the sign before sending back to city
+        power_demand = [-v for v in power_demand]
+        committed_reserves = [-v for v in committed_reserves]
+
+        # Send to city
         self.vip.pubsub.publish(peer='pubsub',
                                 topic=self.campus_demand_topic,
                                 message={
