@@ -76,10 +76,12 @@ class CityAgent(Agent):
     def __init__(self, config_path, **kwargs):
         Agent.__init__(self, **kwargs)
 
+        # Grab config params
         self.config_path = config_path
         self.config = utils.load_config(config_path)
         self.name = self.config.get('name')
         self.T = int(self.config.get('T', 24))
+        self.start_hour = int(self.config.get('start_hour', 0))
 
         self.db_topic = self.config.get("db_topic", "tnc")
         self.campus_demand_topic = "{}/campus/city/demand".format(self.db_topic)
@@ -120,13 +122,13 @@ class CityAgent(Agent):
             next_exp_time = datetime.now() + one_second
         else:
             now = datetime.now()
-            offset = timedelta(seconds=3*Timer.sim_one_hr_in_sec)
+            offset = timedelta(seconds=1200)
             next_exp_time = now + offset
             if next_exp_time.day == now.day:
                 next_exp_time = now + one_second
             else:
-                _log.debug("{} did not run onstart because it's too late. Wait for next hour.".format(self.name))
-                next_exp_time = next_exp_time.replace(hour=0, minute=0, second=0, microsecond=0)
+                _log.debug("{} did not run onstart because it's too late. Wait for next day.".format(self.name))
+                next_exp_time = next_exp_time.replace(hour=self.start_hour, minute=0, second=0, microsecond=0)
         return next_exp_time
 
     def get_next_exp_time(self, cur_exp_time, cur_analysis_time):
@@ -134,11 +136,11 @@ class CityAgent(Agent):
         one_day = timedelta(days=1)
         one_minute = timedelta(minutes=1)
 
-        cur_analysis_time = cur_analysis_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        cur_analysis_time = cur_analysis_time.replace(hour=self.start_hour, minute=0, second=0, microsecond=0)
         if self.simulation:
             next_exp_time = cur_exp_time + one_T_simulation
         else:
-            cur_exp_time = cur_exp_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            cur_exp_time = cur_exp_time.replace(hour=self.start_hour, minute=0, second=0, microsecond=0)
             next_exp_time = cur_exp_time + one_day + one_minute
 
         next_analysis_time = cur_analysis_time + one_day + one_minute

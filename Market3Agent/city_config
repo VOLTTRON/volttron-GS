@@ -3,6 +3,7 @@
   "name": "City_Of_Richland",
 
   "T": 24,
+  "start_hour": 23,
   "iteration_threshold": 2000,
   "alpha_reserve": 1,
   "alpha_energy": 1,
