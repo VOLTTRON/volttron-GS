@@ -125,14 +125,18 @@ class UpdatingAgent(Agent):
         else:
             self.wait_time = int(config.get('wait_time', 10))
 
-        self.one_shot = config.get("one_shot", False)
+        self.one_shot = config.get('one_shot', False)
+        self.regress_hourly = config.get('regress_hourly', True)
 
         self.local_tz = pytz.timezone(config.get('local_tz', 'US/Pacific'))
         # If one shot is true then start and end should be specified
         if self.one_shot:
-            self.start = config.get("start")
-            self.end = config.get("end")
-        self.aggregate_hourly = config.get("aggregate_hourly", False)
+            self.start = config.get('start')
+            self.end = config.get('end')
+        else:
+            self.end = dt.now(self.local_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+            self.start = self.end - td(seconds=self.seconds_in_past)
+        self.aggregate_hourly = config.get('aggregate_hourly', False)
         self.file_dict = {}
 
         self.indepen_names = {}
@@ -192,10 +196,10 @@ class UpdatingAgent(Agent):
             except (NameError, ValueError) as e:
                 _log.debug('One shot regression:  Start or end time not specified correctly!: *{}*'.format(e))
                 self.end = dt.now(self.local_tz).replace(hour=0, minute=0, second=0, microsecond=0)
-                self.start = self.end - td(seconds=self.seconds_in_paste)
+                self.start = self.end - td(seconds=self.seconds_in_past)
             self.rpc_start = self.start.astimezone(UTC_TZ)
             self.rpc_end = self.rpc_start + td(hours=1)
-        self.get_data()
+            self.get_data()
 
     @Core.receiver('onstop')
     def stop(self, sender, **kwargs):
@@ -270,21 +274,21 @@ class UpdatingAgent(Agent):
                     agg_df = df
                 else:
                     agg_df = agg_df.append(df)
-                _log.debug('aggregate dataframe:')
+                _log.debug('Aggregate dataframe:')
                 _log.debug(agg_df)
 
                 # increment by hour
                 self.rpc_start = self.rpc_start + td(hours=1)
                 self.rpc_end = self.rpc_start + td(hours=1)  #
 
-            _log.debug('outputting dataframe:')
+            _log.debug('Outputting dataframe:')
             _log.debug(agg_df)
             filename = '{}/data/{}-{} - {}.csv'.format(WORKING_DIR, self.start, self.end, key1)
             self.file_dict[key1] = filename
             try:
                 with open(filename, 'w+') as outfile:
                     agg_df.to_csv(outfile, mode='a', index=True)
-                    _log.debug('*** finished outputting data ***')
+                    _log.debug('*** Finished outputting data ***')
             except Exception as e:
                 _log.error('File output failed, check whether the dataframe is empty - {}'.format(e))
 
@@ -301,14 +305,21 @@ class UpdatingAgent(Agent):
         df = df.drop(['index'], axis=1)
 
         holiday = CustomBusinessDay(calendar=calendar()).onOffset
-        df['Date'] = pd.to_datetime(df['Date']).dt.tz_convert(self.local_tz)
+        try:
+            df['Date'] = pd.to_datetime(df['Date']).dt.tz_convert(self.local_tz)
+        except Exception as e:
+            _log.error('Failed to convert Date column to datetime object - {}'.format(e))
         match = df["Date"].map(holiday)
         df = df[match]
 
         # process the coefficients from data by hour
         out_df = None
-        for i in range(24):
-            hour_df = df.loc[df['Date'].dt.hour == i]
+        num_val = 24 if self.regress_hourly else 1
+        for i in range(num_val):
+            if self.regress_hourly:
+                hour_df = df.loc[df['Date'].dt.hour == i]
+            else:
+                hour_df = df
             _log.debug(hour_df)
             filename = '{}/data/{}-hourly-{}.csv'.format(WORKING_DIR, device, i)
             with open(filename, 'w+') as outfile:
@@ -322,7 +333,7 @@ class UpdatingAgent(Agent):
             for j in range(len(out_columns)):
                 out_dict.update({out_columns[j]: [out_values[j]]})
             hour_out_df = pd.DataFrame.from_dict(out_dict)
-            _log.debug('coefficients for hour {}'.format(str(i)))
+            _log.debug('Coefficients for hour {}'.format(str(i)))
             _log.debug(hour_out_df)
             if out_df is None:
                 out_df = hour_out_df
@@ -337,7 +348,7 @@ class UpdatingAgent(Agent):
         if self.post_processing is not None:
             out_df = self.post_processor(out_df)
 
-        _log.debug('outputting dataframe: ')
+        _log.debug('Outputting dataframe: ')
         _log.debug(out_df)
         with open('{}/results/{}.csv'.format(WORKING_DIR, device), 'w+') as outfile:
             out_df.to_csv(outfile, mode='a', index=False)
@@ -345,79 +356,62 @@ class UpdatingAgent(Agent):
         out_dict = out_df.to_dict(orient='list')
         with open('{}/results/{}.json'.format(WORKING_DIR, device), 'w+') as outfile:
             json.dump(out_dict, outfile, indent=4, separators=(',', ': '))
-        _log.debug('***finished outputting coefficients***')
+        _log.debug('*** Finished outputting coefficients ***')
 
         exec_end = utils.get_aware_utc_now()
         exec_dif = exec_end - self.exec_start
         _log.debug('Execution start: {}, current time: {}, elapsed time: {}'.format(self.exec_start, exec_end, exec_dif))
 
     def calc_coeffs(self, df):
-        spl = self.model_struc.split(' = ')
-        formula = self.model_depen[0] + ' ~ ' + spl[1]
+        formula = self.model_struc.replace('=', '~')
 
         df = df.dropna()
-        paren_list = []
-        paren_list = re.findall(r'\((.*?)\)', self.model_struc)
-        model_indepen_alt = None
         model_indepen_alt = dict(self.indepen_names)
 
-        # handle an expression in parentheses in model structure
-        if paren_list:
-            non_paren_list = []
-            for key, value in self.indepen_names.items():
-                if '(' not in key:
-                    non_paren_list.append(key)
-            count = 1
-            for expr in paren_list:
-                col_name = 'paren_' + str(count)
-                formula = formula.replace(expr, col_name)
-                paren_expression_name = '(' + expr + ')'
-                val = self.indepen_names[paren_expression_name]
-                model_indepen_alt.update({col_name: val})
-                if paren_expression_name in model_indepen_alt:
-                    del model_indepen_alt[paren_expression_name]
-                paren_exp_list = expr.split(' ')  # space required
-                if paren_exp_list[1] == '+':
-                    df[col_name] = df[paren_exp_list[0]] + df[paren_exp_list[2]]
-                elif paren_exp_list[1] == '-':
-                    df[col_name] = df[paren_exp_list[0]] - df[paren_exp_list[2]]
-                elif paren_exp_list[1] == '*':
-                    df[col_name] = df[paren_exp_list[0]] * df[paren_exp_list[2]]
-                elif paren_exp_list[1] == '/':
-                    df[col_name] = df[paren_exp_list[0]] / df[paren_exp_list[2]]
+        new_df = pd.DataFrame()
+        self.intercept = None
 
-                _log.debug(df)
-                count += 1
+        if 'Intercept' in model_indepen_alt:  # TODO: make this work for lowercase 'intercept' as well
+            self.intercept = model_indepen_alt.pop('Intercept')
+        elif 'intercept' in model_indepen_alt:
+            self.intercept = model_indepen_alt.pop('intercept')
 
-            # remove column of point in parentheses if it's not being used on its own to avoid unwanted coefficients
-            for expr in paren_list:
-                paren_exp_list = expr.split(' ')
-                if paren_exp_list[0] not in non_paren_list and paren_exp_list[0] in df.columns:
-                    df = df.drop(columns=[paren_exp_list[0]])
-                if paren_exp_list[2] not in non_paren_list and paren_exp_list[2] in df.columns:
-                    df = df.drop(columns=[paren_exp_list[2]])
+        for independent, coeff in model_indepen_alt.items():
+            new_df[coeff] = df.eval(independent)
+            formula = formula.replace(independent, coeff)
+
+        for dependent in self.model_depen:
+            new_df[dependent] = df.eval(dependent)
+
+        new_df.dropna(inplace=True)
 
         if model_indepen_alt is None:
             model_indepen_alt = self.indepen_names
 
-        if 'intercept' in self.model_indepen.keys():
-            df['intercept'] = 1
-        elif 'Intercept' in self.model_indepen.keys():
-            df['Intercept'] = 1
+        _log.debug('formula: {}'.format(formula))
+        y, x = patsy.dmatrices(formula, new_df, return_type='dataframe')
+        y = y[self.model_depen[0]]
+        if not any(x in self.model_indepen.keys() for x in ['Intercept', 'intercept']):
+            x = x.drop(columns=['Intercept', 'intercept'])
+        else:
+            x = x.rename(columns={'Intercept': self.intercept})
+            x = x.rename(columns={'intercept': self.intercept})
 
-        x = patsy.dmatrices(formula, df, return_type='dataframe')[1]
-        _log.debug('formula: {0}'.format(formula))
-        y = df[self.model_depen[0]]
-        scipy_result = scipy.optimize.lsq_linear(x, y, bounds=self.bounds)
-        _log.debug('\n***scipy regression: ***')
+        bounds = [[], []]
+        for coeff in x.columns:
+            bounds[0].append(self.bounds[coeff][0])
+            bounds[1].append(self.bounds[coeff][1])
+        _log.debug('*** Bounds: {} ***'.format(bounds))
+
+        scipy_result = scipy.optimize.lsq_linear(x, y, bounds=bounds)
+        coeffs_dict = dict(zip(x.columns, scipy_result.x))
+        _log.debug('\n***Scipy regression: ***')
         _log.debug(scipy_result.x.tolist())
         keys = model_indepen_alt.keys()
         keys.sort()
         fit = pd.Series()
-        i = 0
-        for coeff in scipy_result.x.tolist():
-            fit = fit.set_value(keys[i], coeff)
-            i += 1
+        for coeff, value in coeffs_dict.items():
+            fit = fit.set_value(coeff, value)
 
         return fit, model_indepen_alt
 
@@ -461,6 +455,7 @@ class UpdatingAgent(Agent):
             # process bounds for each coefficient
             lower_bounds = ()
             upper_bounds = ()
+            self.bounds = {}
             for key, value in self.model_indepen.items():
                 if self.model_indepen[key]['lower_bound'] == 'infinity':
                     self.model_indepen[key]['lower_bound'] = np.inf
@@ -483,10 +478,12 @@ class UpdatingAgent(Agent):
                 except AttributeError as e:
                     _log.debug('Upper bound for *{}* is not a string, no need to try to set to int - {}'.format(key, e))
 
+                self.bounds[self.model_indepen[key]['coefficient_name']] = \
+                    [self.model_indepen[key]['lower_bound'], self.model_indepen[key]['upper_bound']]
+
                 lower_bounds += (self.model_indepen[key]['lower_bound'],)
                 upper_bounds += (self.model_indepen[key]['upper_bound'],)
-            self.bounds = (lower_bounds, upper_bounds)
-            _log.debug('bounds: {0}'.format(self.bounds))
+            self.bounds_alt = (lower_bounds, upper_bounds)
 
             formula_indep = spl[1]
             for key, value in self.model_indepen.items():
