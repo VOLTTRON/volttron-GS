@@ -115,6 +115,7 @@ def is_heavyloadhour(datetime_value):
     """
     is_hlh = False
     if not isinstance(datetime_value, datetime):
+        # noinspection PyStringException
         raise 'Input value has to be an instance of datetime'
 
     # These holidays are always LLH. If New Year's Day, Independence Day, or
@@ -467,33 +468,27 @@ def are_different1(s, r, threshold, calling_neighbor=''):
 
 
 def are_different2(m, s, threshold, calling_neighbor=''):
-    # Assess whether two TransactiveRecord messages,
-    # representing the calculated and sent messages in an active time interval
-    # are significantly different from one another. If the signals are
-    # different, this indicates that local conditions have changed, and a
-    # revised, updated transactive message shoudl be sent to the Neighbor.
+    # Assess whether two TransactiveRecord messages, representing the calculated and sent messages in an active time
+    # interval are significantly different from one another. If the signals are different, this indicates that local
+    # conditions have changed, and a revised, updated transactive message shoudl be sent to the Neighbor.
     #
     # INPUTS:
-    # m - TransactiveRecord message representing the mySignal, the last
-    # message calculated for this transactiveNeighbor.
-    # s - TransactiveRecord messge representing the sentSignal, the last
-    # message that was sent to this transactive Neighbor.
+    # m - TransactiveRecord message representing the mySignal, the last message calculated for this transactiveNeighbor.
+    # s - TransactiveRecord messge representing the sentSignal, the last message that was sent to this transactive
+    #     Neighbor.
     # threshold - a dimensionless, relative error that is used as a convergence
     # criterion.
     #
     # OUTPUTS:
-    # tf - Boolean: true if the sent and recently calculated transactive
-    # messages are significantly different.
+    # tf - Boolean: true if the sent and recently calculated transactive messages are significantly different.
     if len(s) != len(m):
         return True
 
     is_diff = True
     if len(s) == 1 or len(m) == 1:
-        # Either the sent or calculated message is a constant, (i.e., one
-        # Vertex) meaning its marginal price is probaly NOT meaningful. Use
-        # only the power in this case to determine whether they differ.
-        # Pick out the scheduled values (i.e., Record 0) from mySignal and
-        # sentSignal records.
+        # Either the sent or calculated message is a constant, (i.e., one Vertex) meaning its marginal price is
+        # probably NOT meaningful. Use only the power in this case to determine whether they differ. Pick out the
+        # scheduled values (i.e., Record 0) from mySignal and sentSignal records.
         s0 = [x for x in s if x.record == 0]
         s0 = s0[0]  # a TransactiveRecord
         m0 = [x for x in m if x.record == 0]
@@ -531,10 +526,9 @@ def are_different2(m, s, threshold, calling_neighbor=''):
     else:
         # There are multiple records, meaning that the Neighbor is price-responsive.
 
-        # Pick out the records that are NOT scheduled points, i.e., are not
-        # Record 0. Local convergence of the coordination sub-problem does
-        # not require so much that the exact point has been determined as
-        # that the flexibility is accurately conveyed to the Neighbor.
+        # Pick out the records that are NOT scheduled points, i.e., are not Record 0. Local convergence of the
+        # coordination sub-problem does not require so much that the exact point has been determined as that the
+        # flexibility is accurately conveyed to the Neighbor.
         s0 = [x for x in s if x.record != 0]
         m0 = [x for x in m if x.record != 0]
 
@@ -562,24 +556,21 @@ def are_different2(m, s, threshold, calling_neighbor=''):
                 # Calculate average avg_q of power pairs in the two sets of records.
                 avg_q = abs(s0[i].power + m0[j].power)  # [avg.kW]
 
-                # If no pairing between the flexibility records of the two sets
-                # of records can be found within the relative error criterion,
-                # things must have changed locally since the transactive message
-                # was last sent.
+                # If no pairing between the flexibility records of the two sets of records can be found within the
+                # relative error criterion, things must have changed locally since the transactive message was last
+                # sent.
 
-                # [180904DJH-HUNG FOUND CASE WHERE AVERAGES IN DENOMINATORS BECOME ZERO. THE
-                # OUTCOME HAD BEEN AN UNRELIABLE CONDITIONAL WITH NAN COMPARISONS. THIS CASE
-                # MUST BE AVOIDED WITH THIS CODE:
-                # Avoid unlikely divide-by-zero case. If the average marginal price is
-                # zero, it is probable they are BOTH zero:
+                # [180904DJH-HUNG FOUND CASE WHERE AVERAGES IN DENOMINATORS BECOME ZERO. THE OUTCOME HAD BEEN AN
+                # UNRELIABLE CONDITIONAL WITH NAN COMPARISONS. THIS CASE MUST BE AVOIDED WITH THIS CODE:
+                # Avoid unlikely divide-by-zero case. If the average marginal price is zero, it is probable they are
+                # BOTH zero:
                 dmp = 0 if avg_mp == 0 else dmp / avg_mp
                 dq = 0 if avg_q == 0 else dq / avg_q
 
                 if math.sqrt(dmp ** 2 + dq ** 2) <= threshold:
-                    # No pairing was found within the relative error criterion
-                    # distance. Things must have changed locally since the
-                    # transactive message was last sent to the transactive
-                    # Neighbor. Set the flag true.
+                    # No pairing was found within the relative error criterion distance. Things must have changed
+                    # locally since the transactive message was last sent to the transactive Neighbor. Set the flag
+                    # true.
                     is_diff = False
                     continue
 

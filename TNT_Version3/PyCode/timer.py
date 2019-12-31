@@ -55,7 +55,7 @@
 # under Contract DE-AC05-76RL01830
 
 # }}}
-
+# TODO: Revisit the simulation features of class Timer that may have been lost by directly using datetime methods.
 
 from datetime import datetime
 

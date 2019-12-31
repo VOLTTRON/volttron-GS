@@ -113,7 +113,9 @@ class TimeInterval:
         # ACTIVE - logical true during negotiations, delivery, and
         #          reconcilliation of the time interval
         # TIME STAMP - the time the the time interval is created or modified
-        self.assign_state(market)
+        # NOTE 1911DJH: The market state of an interval is no longer relevant. A Market owns its market state, and the
+        # market state is relevant to all of its included market time intervals.
+        # self.assign_state(market)
 
     def assign_state(self, market):
         # assign_state - assign state of the TimeInterval in its Market.

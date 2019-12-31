@@ -67,14 +67,16 @@ _log = logging.getLogger(__name__)
 
 from helpers import *
 from measurement_type import MeasurementType
+from measurement_unit import MeasurementUnit
 from interval_value import IntervalValue
 from market import Market
 from time_interval import TimeInterval
-from local_asset_model import LocalAssetModel
+from local_asset_model import LocalAsset
 from temperature_forecast_model import TemperatureForecastModel
+from vertex import Vertex
 
 
-class OpenLoopRichlandLoadPredictor(LocalAssetModel, object):
+class OpenLoopRichlandLoadPredictor(LocalAsset, object):
     # OPENLOOPRICHLANDLOADPREDICTOR - predicted electrical load of the City of
     # Richland using hour-of-day, season, heating/cooling regime, and
     # forecasted Fahrenheit temperature.
@@ -270,9 +272,38 @@ class OpenLoopRichlandLoadPredictor(LocalAssetModel, object):
         [3295, -1418]
     ]
 
-    def __init__(self, temperature_forecaster):
+    def __init__(self,
+                    cost_parameters=(0.0, 0.0, 0.0),
+                    default_power=0.0,
+                    description='',
+                    engagement_cost=(0.0, 0.0, 0.0),
+                    location='',
+                    maximum_power=0.0,
+                    measurement_interval=timedelta(hours=1),
+                    measurement_type=MeasurementType.Unknown,
+                    measurement_unit=MeasurementUnit.Unknown,
+                    minimum_power=0.0,
+                    name='',
+                    scheduling_horizon=timedelta(hours=24),
+                    subclass=None):
+
         super(OpenLoopRichlandLoadPredictor, self).__init__()
-        self.temperature_forecaster = temperature_forecaster
+        self.temperature_forecaster = TemperatureForecastModel,
+
+        # These are static properties that may be passed as parameters:
+        self.costParameters = cost_parameters
+        self.defaultPower = default_power
+        self.description = description
+        self.engagementCost = engagement_cost
+        self.location = location
+        self.maximumPower = maximum_power
+        self.minimumPower = minimum_power
+        self.measurementInterval = measurement_interval
+        self.measurementType = measurement_type
+        self.measurementUnit = measurement_unit
+        self.name = name
+        self.schedulingHorizon = scheduling_horizon
+        self.subclass = subclass
 
     def schedule_power(self, mkt):
         """
@@ -439,12 +470,12 @@ class OpenLoopRichlandLoadPredictor(LocalAssetModel, object):
             print('- the method ran without errors')
         except:
             pf = 'fail'
-            _log.warning('- the method had errors when called')
+            # _log.warning('- the method had errors when called')
 
         # if any(abs([test_obj.scheduledPowers(1: 2).value] - [LOAD])) > 5
         if any([abs(test_obj.scheduledPowers[i].value - LOAD[i]) > 5 for i in range(len(test_obj.scheduledPowers))]):
             pf = 'fail'
-            _log.warning('- the calculated powers were not as expected')
+            # _log.warning('- the calculated powers were not as expected')
         else:
             print('- the calculated powers were as expected')
 

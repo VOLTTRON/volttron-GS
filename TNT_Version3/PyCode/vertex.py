@@ -59,14 +59,12 @@
 
 class Vertex:
     def __init__(self, marginal_price, prod_cost, power, continuity=True, power_uncertainty=0.0):
-        # Production cost. A dynamic representation of the delivered
-        # cost. An ideal is that the cost of electricity using this price should be equivalent to
-        # revenue payments over extended time periods. Local assets and
-        # neighbor "friends" (meaning belonging to the same business entity)
-        # may be offered the "recovery cost" that covers actual costs, but
-        # includes no profits. Others can be offered a cost that
-        # additionally includes production surplus (aka "profit"). NOTE that
-        # this is stated as absolute dollar ($), not dollars per hour ($/h).
+        # Production cost. A dynamic representation of the delivered cost. An ideal is that the cost of electricity
+        # using this price should be equivalent to revenue payments over extended time periods. Local assets and
+        # neighbor "friends" (meaning belonging to the same business entity) may be offered the "recovery cost" that
+        # covers actual costs, but includes no profits. Others can be offered a cost that additionally includes
+        # production surplus (aka "profit"). NOTE that this is stated as absolute dollar ($), not dollars per hour
+        # ($/h).
         self.cost = prod_cost  # [$] Real & >=0.0
 
         # The signal. The unit price upon which resource decisions should be based.
@@ -74,19 +72,15 @@ class Vertex:
 
         # The averaged interval power
         # POWER > 0: generation or importation of real power
-        # POWER > 0: consumtion or exportation
+        # POWER > 0: consumption or exportation
         self.power = power  # [avg.kW] Real
 
-        # Realtive uncertainty of the included power value. This is not a
-        # required property, but it will be useful in future versions for
-        # the treatment of reliability and resiliency.
-        # [dimensionless, 0.01 = 1#]
+        # Relative uncertainty of the included power value. This is not a required property, but it will be useful in
+        # future versions for the treatment of reliability and resiliency. [dimensionless, 0.01 = 1#]
         self.powerUncertainty = power_uncertainty  # Real & >=0.0
 
-        # Logical continuity flag. This flag should be true if a continuum
-        # of power generation, importation, consumption, or importation
-        # exists on both sides of the vertex, or if there is only one
-        # vertex. Set false if production is disallowed between this vertex
-        # and either of its neighbor vertices. (This property is not
+        # Logical continuity flag. This flag should be true if a continuum of power generation, importation,
+        # consumption, or importation exists on both sides of the vertex, or if there is only one vertex. Set false if
+        # production is disallowed between this vertex and either of its neighbor vertices. (This property is not
         # required and may not be used in early implementations.)
         self.continuity = continuity  # boolean

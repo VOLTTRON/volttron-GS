@@ -64,37 +64,40 @@ from helpers import format_ts
 
 
 class TransactiveRecord:
-    def __init__(self, ti, rn, mp, p, pu=0.0, cost=0.0, rp=0.0, rpu=0.0, v=0.0, vu=0.0):
-        # NOTE: As of Feb 2018, ti is forced to be text, the time interval name,
-        # not a TimeInterval object.
-        # ti - TimeInterval object (that must be converted to its name)
-        # rn - record number, a nonzero integer
-        # mp - marginal price [$/kWh]
-        # p  - power [avg.kW]
+    def __init__(self,
+                 time_interval,
+                 record=0,
+                 marginal_price=0,
+                 power=0,
+                 power_uncertainty=0.0,
+                 cost=0.0,
+                 reactive_power=0.0,
+                 reactive_power_uncertainty=0.0,
+                 voltage=0.0,
+                 voltage_uncertainty=0.0):
 
-        # These are the four normal arguments of the constructor.
-        # NOTE: Use the time interval ti text name, not a TimeInterval object itself.
-        if isinstance(ti, TimeInterval):
+        # These are the four normal arguments of the constructor. NOTE: Use the time interval ti text name, not a
+        # TimeInterval object itself.
+        if isinstance(time_interval, TimeInterval):
+
             # A TimeInterval object argument must be represented by its text name.
-            self.timeInterval = ti.name
+            self.timeInterval = time_interval.name
 
         else:
-            # Argument ti is most likely received as a text string name. Further
-            # validation might be used to make sure that ti is a valid name of an
-            # active time interval.
-            self.timeInterval = ti
 
-        self.record = rn  # a record number (0 refers to the balance point)
-        self.marginalPrice = mp  # marginal price [$/kWh]
-        self.power = p  # power [avg.kW]
+            # Argument ti is most likely received as a text string name. Further validation might be used to make sure
+            # that ti is a valid name of an active time interval.
+            self.timeInterval = str(time_interval)
 
-        # Source and target are obvious from Neighbor and filenames. Omit
-        # self.powerUncertainty = pu  # relative [dimensionless]
-        self.cost = cost  # ?
-        # self.reactivePower = rp  # [avg.kVAR]
-        # self.reactivePowerUncertainty = rpu  # relative [dimensionless]
-        # self.voltage = v  # [p.u.]
-        # self.voltageUncertainty = vu  # relative [dimensionless]
+        self.record = record                                # a record number (0 refers to the balance point)
+        self.marginalPrice = marginal_price                 # marginal price [$/kWh]
+        self.power = power                                  # power [avg.kW]
+        # self.powerUncertainty = power_uncertainty  # relative [dimensionless]
+        self.cost = cost                                    # ?
+        # self.reactivePower = reactive_power  # [avg.kVAR]
+        # self.reactivePowerUncertainty = reactive_power_uncertainty  # relative [dimensionless]
+        # self.voltage = voltage  # [p.u.]
+        # self.voltageUncertainty = voltage_uncertainty  # relative [dimensionless]
 
-        # Finally, create the timestamp that captures when the record is created.
+        # Finally, always append the timestamp that captures when the record is created.
         self.timeStamp = datetime.utcnow()

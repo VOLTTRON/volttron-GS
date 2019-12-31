@@ -70,6 +70,7 @@ class IntervalValue:
         self.id = None
         self.timeInterval = time_interval
         self.market = market
+        # TODO: This would be strengthened if measurement type were made to be in enumeration MeasurementType.
         self.measurementType = measurement_type
         self.value = value
 
