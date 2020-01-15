@@ -67,6 +67,7 @@ import logging
 import math
 from volttron.platform.agent import utils
 from collections import defaultdict
+from functools import reduce
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -238,7 +239,7 @@ def input_matrix(builder, criteria_labels):
     """
     sum_mat = defaultdict(float)
     inp_mat = {}
-    label_check = builder.values()[-1].keys()
+    label_check = list(list(builder.values())[-1].keys())
     if set(label_check) != set(criteria_labels):
         raise Exception('Input criteria and data criteria do not match.')
     for device_data in builder.values():
