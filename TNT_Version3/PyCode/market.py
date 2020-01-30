@@ -58,7 +58,6 @@
 
 
 # import gevent  # Comment out if Volttron environment is available
-from datetime import datetime, timedelta
 # import logging  # Comment out if Volttron environment is available
 # TODO: Reenable logging throughout Market
 
@@ -69,7 +68,7 @@ from vertex import Vertex
 from helpers import *
 from measurement_type import MeasurementType
 from interval_value import IntervalValue
-from meter_point import MeterPoint
+# from meter_point import MeterPoint
 from market_state import MarketState
 from time_interval import TimeInterval
 from timer import Timer
@@ -106,8 +105,7 @@ class Market:
                     name='',
                     next_market_clearing_time=None,
                     negotiation_lead_time=timedelta(hours=0),
-                    prior_market_in_series=None
-                    ):
+                    prior_market_in_series=None):
 
         # These properties are relatively static and may be received as parameters:
         self.activationLeadTime = activation_lead_time      # [timedelta] Time in market state "Active"
@@ -164,7 +162,7 @@ class Market:
         :return: None
         """
 
-        current_time = datetime.now()
+        current_time = Timer.get_cur_time()
 
         # EVENT 1A: % A NEW MARKET OBJECT BECOMES ACTIVE ***************************************************************
         # This is the instantiation of a market object in market state "Active." This transition occurs at a time when
@@ -175,7 +173,6 @@ class Market:
 
         # 191212DJH: This logic is simplified greatly by the introduction of flag isNewestMarket. The potential need for
         # new market objects is triggered only by the newest market in any series.
-        # TODO: Make sure that newly instantiated markets in a series displace the current newest market flag.
 
         if self.isNewestMarket is True:
             future_clearing_time = current_time + self.activationLeadTime \
@@ -416,7 +413,6 @@ class Market:
 
         # Initialize the marginal prices in the Market object's time intervals.
         new_market.check_marginal_prices(mtn)
-        # ************************************************************************************************** 1911DJH NEW
 
     def transition_from_inactive_to_active(self, mtn):
         """
@@ -427,7 +423,6 @@ class Market:
         pass
         return None
 
-    # NEW 1911DJH ******************************************************************************************************
     def while_in_active(self, mtn):
         """
         For activities that should happen while a market object is in its initial "Active" market state. This method
@@ -439,9 +434,7 @@ class Market:
         """
         pass
         return None
-        # ************************************************************************************************** 1911DJH NEW
 
-    # NEW 1911DJH ******************************************************************************************************
     def transition_from_active_to_negotiation(self, mtn):
         """
         For activities that should accompany a market object's transition from market state "Active" to "Negotiation."
@@ -669,8 +662,10 @@ class Market:
             avg_price: [$/kWh] average model price for the given date and time
             sd_price: [$/kWh] standard price deviation for given date and time
         """
+        # Initialize the average and standard deviation prices.
+        avg_price = None
+        sd_price = None
 
-        # TODO: the market price model could be more forgiving of time representations other than datetime.
         try:
             h = int(date_time.hour)  # Extract the hour in [0,24] from referenced date_time.
 
@@ -684,12 +679,10 @@ class Market:
                 self.priceModel[2 * h] = avg_price
                 self.priceModel[2 * h + 1] = sd_price
 
-        except NameError("Could not use the price model to determine or set a price"):
-            avg_price = None
-            sd_price = None
+        except:
+            pass
 
-        finally:
-            return avg_price, sd_price
+        return avg_price, sd_price
 
     def assign_system_vertices(self, mtn):
         # Collect active vertices from neighbor and asset models and reassign them with aggregate system information
@@ -759,7 +752,7 @@ class Market:
         # and demand and (2) dual costs. This local convergence says nothing about the additional convergence between
         # transactive neighbors and their calculations.
 
-        # TODO: Consider moving iteration of the market balancing process to the market state machine, not here.
+        # TODO: Move iteration of the market balancing process to the market state machine, not here.
         # Initialize the iteration counter k
         k = 1
 
@@ -974,7 +967,6 @@ class Market:
         self.marketClearingTime = cur_time.replace(minute=0, second=0, microsecond=0)
         self.nextMarketClearingTime = self.marketClearingTime + timedelta(hours=1)
 
-    # CHANGED 1911DJH **************************************************************************************************
     def check_intervals(self):
         # Check or create the set of instantiated TimeIntervals in this Market
 
@@ -1001,8 +993,8 @@ class Market:
 
             # No match was found. Create a new TimeInterval and append it to the list of time intervals.
             if tis_len == 0:
-                #ti = TimeInterval(Timer.get_cur_time(), self.intervalDuration, self, self.marketClearingTime, steps[i])
-                ti = TimeInterval(datetime.now(), self.intervalDuration, self, self.marketClearingTime, steps[i])
+
+                ti = TimeInterval(Timer.get_cur_time(), self.intervalDuration, self, self.marketClearingTime, steps[i])
                 self.timeIntervals.append(ti)
 
             # The TimeInterval already exists. There is really no problem. 
@@ -1016,7 +1008,6 @@ class Market:
                 self.timeIntervals.append(tis[0])
             # ****************************************************************************************** 1911DJH CHANGED
 
-    # CHANGED 1911DJH **************************************************************************************************
     def check_marginal_prices(self, mtn, return_prices=None):
         """
         191212DJH: Much of the logic may be simplified upon the introduction of isNewestMarket flag and assertion that
@@ -1045,151 +1036,114 @@ class Market:
 
         # Clean up the list of active marginal prices. Remove any active marginal prices that are not in active time
         # intervals.
+        # TODO: This step is probably unnecessary using Python that has garbage cleanup(?).
         self.marginalPrices = [x for x in self.marginalPrices if x.timeInterval in ti]
 
         # Index through active time intervals ti
         for i in range(len(ti)):
-            # Check to see if a marginal price exists in the active time interval
+
+            # Initialize the marginal price value.
+            value = None
+
+            # METHOD #1: If the market interval already has a price, you're done.
+            # Check to see if a marginal price exists in the active time interval.
             iv = find_obj_by_ti(self.marginalPrices, ti[i])
 
-            # METHOD #1. If the market interval already has a price, you're done.
             if iv is None:
 
-                try:  # METHOD #2
+                # METHOD #2. If the same time interval exists from the prior market clearing, its price may be used.
+                # This can be the case where similar successive markets' delivery periods overlap, e.g., a rolling
+                # window of 24 hours.
+                # 191212DJH: This logic is greatly simplified upon introduction of isNewestMarket flag. Also, only
+                # the prior market clearing really needs to be checked.
 
-                    # METHOD #2. If the same time interval exists from the prior market clearing, its price may be used.
-                    # This can be the case where similar successive markets' delivery periods overlap, e.g., a rolling
-                    # window of 24 hours.
-                    # 191212DJH: This logic is greatly simplified upon introduction of isNewestMarket flag. Also, only
-                    # the prior market clearing really needs to be checked.
+                # The time interval will be found in prior markets of this series only if more than one time
+                # interval is cleared by each market.
+                if not isinstance(self.priorMarketInSeries, type(None)) \
+                        and self.priorMarketInSeries is not None \
+                        and self.intervalsToClear > 1 \
+                        and value is None:
 
-                    # The time interval will be found in prior markets of this series only if more than one time
-                    # interval is cleared by each market.
-                    if self.intervalsToClear > 1:
+                    # Look for only the market just prior to this one, based on its market clearing time.
+                    prior_market_in_series = self.priorMarketInSeries
 
-                        # Look for only the market just prior to this one, based on its market clearing time.
-                        prior_market_in_series = self.priorMarketInSeries
+                    # Gather the marginal prices from the most recent similar market.
+                    prior_marginal_prices = prior_market_in_series.marginalPrices
 
-                        # Gather the marginal prices from the most recent similar market.
-                        prior_marginal_prices = prior_market_in_series.marginalPrices
+                    # If a valid marginal price is found in the most recent market,
+                    if len(prior_marginal_prices) != 0:
 
-                        # If no valid marginal prices were found in the most recent market,
-                        if type(prior_marginal_prices) == 'list' and len(prior_marginal_prices) == 0:
+                        # Index through those prior marginal prices,
+                        for x in range(len(prior_marginal_prices)):
 
-                            # then raise an error and try another method.
-                            raise NameError("No marginal prices were found")  # raise error. Not critical.
+                            # and if any are found such that the currently indexed time interval lies within its
+                            # timing,
+                            start_time = prior_marginal_prices[x].timeInterval.startTime
+                            end_time = start_time + prior_market_in_series.intervalDuration
+                            if start_time <= ti[i].startTime < end_time:
 
-                        else:
-                            # Some marginal prices were found in the most recent similar market.
-                            value = None
-                            # Index through those prior marginal price,
-                            for x in range(len(prior_marginal_prices)):
+                                # then capture this value for the new marginal price in this time interval,
+                                value = prior_marginal_prices[x].value
 
-                                # and if any are found such that the currently indexed time interval lies within its
-                                # timing,
-                                start_time = prior_marginal_prices[x].timeInterval.startTime
-                                end_time = start_time + prior_market_in_series.intervalDuration
-                                if start_time <= ti[i].startTime < end_time:
+                # METHOD #3. If this market corrects another prior market,  its cleared price should be used,
+                # e.g., a real-time market that corrects day-ahead market periods. This is indicated by naming a
+                # prior market name, which points to a series that is to be corrected.
+                # 191212DJH: The logic is significantly simplified by introduction of priorRefinedMarket
+                # pointer.
 
-                                    # then capture this value for the new marginal price in this time interval,
-                                    value = prior_marginal_prices[x].value
+                # If there is a prior market indicated and a marginal price value has not been found,
+                elif not isinstance(self.marketToBeRefined, type(None)) \
+                        and self.marketToBeRefined is not None \
+                        and value is None:
 
-                                    # and quit indexing through the the marginal prices.
-                                    break
+                    # Read the this market's prior refined market name.
+                    prior_market = self.marketToBeRefined
 
-                    else:
-                        raise NameError("Interval cannot match if number of intervals < 2")
+                    # Gather the marginal prices from the most recent similar market.
+                    prior_marginal_prices = prior_market.marginalPrices
 
-                except NameError:
-                    pass
+                    # If a valid marginal price is found in the most recent market,
+                    if len(prior_marginal_prices) != 0:
 
-                    try:  # METHOD #3
+                        # Some marginal prices were found in the most recent similar market.
+                        value = None
 
-                        # METHOD #3. If this market corrects another prior market,  its cleared price should be used,
-                        # e.g., a real-time market that corrects day-ahead market periods. This is indicated by naming a
-                        # prior market name, which points to a series that is to be corrected.
-                        # 191212DJH: The logic is significantly simplified by introduction of priorRefinedMarket
-                        # pointer.
+                        # Index through those prior marginal price,
+                        for x in range(len(prior_marginal_prices)):
 
-                        # Read the this market's prior refined market name.
-                        prior_market = self.marketToBeRefined
+                            # and if any are found such that the currently indexed time interval lies within its
+                            # timing,
+                            start_time = prior_marginal_prices[x].timeInterval.startTime
+                            end_time = start_time + prior_market.intervalDuration
+                            if start_time <= ti[i].startTime < end_time:
+                                # then capture this value for the new marginal price in this time interval,
+                                value = prior_marginal_prices[x].value
 
-                        # If there is no prior market indicated,
-                        if type(prior_market) == 'NoneType' or prior_market is None:
+                # METHOD #4. If there exists a price forecast model for this market, this model should be
+                # used to forecast price. See method Market.model_prices().
 
-                            # then raise an error and move on to the next method to find a marginal price.
-                            raise NameError("No prior market was indicated")
+                elif self.priceModel is not None and value is None:
+                    answer = self.model_prices(ti[i].startTime)
+                    value = answer[0]
 
-                        else:
+                # METHOD 5. If all above methods fail, market periods should be assigned the market's
+                # default price. See property Market.defaultPrice. However, if there is not default
+                # price, then the price should be assigned as NaN.
 
-                            # Gather the marginal prices from the most recent similar market.
-                            prior_marginal_prices = prior_market.marginalPrices
+                elif self.defaultPrice is not None and value is None:
+                    value = self.defaultPrice
 
-                            # If no valid marginal prices were found in the most recent market,
-                            if type(prior_marginal_prices) == 'list' and len(prior_marginal_prices) == 0:
-
-                                # then raise an error and try another method.
-                                raise NameError("No marginal prices were found")  # raise error. Not critical.
-
-                            else:
-                                # Some marginal prices were found in the most recent similar market.
-                                value = None
-
-                                # Index through those prior marginal price,
-                                for x in range(len(prior_marginal_prices)):
-
-                                    # and if any are found such that the currently indexed time interval lies within its
-                                    # timing,
-                                    start_time = prior_marginal_prices[x].timeInterval.startTime
-                                    end_time = start_time + prior_market.intervalDuration
-                                    if start_time <= ti[i].startTime < end_time:
-                                        # then capture this value for the new marginal price in this time interval,
-                                        value = prior_marginal_prices[x].value
-
-                                        # and quit indexing through the the marginal prices.
-                                        break
-
-                    except NameError:
-                        pass
-
-                        try:  # METHOD #4
-
-                            # METHOD #4. If there exists a price forecast model for this market, this model should be
-                            # used to forecast price. See method Market.model_prices().
-
-                            answer = self.model_prices(ti[i].startTime)
-                            value = answer[0]
-
-                        except NameError:
-                            pass
-                 
-                            try:  # METHOD #5
-
-                                # METHOD 5. If all above methods fail, market periods should be assigned the market's
-                                # default price. See property Market.defaultPrice. However, if there is not default
-                                # price, then the price should be assigned as NaN.
-
-                                if type(self.defaultPrice) == 'NoneType' or self.defaultPrice is None:
-                                    raise NameError("No default price was found")  # raise error
-
-                                elif type(self.defaultPrice) == 'list' and len(self.defaultPrice) == 0:
-                                    raise NameError("No default price was found")
-
-                                else:
-                                    value = self.defaultPrice
-
-                            except NameError:
-                                value = None
+                else:
+                    value = None
 
                 # Create an interval value for the new marginal price in the indexed time interval with either the
                 # default price or the marginal price from the previous active time interval.
                 iv = IntervalValue(self, ti[i], self, MeasurementType.MarginalPrice, value)
 
-                # Append the marginal price value to the list of active marginal prices
-                self.marginalPrices.append(iv)
+            # Append the marginal price value to the list of active marginal prices
+            self.marginalPrices.append(iv)
 
-            return None
-            # ****************************************************************************************** 1911DJH CHANGED
+        return None
 
     def schedule(self, mtn):
         # Process called to
@@ -1197,7 +1151,7 @@ class Market:
         # (2) converge to system balance using sub-gradient search.
         #
         # mkt - Market object
-        # mtn - my transactive node object
+        # mtn - transactive node object
 
         # 1.2.1 Call resource models to update their schedules
         # Call each local asset model m to schedule itself.
@@ -1210,12 +1164,12 @@ class Market:
             n.schedule(self)
 
     def sum_vertices(self, mtn, ti, ote=None):
-        '''
+        """
         Create system vertices with system information for a single time interval. An optional argument allows the
         exclusion of a transactive neighbor object, which is useful for transactive records and their corresponding
         demand or supply curves. This utility method should be used for creating transactive signals (by excluding the
         neighbor object), and for visualization tools that review the local system's net supply/demand curve.
-        '''
+        """
 
         # Initialize a list of marginal prices mps at which vertices will be created.
         mps = []
@@ -1289,7 +1243,6 @@ class Market:
         # Create a new vector of marginal prices. The first two entries are accepted because they cannot violate the
         # two-duplicates rule. The vector is padded with zeros, which should be computationally efficient. A counter is
         # used and should be incremented with new vector entries.
-        mps_new = None
         if len(mps) >= 3:
             mps_new = [mps[0], mps[1]]
         else:
@@ -1586,10 +1539,10 @@ class Market:
         #        _log.debug("{} market netPowers are: {}".format(self.name, np))
 
     def view_net_vertices(self):
-        '''
+        """
         If within an operating system that supports graphical data representations, this method plots a market's active
         vertices.
-        '''
+        """
         time_intervals = self.timeIntervals
 
         def by_start_times(time_interval_list):
@@ -1604,7 +1557,3 @@ class Market:
 
         fig = px.line(df, x='Date', y='AAPL.High')
         fig.show()
-
-
-
-

@@ -119,7 +119,7 @@ class CityAgent(TransactiveNode):
         # self.simulation_start_time = parser.parse(self.config.get('simulation_start_time'))
         self.simulation_one_hour_in_seconds = int(self.config.get('simulation_one_hour_in_seconds'))
 
-        Timer.created_time = datetime.now()
+        Timer.created_time = Timer.get_cur_time()
         Timer.simulation = self.simulation
         Timer.sim_start_time = self.simulation_start_time
         Timer.sim_one_hr_in_sec = self.simulation_one_hour_in_seconds
@@ -127,9 +127,9 @@ class CityAgent(TransactiveNode):
     def get_exp_start_time(self):
         one_second = timedelta(seconds=1)
         if self.simulation:
-            next_exp_time = datetime.now() + one_second
+            next_exp_time = Timer.get_cur_time() + one_second
         else:
-            now = datetime.now()
+            now = Timer.get_cur_time()
             ten_mins = timedelta(minutes=10)
             next_exp_time = now + ten_mins
             if next_exp_time.hour == now.hour:
@@ -238,7 +238,7 @@ class CityAgent(TransactiveNode):
             else:
                 # Schedule rerun balancing only if not in simulation mode
                 if not self.simulation:
-                    dt = datetime.now()
+                    dt = Timer.get_cur_time()
                     _log.debug("{} ({}) did not send records due to check_for_convergence()".format(self.name, dt))
                     # Schedule to rerun after 5 minutes if it is in the same hour and is the first reschedule
                     next_run_dt = dt + self.reschedule_interval

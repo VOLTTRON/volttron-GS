@@ -57,15 +57,14 @@
 # }}}
 
 
-
-from datetime import datetime, timedelta
+# from datetime import datetime, timedelta
 
 from vertex import Vertex
 from helpers import *
 from measurement_type import MeasurementType
 from interval_value import IntervalValue
-from transactive_record import TransactiveRecord
-from meter_point import MeterPoint
+# from transactive_record import TransactiveRecord
+# from meter_point import MeterPoint
 from market import Market
 from market_state import MarketState
 from time_interval import TimeInterval
@@ -87,7 +86,6 @@ def test_balance():
 
     # Success
     print('Method test_balance() ran to completion\n')
-    #print('Result: #s\n\n', pf)
 
 
 def test_calculate_blended_prices():
@@ -96,7 +94,6 @@ def test_calculate_blended_prices():
 
     # Success
     print('Method test_calculate_blended_prices() ran to completion.\n')
-    # print('Result: #s\n\n', pf)
 
 
 def test_check_intervals():
@@ -112,7 +109,7 @@ def test_check_intervals():
     try:
         test_market.check_intervals()
         print(' The method ran without errors.')
-    except:
+    except RuntimeWarning:
         print('  The method encountered errors.')
 
     assert len(test_market.timeIntervals) == test_market.intervalsToClear, \
@@ -161,7 +158,7 @@ def test_check_marginal_prices():
     try:
         test_mkt.check_marginal_prices(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mkt.timeIntervals) == 1, "One active time interval should exist"
@@ -178,19 +175,14 @@ def test_check_marginal_prices():
     # Configure the test.
     prior_mkt = Market()
     prior_mkt.marketSeriesName = "Test Market"
-    # prior_mkt.intervalDuration = timedelta(hours=1)
 
-    # prior_mkt.marketClearingInterval = timedelta(hours=24)
     new_mp = 1.234
 
     test_mkt = Market()
     test_mkt.marketSeriesName = "Test Market"
-    # test_mkt.marketClearingTime = datetime.now()
-    # test_mkt.marketClearingInterval = timedelta(hours=24)
+
     test_mkt.intervalsToClear = 2
     test_mkt.priorMarketInSeries = prior_mkt  # Important pointer to the prior market in the series
-
-    # prior_mkt.marketClearingTime = test_mkt.marketClearingTime - test_mkt.marketClearingInterval
 
     test_ti = TimeInterval(datetime.now(), timedelta(hours=1), test_mkt, datetime.now(), datetime.now())
 
@@ -210,15 +202,11 @@ def test_check_marginal_prices():
     assert test_mkt.timeIntervals[0] == test_ti, "The active time interval is not as configured"
     assert len(test_mkt.marginalPrices) == 0, "No marginal price should exist in the test_mkt"
     assert len(test_mtn.markets) == 2, "Two active markets should exist"
-    # assert prior_mkt.marketClearingTime < test_mkt.marketClearingTime, \
-    #    "The prior market must clear before the current one"
-    # assert prior_mkt.marketClearingTime == test_mkt.marketClearingTime - test_mkt.marketClearingInterval, \
-    #   "The prior market's clearing time must be correct so the method knows how to find it"
 
     try:
         test_mkt.check_marginal_prices(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mkt.timeIntervals) == 1, "One active time interval should exist"
@@ -243,7 +231,7 @@ def test_check_marginal_prices():
 
     test_mkt = Market()
     test_mkt.marketSeriesName = "Test Market"  # This points to the market series that is to be corrected.
-    test_mkt.marketClearingTime = prior_mkt.marketClearingTime + timedelta(hours=1) # Must be after prior market.
+    test_mkt.marketClearingTime = prior_mkt.marketClearingTime + timedelta(hours=1)  # Must be after prior market.
     test_mkt.marketToBeRefined = prior_mkt.marketSeriesName  # Assuming here this is not a list.
     test_mkt.marketToBeRefined = prior_mkt  # Important pointer to market that is being refined
 
@@ -277,7 +265,7 @@ def test_check_marginal_prices():
     try:
         test_mkt.check_marginal_prices(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mkt.timeIntervals) == 1, "One active time interval should exist"
@@ -293,8 +281,6 @@ def test_check_marginal_prices():
     print("  Case 4: If there exists a price forecast model for this market, this model should be used.")  # ***********
 
     # Configure the test.
-    prior_mkt = None
-
     test_mkt = Market()
     test_mkt.marketSeriesName = "Test Market"
     test_mkt.marketClearingTime = datetime.now() + timedelta(hours=1)  # Must be after prior market.
@@ -321,7 +307,7 @@ def test_check_marginal_prices():
     try:
         test_mkt.check_marginal_prices(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mkt.timeIntervals) == 1, "One active time interval should exist"
@@ -338,8 +324,6 @@ def test_check_marginal_prices():
     print("  Case 5: If all above methods fail, market periods should be assigned the market's default price.")  # *****
 
     # Configure the test.
-    prior_mkt = None
-
     test_mkt = Market()
     test_mkt.marketSeriesName = "Test Market"
     test_mkt.marketClearingTime = datetime.now() + timedelta(hours=1)  # Must be after prior market.
@@ -367,8 +351,8 @@ def test_check_marginal_prices():
     try:
         test_mkt.check_marginal_prices(test_mtn)
 
-    except:
-        pass
+    except RuntimeWarning as cause:
+        print('  ERRORS OCCURRED', cause)
 
     assert len(test_mkt.timeIntervals) == 1, "One active time interval should exist"
     assert test_mkt.timeIntervals[0] == test_ti, "The active time interval should remain unchanged"
@@ -384,8 +368,6 @@ def test_check_marginal_prices():
     print("  Case 6: Finally, if no method has worked, set the marginal price to Null.")  # *****
 
     # Configure the test.
-    prior_mkt = None
-
     test_mkt = Market()
     test_mkt.marketSeriesName = "Test Market"
     test_mkt.marketClearingTime = datetime.now() + timedelta(hours=1)  # Must be after prior market.
@@ -413,7 +395,7 @@ def test_check_marginal_prices():
     try:
         test_mkt.check_marginal_prices(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mkt.timeIntervals) == 1, "One active time interval should exist"
@@ -433,7 +415,6 @@ def test_schedule():
     print('WARNING: This test may be affected by method LocalAsset.schedule()')
     print('WARNING: This test may be affected by Neighbor.schedule()')
     print('NOTE: Only the most basic functionality is being tested at this time.')
-    pf = 'pass'
 
     # Establish a TransactiveNode object
     mtn = TransactiveNode()
@@ -457,38 +438,27 @@ def test_schedule():
         IntervalValue(test_mkt, ti, test_mkt, MeasurementType.MarginalPrice, 0.01)]
 
     print('- configuring a test Neighbor and its Neighbor')
-    # Create a test object that is a Neighbor
-    # test_obj1 = Neighbor()
-
 
     # Create the corresponding model that is a Neighbor.
     test_mdl1 = Neighbor()
     test_mdl1.defaultPower = 10
     test_mdl1.maximumPower = 100
 
-    # test_obj1.model = test_mdl1
-    # test_mdl1.object = test_obj1
-
     mtn.neighbors = [test_mdl1]
 
     print('- configuring a test LocalAsset and its LocalAsset')
-    # Create a test object that is a Local Asset
-    # test_obj2 = LocalAsset()  # Note that parentheses are manditory where there is complex inheritance!
 
     # Create the corresponding model that is a LocalAsset.
     test_mdl2 = LocalAsset()
     test_mdl2.defaultPower = 10
     test_mdl2.maximumPower = 100
 
-    # test_obj2.model = test_mdl2
-    # test_mdl2.object = test_obj2
-
     mtn.localAssets = [test_mdl2]
 
     try:
         test_mkt.schedule(mtn)
-    except:
-        raise ('The method did not run due to errors')
+    except RuntimeWarning:
+        print('The method did not run due to errors')
 
     assert len(test_mdl1.scheduledPowers) == 1, "The wrong numbers of scheduled powers were stored for the Neighbor"
     assert len(test_mdl2.scheduledPowers) == 1, "The wrong numbers of scheduled powers were stored for the LocalAsset"
@@ -497,7 +467,6 @@ def test_schedule():
 
 def test_sum_vertices():
     print('Running Market.test_sum_vertices()')
-    pf = 'pass'
 
     # Create a test TransactiveNode object.
     test_node = TransactiveNode()
@@ -519,15 +488,10 @@ def test_sum_vertices():
     test_market.timeIntervals = [time_interval]
 
     # Create test LocalAsset and LocalAsset objects
-    # test_asset = LocalAsset()
     test_asset_model = LocalAsset()
 
     # Add the test_asset to the test node list.
     test_node.localAssets = [test_asset_model]
-
-    # Have the test asset and its model cross reference one another.
-    # test_asset.model = test_asset_model
-    # test_asset_model.object = test_asset
 
     # Create and store an active Vertex or two for the test asset
     test_vertex = [
@@ -541,15 +505,10 @@ def test_sum_vertices():
     test_asset_model.activeVertices = [interval_values[0], interval_values[1]]  # interval_value(1:2)
 
     # Create test Neighbor and Neighbor objects.
-    # test_neighbor = Neighbor()
     test_neighbor_model = Neighbor()
 
     # Add the test neighbor to the test node list.
     test_node.neighbors = [test_neighbor_model]
-
-    # Have the test neighbor and its model cross reference one another.
-    # test_neighbor.model = test_neighbor_model
-    # test_neighbor.model.object = test_neighbor
 
     # Create and store an active Vertex or two for the test neighbor
     test_vertex.append(Vertex(0.1, 0, 0))
@@ -567,30 +526,25 @@ def test_sum_vertices():
     try:
         vertices = test_market.sum_vertices(test_node, time_interval)
         print('  - the method ran without errors')
-    except:
-        pf = 'fail'
+    except RuntimeWarning:
         print('  - the method had errors when called and stopped')
+        vertices = []
 
     if len(vertices) != 4:
-        pf = 'fail'
         print('  - an unexpected number of vertices was returned')
     else:
         print('  - the expected number of vertices was returned')
 
     powers = [x.power for x in vertices]
 
-    # if any(~ismember(single(powers), single([-110.0000, -10.0000, 10.0000, 110.0000])))
-    if len([x for x in powers if round(x,4) not in [-110.0000, -10.0000, 10.0000, 110.0000]]) > 0:
-        pf = 'fail'
+    if len([x for x in powers if round(x, 4) not in [-110.0000, -10.0000, 10.0000, 110.0000]]) > 0:
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex powers were as expected')
 
-    marginal_prices = [round(x.marginalPrice,4) for x in vertices]
+    marginal_prices = [round(x.marginalPrice, 4) for x in vertices]
 
-    # if any(~ismember(single(marginal_prices), single([0.1000, 0.2000, 0.3000])))
-    if len([x for x in marginal_prices if round(x,4) not in [0.1000, 0.2000, 0.3000]]) > 0:
-        pf = 'fail'
+    if len([x for x in marginal_prices if round(x, 4) not in [0.1000, 0.2000, 0.3000]]) > 0:
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex marginal prices were as expected')
@@ -607,30 +561,24 @@ def test_sum_vertices():
         # [vertices] = test_market.sum_vertices(test_node, time_interval, test_neighbor_model)
         vertices = test_market.sum_vertices(test_node, time_interval, test_neighbor_model)
         print('  - the method ran without errors')
-    except:
-        pf = 'fail'
+    except RuntimeWarning:
         print('  - the method encountered errors and stopped')
 
     if len(vertices) != 2:
-        pf = 'fail'
         print('  - an unexpected number of vertices was returned')
     else:
         print('  - the expected number of vertices was returned')
 
     powers = [round(x.power, 4) for x in vertices]
 
-    # if any(~ismember(single(powers), single([-110.0000, -90.0000])))
     if len([x for x in powers if x not in [-110.0000, -90.0000]]) > 0:
-        pf = 'fail'
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex powers were as expected')
 
     marginal_prices = [x.marginalPrice for x in vertices]
 
-    # if any(~ismember(single(marginal_prices), single([0.2000])))
-    if len([x for x in marginal_prices if round(x,4) not in [0.2000]]) > 0:
-        pf = 'fail'
+    if len([x for x in marginal_prices if round(x, 4) not in [0.2000]]) > 0:
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex marginal prices were as expected')
@@ -645,36 +593,30 @@ def test_sum_vertices():
 
     # Run the test.
     try:
-        # [vertices] = test_market.sum_vertices(test_node, time_interval)
         vertices = test_market.sum_vertices(test_node, time_interval)
         print('  - the method ran without errors')
-    except:
-        pf = 'fail'
+    except RuntimeWarning:
         print('  - the method encountered errors and stopped')
+        vertices = []
 
     # %[180907DJH: THIS TEST IS CORRECTED. THE NEIGHBOR HAS TWO VERTICES. ADDING AN ASSET WITH ONE VERTEX (NO
     # FLEXIBILITY) SHOULD NOT CHANGE THE NUMBER OF ACTIVE VERTICES, SO THE CORRECTED TEST CONFIRMS TWO VERTICES. THE
     # CODE HAS BEEN CORRECTED ACCORDINGLY.]
     if len(vertices) != 2:
-        pf = 'fail'
         print('  - an unexpected number of vertices was returned')
     else:
         print('  - the expected number of vertices was returned')
 
     powers = [x.power for x in vertices]
 
-    # if any(~ismember(single(powers), single([-110.0000, 90])))
-    if len([x for x in powers if round(x,4) not in [-110.0000, 90]]) > 0:
-        pf = 'fail'
+    if len([x for x in powers if round(x, 4) not in [-110.0000, 90]]) > 0:
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex powers were as expected')
 
     marginal_prices = [x.marginalPrice for x in vertices]
 
-    # if any(~ismember(single(marginal_prices), single([0.1000, 0.3000, Inf])))
-    if len([x for x in marginal_prices if round(x,4) not in [0.1000, 0.3000, float("inf")]]) > 0:
-        pf = 'fail'
+    if len([x for x in marginal_prices if round(x, 4) not in [0.1000, 0.3000, float("inf")]]) > 0:
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex marginal prices were as expected')
@@ -698,37 +640,31 @@ def test_sum_vertices():
     try:
         vertices = test_market.sum_vertices(test_node, time_interval)
         print('  - the method ran without errors')
-    except:
-        pf = 'fail'
+    except RuntimeWarning:
         print('  - the method encountered errors and stopped')
+        vertices = []
 
     if len(vertices) != 3:
-        pf = 'fail'
         print('  - an unexpected number of vertices was returned')
     else:
         print('  - the expected number of vertices was returned')
 
     powers = [x.power for x in vertices]
 
-    # if any(~ismember(single(powers), single([-110.0000, -90.0000, 110.0000])))
-    if len([x for x in powers if round(x,4) not in [-110.0000, -90.0000, 110.0000]]) > 0:
-        pf = 'fail'
+    if len([x for x in powers if round(x, 4) not in [-110.0000, -90.0000, 110.0000]]) > 0:
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex powers were as expected')
 
     marginal_prices = [x.marginalPrice for x in vertices]
 
-    # if any(~ismember(single(marginal_prices), single([0.1000, 0.3000])))
-    if len([x for x in marginal_prices if round(x,4) not in [0.1000, 0.3000]]) > 0:
-        pf = 'fail'
+    if len([x for x in marginal_prices if round(x, 4) not in [0.1000, 0.3000]]) > 0:
         print('  - the vertex powers were not as expected')
     else:
         print('  - the vertex marginal prices were as expected')
 
     # Success
     print('Method test_sum_vertices() ran to completion.\n')
-    # print('Result: #s\n\n', pf)
 
 
 def test_update_costs():
@@ -737,7 +673,6 @@ def test_update_costs():
 
     # Success
     print('Method test_update_costs() ran to completion.\n')
-    # print('Result: #s\n\n', pf)
 
 
 def test_update_supply_demand():
@@ -746,7 +681,6 @@ def test_update_supply_demand():
 
     # Success
     print('Method test_update_supply_demand() ran to completion.\n')
-    # print('Result: #s\n\n', pf)
 
 
 def test_events():
@@ -822,7 +756,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert 0 < len(test_mtn.markets) < 2, "There should remain exactly one active market"
@@ -870,7 +804,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -926,7 +860,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 2, "There should be two active markets"
@@ -984,7 +918,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1038,7 +972,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1091,7 +1025,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1144,7 +1078,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1196,7 +1130,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1248,7 +1182,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1278,7 +1212,7 @@ def test_events():
 
     test_mkt.marketSeriesName = "Test Market"
 
-    test_mkt.marketClearingTime = now - test_mkt.deliveryLeadTime  - 0.5 * test_mkt.intervalDuration
+    test_mkt.marketClearingTime = now - test_mkt.deliveryLeadTime - 0.5 * test_mkt.intervalDuration
 
     test_mkt.reconciled = False
     test_mkt.marketClearingInterval = timedelta(days=1)
@@ -1301,7 +1235,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1331,7 +1265,7 @@ def test_events():
 
     test_mkt.marketSeriesName = "Test Market"
 
-    test_mkt.marketClearingTime = now - test_mkt.deliveryLeadTime  - 0.5 * test_mkt.intervalDuration
+    test_mkt.marketClearingTime = now - test_mkt.deliveryLeadTime - 0.5 * test_mkt.intervalDuration
 
     test_mkt.reconciled = False
     test_mkt.marketClearingInterval = timedelta(days=1)
@@ -1354,7 +1288,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1388,7 +1322,7 @@ def test_events():
                                   - test_mkt.intervalsToClear * test_mkt.intervalDuration - timedelta(minutes=1)
 
     test_mkt.marketClearingInterval = timedelta(days=1)
-    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2* test_mkt.marketClearingInterval
+    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2 * test_mkt.marketClearingInterval
 
     test_mtn = TransactiveNode()
     test_mtn.markets = [test_mkt]  # %%%%%%%%%%%%%
@@ -1408,7 +1342,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1442,7 +1376,7 @@ def test_events():
                                   - test_mkt.intervalsToClear * test_mkt.intervalDuration - timedelta(minutes=1)
 
     test_mkt.marketClearingInterval = timedelta(days=1)
-    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2* test_mkt.marketClearingInterval
+    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2 * test_mkt.marketClearingInterval
 
     test_mtn = TransactiveNode()
     test_mtn.markets = [test_mkt]  # %%%%%%%%%%%%%
@@ -1462,7 +1396,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 1, "There should remain only the one active market"
@@ -1496,7 +1430,7 @@ def test_events():
                                   - test_mkt.intervalsToClear * test_mkt.intervalDuration - timedelta(minutes=1)
 
     test_mkt.marketClearingInterval = timedelta(days=1)
-    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2* test_mkt.marketClearingInterval
+    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2 * test_mkt.marketClearingInterval
 
     test_mtn = TransactiveNode()
     test_mtn.markets = [test_mkt]  # %%%%%%%%%%%%%
@@ -1516,7 +1450,7 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 0, "The market should have been removed from the agent's list"
@@ -1547,7 +1481,7 @@ def test_events():
                                   - test_mkt.intervalsToClear * test_mkt.intervalDuration - timedelta(minutes=1)
 
     test_mkt.marketClearingInterval = timedelta(days=1)
-    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2* test_mkt.marketClearingInterval
+    test_mkt.nextMarketClearingTime = test_mkt.marketClearingTime + 2 * test_mkt.marketClearingInterval
 
     test_mtn = TransactiveNode()
     test_mtn.markets = [test_mkt]  # %%%%%%%%%%%%%
@@ -1567,13 +1501,14 @@ def test_events():
     try:
         test_mkt.events(test_mtn)
 
-    except:
+    except RuntimeWarning:
         pass
 
     assert len(test_mtn.markets) == 0, "The market should have been inactivated, removed from the agent's list"
     assert test_mkt.marketState == MarketState.Expired, "The market remains expired until deleted by garbage collection"
 
     print("  Case 7b ran to completion.\n")
+
 
 """
 def test_view_net_curve():
@@ -1665,18 +1600,18 @@ def test_view_marginal_prices():
 
 
 if __name__ == '__main__':
-        print('Running tests in testmarket.py\n')
-        test_assign_system_vertices()
-        test_balance()
-        test_calculate_blended_prices()
-        test_check_intervals()
-        test_check_marginal_prices()
-        test_schedule()
-        test_sum_vertices()
-        test_update_costs()
-        test_update_supply_demand()
-        test_events()
-        # These next two methods have not been established in Python and cannot be tested.
-        # test_view_net_curve()
-        # test_view_marginal_prices()
-        print("Tests in testmarket.py ran to completion.\n")
+    print('Running tests in testmarket.py\n')
+    test_assign_system_vertices()
+    test_balance()
+    test_calculate_blended_prices()
+    test_check_intervals()
+    test_check_marginal_prices()
+    test_schedule()
+    test_sum_vertices()
+    test_update_costs()
+    test_update_supply_demand()
+    test_events()
+    # These next two methods have not been established in Python and cannot be tested.
+    # test_view_net_curve()
+    # test_view_marginal_prices()
+    print("Tests in testmarket.py ran to completion.\n")

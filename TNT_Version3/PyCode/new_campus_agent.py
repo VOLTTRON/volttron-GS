@@ -51,7 +51,7 @@
 # operated by BATTELLE for the UNITED STATES DEPARTMENT OF ENERGY
 # under Contract DE-AC05-76RL01830
 
-#}}}
+# }}}
 
 # import os
 
@@ -125,7 +125,7 @@ class CampusAgent(TransactiveNode):
         # self.simulation_start_time = parser.parse(self.config.get('simulation_start_time'))
         self.simulation_one_hour_in_seconds = int(self.config.get('simulation_one_hour_in_seconds'))
 
-        Timer.created_time = datetime.now()
+        Timer.created_time = Timer.get_cur_time()
         Timer.simulation = self.simulation
         Timer.sim_start_time = self.simulation_start_time
         Timer.sim_one_hr_in_sec = self.simulation_one_hour_in_seconds
@@ -235,7 +235,7 @@ class CampusAgent(TransactiveNode):
                 # Schedule rerun if any neighbor is not converged
                 if not start_of_cycle:
                     if not all([n.model.converged for n in self.neighbors]):
-                        dt = datetime.now()
+                        dt = Timer.get_cur_time()
                         # Schedule to rerun after 5 minutes if it is in the same hour and is the first reschedule
                         next_run_dt = dt + self.reschedule_interval
                         if dt.hour == next_run_dt.hour and run_cnt >= 1:

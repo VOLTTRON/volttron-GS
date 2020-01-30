@@ -57,8 +57,8 @@
 # }}}
 
 
-from datetime import datetime, timedelta, date, time
-import csv
+# from datetime import datetime, timedelta, date, time
+# import csv
 
 # import logging
 # TODO: Reenable logging throughout NeighborModel.
@@ -80,13 +80,14 @@ _log = logging.getLogger(__name__)
 
 # 191217DJH: This class had originally inherited from class Model. Model will be deleted.
 
-class Neighbor():
+
+class Neighbor:
     # The Neighbor class manages the interface with a Neighbor object and represents it for the computational agent.
     # Members of the transactive network must be indicated by setting the "transactive" property true.
 
     def __init__(self,
                  convergence_threshold=0.05,
-                 cost_parameters = (0.0, 0.0, 0.0),
+                 cost_parameters=(0.0, 0.0, 0.0),
                  demand_month=datetime.today().month,
                  demand_rate=4.5,
                  demand_threshold=1e9,
@@ -653,6 +654,7 @@ class Neighbor():
         #
         # OUTPUTS:
         # Updates self.activeVertices - an array of IntervalValues that contain Vertex() structs
+        # TODO: Consider eliminating the try-catch pairs in "update_vertices" to improve code structure.
 
         # Extract active time intervals.
         time_intervals = market.timeIntervals
@@ -1161,14 +1163,13 @@ class Neighbor():
         self.receivedSignal = []
         for curve in curves:
             transactive_record = TransactiveRecord(time_interval=curve['timeInterval'],
-                                                  record=int(curve['record']),
-                                                  marginal_price=float(curve['marginalPrice']),
-                                                  power=float(curve['power']),
-                                                  cost=float(curve['cost']))
+                                                      record=int(curve['record']),
+                                                      marginal_price=float(curve['marginalPrice']),
+                                                      power=float(curve['power']),
+                                                      cost=float(curve['cost']))
 
             # Save each transactive record
             self.receivedSignal.append(transactive_record)
-
 
     def update_costs(self, market):
         """

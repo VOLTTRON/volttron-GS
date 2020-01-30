@@ -57,7 +57,7 @@
 # }}}
 
 
-from datetime import datetime, timedelta, date, time
+from datetime import date, time
 # from dateutil import relativedelta
 
 from vertex import Vertex
@@ -125,7 +125,7 @@ def test_calculate_reserve_margin():
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print('    The method ran without errors')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.reserveMargins) == 1, '- an unexpected number of results were stored'
@@ -143,7 +143,7 @@ def test_calculate_reserve_margin():
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print("    The method ran without errors")
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert test_model.reserveMargins[0].value == 10, '- the method should have used vertex for comparison'
@@ -154,7 +154,7 @@ def test_calculate_reserve_margin():
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print('    Method ran without errors')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert test_model.reserveMargins[0].value == 5, '- method should have used maximum power for comparison'
@@ -166,7 +166,7 @@ def test_calculate_reserve_margin():
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print('    The method ran witout errors')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert test_model.reserveMargins[0].value == 0, '- method should have assigned zero for a neg. result'
@@ -198,7 +198,7 @@ def test_check_for_convergence():
     try:
         test_model.check_for_convergence(test_market)
         print('    The method ran to completion')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.convergenceFlags) == 1, '  - an unexpected number of convergence flags occurred'
@@ -226,7 +226,7 @@ def test_check_for_convergence():
     try:
         test_model.check_for_convergence(test_market)
         print('    The method ran to completion')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.convergenceFlags) == 1, '  - an unexpected number of interval convergence flags occurred'
@@ -240,7 +240,7 @@ def test_check_for_convergence():
     try:
         test_model.check_for_convergence(test_market)
         print('    The method ran to completion')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.convergenceFlags) == 1, '  - an unexpected number of interval convergence flags occurred'
@@ -256,7 +256,7 @@ def test_check_for_convergence():
     try:
         test_model.check_for_convergence(test_market)
         print('    The method ran to completion')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.convergenceFlags) == 1, '  - an unexpected number of interval convergence flags occurred'
@@ -282,7 +282,7 @@ def test_check_for_convergence():
     try:
         test_model.check_for_convergence(test_market)
         print('    The method ran to completion')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.convergenceFlags) == 1, '  - an unexpected number of interval convergence flags occurred'
@@ -307,7 +307,7 @@ def test_check_for_convergence():
     try:
         test_model.check_for_convergence(test_market)
         print('    The method ran to completion')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.convergenceFlags) == 1, '  - an unexpected number of interval convergence flags occurred'
@@ -326,7 +326,7 @@ def test_check_for_convergence():
     try:
         test_model.check_for_convergence(test_market)
         print('    The method ran to completion')
-    except:
+    except RuntimeWarning:
         print('    ERRORS ENCOUNTERED')
 
     assert len(test_model.convergenceFlags) == 1, '  - an unexpected number of interval convergence flags occurred'
@@ -362,8 +362,9 @@ def test_marginal_price_from_vertices():
     try:
         marginal_price = test_obj.marginal_price_from_vertices(power, test_vertices)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
+        marginal_price = []
 
     assert marginal_price == test_vertices[1].marginalPrice, '  - the method returned an unexpected marginal price'
 
@@ -374,19 +375,19 @@ def test_marginal_price_from_vertices():
     try:
         marginal_price = test_obj.marginal_price_from_vertices(power, test_vertices)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert marginal_price == test_vertices[0].marginalPrice, '  - the method returned an unexpected marginal price'
 
-     # Test 3: Power between vertices.
+    # Test 3: Power between vertices.
     print('- Test 3: power is between vertices')
     power = 0
 
     try:
         marginal_price = test_obj.marginal_price_from_vertices(power, test_vertices)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert abs(marginal_price - 0.15) <= 0.0001, '  - the method returned an unexpected marginal price'
@@ -445,7 +446,7 @@ def test_prep_transactive_signal():
     try:
         test_model.prep_transactive_signal(test_market, test_myTransactiveNode)
         print('  - The method warned and returned, as expected')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     # TEST 2
@@ -461,7 +462,7 @@ def test_prep_transactive_signal():
     try:
         test_model.prep_transactive_signal(test_market, test_myTransactiveNode)
         print('  - the method ran to completion without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.mySignal) == 1, '  - the wrong number of transactive records were stored'
@@ -483,7 +484,7 @@ def test_prep_transactive_signal():
     try:
         test_model.prep_transactive_signal(test_market, test_myTransactiveNode)
         print('  - the method ran to completion without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.mySignal) == 3, '  - the wrong number of transactive records were stored'
@@ -511,7 +512,7 @@ def test_prep_transactive_signal():
     try:
         test_model.prep_transactive_signal(test_market, test_myTransactiveNode)
         print('  - the method ran to completion without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.mySignal) == 3, '  - the wrong number of transactive records were stored'
@@ -524,7 +525,7 @@ def test_prep_transactive_signal():
     cond3 = [abs(x.marginalPrice - 0.2800) < 0.0001 for x in test_model.mySignal]
     assert any(cond1) and any(cond2) and any(cond3), '  - the marginal price values were not as expected'
 
-    ## TEST 5
+    # TEST 5
     print('- Test 5: There is an extra Vertex in the range')
 
     # Configure the test.
@@ -540,7 +541,7 @@ def test_prep_transactive_signal():
     try:
         test_model.prep_transactive_signal(test_market, test_myTransactiveNode)
         print('  - the method ran to completion without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.mySignal) == 4, '  - the wrong number of transactive records were stored'
@@ -584,14 +585,14 @@ def test_receive_transactive_signal():
     test_myTransactiveNode = TransactiveNode()
     test_myTransactiveNode.name = 'mTN_abcd'
 
-    ## TEST 1
+    # TEST 1
     print('- Test 1: Neighbor is NOT transactive')
     test_model.transactive = False
 
     try:
         test_model.receive_transactive_signal(test_myTransactiveNode)
         print('  - The method warned and returned, as expected')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     # Test 2
@@ -630,7 +631,7 @@ def test_receive_transactive_signal():
     try:
         test_model.receive_transactive_signal(test_myTransactiveNode)
         print('  - the receive method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.receivedSignal) == 2, '  - an unexpected, or no, record count was stored'
@@ -643,12 +644,11 @@ def test_schedule_engagement():
     print('Running Neighbor.test_schedule_engagement()')
 
     test_obj = Neighbor()
-    test_mkt = Market()
 
     try:
         test_obj.schedule_engagement()
         print('- method ran to completion')
-    except:
+    except RuntimeWarning:
         print('- ERRORS ENCOUNTERED')
 
     assert test_obj == test_obj, '- the Neighbor was unexpected altered'
@@ -689,7 +689,7 @@ def test_schedule_power():
     try:
         test_model.schedule_power(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.scheduledPowers) == 1, '  - an unexpected number of scheduled powers is created'
@@ -707,7 +707,7 @@ def test_schedule_power():
     try:
         test_model.schedule_power(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.scheduledPowers) == 1, '  - an unexpected number of scheduled powers is found'
@@ -731,14 +731,6 @@ def test_send_transactive_signal():
     test_model = Neighbor()
     test_model.name = 'NM_abcdefghijkl'
 
-    # Create a test Neighbor object.
-    # test_object = Neighbor()
-
-    # Get the test object and model to cross-reference one another.
-    # test_object.model = test_model
-    # test_model.object = test_object
-    # test_object.name = 'TN_abcdefghijklmn'
-
     # Create a test market object.
     test_market = Market()
 
@@ -746,7 +738,7 @@ def test_send_transactive_signal():
     test_myTransactiveNode = TransactiveNode()
     test_myTransactiveNode.name = 'mTN_abcd'
 
-    ## TEST 1
+    # TEST 1
     print('- Test 1: Neighbor is NOT transactive')
     test_model.transactive = False
 
@@ -852,7 +844,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('- ERRORS ENCOUNTERED')
 
     assert test_obj.demandThreshold == 1000, '- the method inferred the wrong demand threshold value'
@@ -864,7 +856,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors when there is no meter')
-    except:
+    except RuntimeWarning:
         print('- ERRORS ENCOUNTERED')
 
     assert test_obj.demandThreshold == 1100, '- the method did not update the inferred demand threshold value'
@@ -888,7 +880,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors when there is a meter')
-    except:
+    except RuntimeWarning:
         print('- ERRORS ENCOUNTERED')
 
     # Check that the old threshold is correctly retained.
@@ -905,7 +897,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors with lower current threshold')
-    except:
+    except RuntimeWarning:
         print('- ERRORS ENCOUNTERED')
 
     # Check that a new, higher demand threshold was set.
@@ -928,7 +920,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors upon rollover to new month')
-    except:
+    except RuntimeWarning:
         print('- ERRORS ENCOUNTERED')
 
     # See if the demand threshold was reset at the new month.
@@ -971,7 +963,7 @@ def test_update_dual_costs():
     try:
         test_model.update_dual_costs(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.dualCosts) == 1, '  - the wrong number of dual cost values was created'
@@ -988,7 +980,7 @@ def test_update_dual_costs():
     try:
         test_model.update_dual_costs(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.dualCosts) == 1, '  - the wrong number of dual cost values was created'
@@ -1034,7 +1026,7 @@ def test_update_production_costs():
     try:
         test_model.update_production_costs(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.productionCosts) == 1, '  - the wrong number of production costs was created'
@@ -1051,7 +1043,7 @@ def test_update_production_costs():
     try:
         test_model.update_production_costs(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.productionCosts) == 1, '  - the wrong number of productions was created'
@@ -1091,7 +1083,7 @@ def test_update_vertices():
     # test_object.model = test_model
     # test_model.object = test_object
 
-    ## TEST 1
+    # TEST 1
     print('- Test 1: No default vertex has been defined for the Neighbor')
 
     test_model.defaultVertices = []
@@ -1099,10 +1091,10 @@ def test_update_vertices():
     try:
         test_model.update_vertices(test_market)
         print('  - the method warned and returned, as designed.')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
-    ## TEST 2
+    # TEST 2
     print('- Test 2: The Neighbor is not transactive')
 
     # Create the default Vertex object.
@@ -1112,7 +1104,7 @@ def test_update_vertices():
     try:
         test_model.update_vertices(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.activeVertices) == 1, '  - there is an unexpected number of active vertices'
@@ -1128,7 +1120,7 @@ def test_update_vertices():
     try:
         test_model.update_vertices(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.activeVertices) == 1, '  - there is an unexpected number of active vertices'
@@ -1136,7 +1128,7 @@ def test_update_vertices():
     vertex = test_model.activeVertices[0].value
     assert vertex.power == 200 and vertex.marginalPrice == 0.2, '  - the vertex values are not as expected'
 
-    ## TEST 4
+    # TEST 4
     print('- Test 4: The Neighbor is transactive, and a transactive records are available to use')
     test_model.transactive = True
 
@@ -1151,7 +1143,7 @@ def test_update_vertices():
     try:
         test_model.update_vertices(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.activeVertices) == 2, '  - there is an unexpected number of active vertices'
@@ -1167,12 +1159,12 @@ def test_update_vertices():
     non_members2 = [x for x in vertex_marginal_price if x not in [0.1500, 0.2500]]
     assert len(non_members1) == 0 and len(non_members2) == 0, '  - the vertex values are not as expected'
 
-    ## TEST 5
+    # TEST 5
     print('- Test 5: The Neighbor is transactive with transactive records, and demand charges are in play')
     test_model.transactive = True
 
     # Create and store some received transactive records
-    transactive_record1 = TransactiveRecord(time_interval=time_interval, record=1, marginal_price=0.15,power=0)
+    transactive_record1 = TransactiveRecord(time_interval=time_interval, record=1, marginal_price=0.15, power=0)
     transactive_record2 = TransactiveRecord(time_interval=time_interval, record=2, marginal_price=0.25, power=100)
     transactive_record3 = TransactiveRecord(time_interval=time_interval, record=0, marginal_price=0.2, power=50)
     test_model.receivedSignal = [transactive_record1, transactive_record2, transactive_record3]
@@ -1183,7 +1175,7 @@ def test_update_vertices():
     try:
         test_model.update_vertices(test_market)
         print('  - the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_model.activeVertices) == 4, '  - there is an unexpected number of active vertices'

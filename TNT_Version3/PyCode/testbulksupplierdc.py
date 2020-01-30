@@ -57,23 +57,22 @@
 # }}}
 
 
-
-from datetime import datetime, timedelta, date, time
+# from datetime import datetime, timedelta, date, time
 # from dateutil import relativedelta
 
-from vertex import Vertex
+# from vertex import Vertex
 from helpers import *
 from measurement_type import MeasurementType
 from interval_value import IntervalValue
-from transactive_record import TransactiveRecord
+# from transactive_record import TransactiveRecord
 from meter_point import MeterPoint
 from market import Market
 from time_interval import TimeInterval
-from neighbor_model import Neighbor
-from local_asset_model import LocalAsset
-from TransactiveNode import TransactiveNode
+# from neighbor_model import Neighbor
+# from local_asset_model import LocalAsset
+# from TransactiveNode import TransactiveNode
 from bulk_supplier_dc import BulkSupplier_dc
-from const import *
+# from const import *
 
 
 def test_update_dc_threshold():
@@ -117,7 +116,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors')
-    except:
+    except RuntimeWarning:
         print('- the method encountered errors when called')
 
     assert test_obj.demandThreshold == 1000, '- the method inferred the wrong demand threshold value'
@@ -131,7 +130,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors when there is no meter')
-    except:
+    except RuntimeWarning:
         print('- the method encountered errors when there is no meter')
 
     assert test_obj.demandThreshold == 1100, '- the method did not update the inferred demand threshold value'
@@ -157,11 +156,12 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('- the method ran without errors when there is a meter')
-    except:
+    except RuntimeWarning:
         print('- the method encountered errors when there is a meter')
 
     # Check that the old threshold is correctly retained.
-    assert test_obj.demandThreshold == 1000, '- the method failed to keep the correct demand threshold value when there is a meter'
+    assert test_obj.demandThreshold == 1000, \
+                            '- the method failed to keep the correct demand threshold value when there is a meter'
 
     # Reconfigure the test object with a lower current threshold
     iv = [
@@ -174,9 +174,10 @@ def test_update_dc_threshold():
     test_obj.update_dc_threshold(test_mkt)
 
     # Check that a new, higher demand threshold was set.
-    assert test_obj.demandThreshold == 900, '- the method failed to update the demand threshold value when there is a meter'
+    assert test_obj.demandThreshold == 900, \
+                                    '- the method failed to update the demand threshold value when there is a meter'
 
-    ## Test rollover to new month
+    # Test rollover to new month
     # Configure the test object
     last_month = dt.month - 1
     if last_month == 0:
@@ -192,7 +193,7 @@ def test_update_dc_threshold():
     try:
         test_obj.update_dc_threshold(test_mkt)
         print('  - The method ran without errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     # See if the demand threshold was reset at the new month.

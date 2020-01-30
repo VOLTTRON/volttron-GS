@@ -57,8 +57,7 @@
 # }}}
 
 
-
-from datetime import datetime, timedelta, date, time
+from datetime import date, time
 # from dateutil import relativedelta    # NOT AVAILABLE??
 
 from vertex import Vertex
@@ -115,31 +114,24 @@ def test_calculate_reserve_margin():
     # Store time interval
     test_mkt.timeIntervals = [ti]
 
-    # Establish a test object that is a LocalAsset with assigned maximum power
-    # test_object = LocalAsset()
-
-
     # Establish test object that is a LocalAsset.
     test_model = LocalAsset()
     test_model.scheduledPowers = [
         IntervalValue(test_model, ti, test_mkt, MeasurementType.ScheduledPower, 0.0)]
     test_model.maximumPower = 100
 
-    # Allow object and model to cross-reference one another.
-    # test_object = test_model
-    # test_model = test_object
-
     # Run the first test case.
     print("  Case 1:")
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print('  The test ran without errors')
-    except:
-        print('  The test encountered errors')
+    except RuntimeWarning as cause:
+        print('  The test encountered errors', cause)
 
     assert len(test_model.reserveMargins) == 1, 'An unexpected number of results were stored'
 
-    assert test_model.reserveMargins[0].value == test_model.maximumPower, 'The method did not use the available maximum power'
+    assert test_model.reserveMargins[0].value == test_model.maximumPower, \
+                                                                'The method did not use the available maximum power'
 
     # create some vertices and store them
     iv = [
@@ -153,8 +145,8 @@ def test_calculate_reserve_margin():
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print('  The test ran without errors')
-    except:
-        print('  The test encountered errors')
+    except RuntimeWarning as cause:
+        print('  The test encountered errors', cause)
 
     assert test_model.reserveMargins[0].value == 10, 'The method should have used vertex for comparison'
 
@@ -163,8 +155,8 @@ def test_calculate_reserve_margin():
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print('  The test ran without errors')
-    except:
-        print('  The test encountered errors')
+    except RuntimeWarning as cause:
+        print('  The test encountered errors', cause)
 
     assert test_model.reserveMargins[0].value == 5, 'The method should have used maximum power for comparison'
 
@@ -174,14 +166,13 @@ def test_calculate_reserve_margin():
     try:
         test_model.calculate_reserve_margin(test_mkt)
         print('  The test ran without errors')
-    except:
-        print('  The test encountered errors')
+    except RuntimeWarning as cause:
+        print('  The test encountered errors', cause)
 
     assert test_model.reserveMargins[0].value == 0, 'The method should have assigned zero for a neg. result'
 
     # Success.
     print('Method test_calculate_reserve_margin() ran to completion.\n')
-    # print('\nResult: #s\n\n', pf)
 
 
 def test_cost():
@@ -194,8 +185,9 @@ def test_cost():
     try:
         production_cost = test_asset.cost(power)
         print('  - The method ran without errors')
-    except:
-        print('  - ERRORS ENCOUNTERED')
+    except RuntimeWarning as cause:
+        print('  - ERRORS ENCOUNTERED', cause)
+        production_cost = []
 
     assert production_cost == 0, 'The production cost should have been 0'
 
@@ -207,8 +199,8 @@ def test_cost():
     try:
         production_cost = test_asset.cost()
         print('  - The method ran without errors')
-    except:
-        print('  - ERRORS ENCOUNTERED')
+    except RuntimeWarning as cause:
+        print('  - ERRORS ENCOUNTERED', cause)
 
     assert production_cost == test_value, 'The production cost should have been provided test value'
 
@@ -219,8 +211,8 @@ def test_cost():
     try:
         production_cost = test_asset.cost(power)
         print('  - The method ran without errors')
-    except:
-        print('  - ERRORS ENCOUNTERED')
+    except RuntimeWarning as cause:
+        print('  - ERRORS ENCOUNTERED', cause)
 
     assert production_cost == 111, 'The production cost should have been 111'
 
@@ -237,7 +229,7 @@ def test_engagement_cost():
     #   Assign engagement costs for [dissengagement, hold, engagement]
     test_model.engagementCost = [1, 2, 3]
 
-    ## TEST 1
+    # TEST 1
     print('  Test 1a: Normal transition input arguments [-1,0,1]')
 
     transition = 0  # false - false  # a hold transition, unchanged
@@ -245,8 +237,9 @@ def test_engagement_cost():
     try:
         cost = test_model.engagement_cost(transition)
         print('The case ran without errors')
-    except:
-        print('The case encountered errors')
+    except RuntimeWarning as cause:
+        print('The case encountered errors', cause)
+        cost = []
 
     assert cost == 2, '  The method miscalculated the cost of a hold'
 
@@ -256,8 +249,8 @@ def test_engagement_cost():
     try:
         cost = test_model.engagement_cost(transition)
         print('The case ran without errors')
-    except:
-        print('The case encountered errors')
+    except RuntimeWarning as cause:
+        print('The case encountered errors', cause)
 
     assert cost == 1, 'The method miscalculated the cost of a disengagement'
 
@@ -267,12 +260,12 @@ def test_engagement_cost():
     try:
         cost = test_model.engagement_cost(transition)
         print('The case ran without errors')
-    except:
-        print('The case encountered errors')
+    except RuntimeWarning as cause:
+        print('The case encountered errors', cause)
 
     assert cost == 3, 'The method miscalculated the cost of an engagement'
 
-    ## TEST 2
+    # TEST 2
     print('- Test 2: Unexpected, dissallowed input argument')
 
     transition = 7  # a disallowed transition
@@ -280,14 +273,14 @@ def test_engagement_cost():
     try:
         cost = test_model.engagement_cost(transition)
         print('The case ran without errors')
-    except:
-        print('The case encountered errors')
+    except RuntimeWarning as cause:
+        print('The case encountered errors', cause)
+        cost = []
 
     assert cost is None, 'The method should not assign a cost for a disallowed transition'
 
     # Success.
     print('Method test_engagement_cost() ran to completion.\n')
-    # print('\nResult: #s\n\n', pf)
 
 
 def test_schedule_engagement():
@@ -324,8 +317,8 @@ def test_schedule_engagement():
     try:
         test_model.schedule_engagement(test_mkt)
         print("  The case ran without errors.")
-    except:
-        print("  The case encountered errors.")
+    except RuntimeWarning as cause:
+        print("  The case encountered errors.", cause)
 
     #   Were the right number of engagement schedule values created?
     assert len(test_model.engagementSchedule) == 2, 'The method did not store the engagement schedule'
@@ -353,8 +346,8 @@ def test_schedule_engagement():
     try:
         test_model.schedule_engagement(test_mkt)
         print("  The method ran without errors.")
-    except:
-        print("  The method encountered errors.")
+    except RuntimeWarning as cause:
+        print("  The method encountered errors.", cause)
 
     #   Was the new time interval used?
     assert len(test_model.engagementSchedule) == 3, 'The method apparently failed to create a new engagement'
@@ -405,8 +398,8 @@ def test_schedule_power():
     try:
         test_model.schedule_power(test_mkt)
         print("  The method ran without errors")
-    except:
-        print("  The method encountered errors")
+    except RuntimeWarning as cause:
+        print("  The method encountered errors", cause)
 
     #   Were the right number of scheduled power values created?
     assert len(test_model.scheduledPowers) == 2, 'The method did not store the right number of results'
@@ -431,8 +424,8 @@ def test_schedule_power():
     try:
         test_model.schedule_power(test_mkt)
         print("  The method ran without errors")
-    except:
-        print("  The method encountered errors")
+    except RuntimeWarning as cause:
+        print("  The method encountered errors", cause)
 
     #   Was the new time interval used?
     assert len(test_model.scheduledPowers) == 3, 'The method failed to create a new scheduled power'
@@ -443,15 +436,12 @@ def test_schedule_power():
 
     # Success.
     print('Method test_schedule_power() ran to completion.\n')
-    # print('\nResult: #s\n\n', pf)
 
 
 def test_update_dual_costs():
-    # TEST_UPDATE_DUAL_COSTS() - test method update_dual_costs() that creates
-    # or revises the dual costs in active time intervals using active vertices,
-    # scheduled powers, and marginal prices.
-    # NOTE: This test is virtually identical to the Neighbor test of the
-    # same name.
+    # TEST_UPDATE_DUAL_COSTS() - test method update_dual_costs() that creates or revises the dual costs in active time
+    # intervals using active vertices, scheduled powers, and marginal prices.
+    # NOTE: This test is virtually identical to the Neighbor test of the same name.
     print('Running LocalAsset.test_update_dual_costs()')
 
     #   Create a test Market object.
@@ -469,8 +459,7 @@ def test_update_dual_costs():
     #   Create a test LocalAsset.
     test_model = LocalAsset()
 
-    #   Create and store a scheduled power IntervalValue in the active time
-    #   interval.
+    #   Create and store a scheduled power IntervalValue in the active time interval.
     test_model.scheduledPowers = [
         IntervalValue(test_model, time_interval, test_market, MeasurementType.ScheduledPower, 100)]
 
@@ -484,8 +473,8 @@ def test_update_dual_costs():
     try:
         test_model.update_dual_costs(test_market)
         print('  The test ran without errors')
-    except:
-        print('  The test encountered errors')
+    except RuntimeWarning as cause:
+        print('  The test encountered errors', cause)
 
     assert len(test_model.dualCosts) == 1, 'The wrong number of dual cost values was created'
 
@@ -502,8 +491,8 @@ def test_update_dual_costs():
     try:
         test_model.update_dual_costs(test_market)
         print('  The test ran without errors')
-    except:
-        print('  The test encountered errors')
+    except RuntimeWarning as cause:
+        print('  The test encountered errors', cause)
 
     assert len(test_model.dualCosts) == 1, 'The wrong number of dual cost values was created'
 
@@ -513,7 +502,6 @@ def test_update_dual_costs():
 
     # Success.
     print('Method test_update_dual_costs() ran to completion.\n')
-    # print('\nResult: #s\n\n', pf)
 
 
 def test_update_production_costs():
@@ -533,8 +521,7 @@ def test_update_production_costs():
     #   Create a test LocalAsset.
     test_model = LocalAsset()
 
-    #   Create and store a scheduled power IntervalValue in the active time
-    #   interval.
+    #   Create and store a scheduled power IntervalValue in the active time interval.
     test_model.scheduledPowers = [
         IntervalValue(test_model, time_interval, test_market, MeasurementType.ScheduledPower, 50)]
 
@@ -553,8 +540,8 @@ def test_update_production_costs():
     try:
         test_model.update_production_costs(test_market)
         print('  - the method ran without errors')
-    except:
-        print('  - the method encountered errors')
+    except RuntimeWarning as cause:
+        print('  - the method encountered errors', cause)
 
     assert len(test_model.productionCosts) == 1, 'The wrong number of production costs was created'
 
@@ -570,8 +557,8 @@ def test_update_production_costs():
     try:
         test_model.update_production_costs(test_market)
         print('  - the method ran without errors')
-    except:
-        print('  - the method encountered errors')
+    except RuntimeWarning as cause:
+        print('  - the method encountered errors', cause)
 
     assert len(test_model.productionCosts) == 1, 'The wrong number of productions was created'
 
@@ -581,7 +568,6 @@ def test_update_production_costs():
 
     # Success.
     print('Method test_update_production_costs() ran to completion.\n')
-    # print('\nResult: #s\n\n', pf)
 
 
 def test_update_vertices():
@@ -604,29 +590,23 @@ def test_update_vertices():
     test_model.scheduledPowers = [
         IntervalValue(test_model, time_interval, test_market, MeasurementType.ScheduledPower, 50)]
 
-    #   Create a LocalAsset and its maximum and minimum powers.
-    # test_object = LocalAsset()
+    #   Create maximum and minimum powers.
     test_model.maximumPower = 200
     test_model.minimumPower = 0
 
-    #   Have the LocalAsset model and object cross reference one another.
-    # test_object = test_model
-    # test_model = test_object
-
-    ## TEST 1
+    # TEST 1
     print('- Test 1: Basic operation')
 
     try:
         test_model.update_vertices(test_market)
         print('  - the method ran without errors')
-    except ('Errors were encountered.'):
-        print('  - the method encountered errors')
+    except RuntimeWarning as cause:
+        print('  - the method encountered errors', cause)
 
     assert len(test_model.activeVertices) == 1, 'There were an unexpected number of active vertices'
 
     # Success.
     print('Method test_update_vertices ran to completion.\n')
-    # print('\nResult: #s\n\n', pf)
 
 
 def test_get_extended_prices():
@@ -662,13 +642,14 @@ def test_get_extended_prices():
     assert len(test_market.marginalPrices) == 1, 'The market was supposed to have a marginal price'
     assert datetime.now() + test_asset_model.schedulingHorizon \
            < test_market.timeIntervals[0].startTime + test_market.intervalDuration, \
-        'For this test, the existing marginal price intervals should not extend beyong the scheduling horizon.'
+        'For this test, the existing marginal price intervals should not extend beyond the scheduling horizon.'
 
     try:
-        price_set = test_asset_model.get_extended_prices(test_market, test_mtn)
+        price_set = test_asset_model.get_extended_prices(test_market)
         print("  The case ran without errors.")
-    except:
-        print("  The case encountered errors.")
+    except RuntimeWarning as cause:
+        print("  The case encountered errors.", cause)
+        price_set = []
 
     assert len(price_set) == 1, 'An unexpected number of prices was found'
     assert price_set[0].value == price, 'The price was no correct'
@@ -677,10 +658,9 @@ def test_get_extended_prices():
     print("  Case 2. Actual marginal prices in prior sequential market that is similar to the market.")  # ****
     # The test setup is such that the local asset should sequentially use Methods 1, & 2 to find two marginal prices.
     now = datetime.now()
-    #test_asset = LocalAsset()
+
     test_asset_model = LocalAsset()
-    # test_asset.model = test_asset_model
-    # test_asset_model.object = test_asset
+
     test_asset_model.schedulingHorizon = timedelta(hours=1.5)  # Should cause asset to use prior market
 
     test_market = Market()
@@ -716,10 +696,10 @@ def test_get_extended_prices():
     assert test_market.priorMarketInSeries == prior_market, "The market must point to its predecessor in market series"
 
     try:
-        price_set = test_asset_model.get_extended_prices(test_market, test_mtn)
+        price_set = test_asset_model.get_extended_prices(test_market)
         print("  The case ran without errors.")
-    except:
-        print("  The case encountered errors.")
+    except RuntimeWarning as result:
+        print("  The case encountered errors.", result)
 
     assert len(price_set) == 2, 'An unexpected number of prices was found'
     assert price_set[0].value == price0, 'The first price was not correct'
@@ -781,16 +761,13 @@ def test_get_extended_prices():
     assert len(prior_market.marginalPrices) == 2, "The prior market should have had two prices"
     assert len(corrected_market.marginalPrices) == 3, 'The corrected market should have three prices'
     assert test_market.marketSeriesName == prior_market.marketSeriesName, 'The market names must be the same'
-    # end_of_horizon = now + test_asset_model.schedulingHorizon
-    # end_of_prices = [max(x.startTime + prior_market.intervalDuration) for x in prior_market.timeIntervals]
-    # assert end_of_horizon < end_of_prices, \
-        # 'For this test, the existing marginal price intervals should not extend beyond the scheduling horizon.'
 
     try:
-        price_set = test_asset_model.get_extended_prices(test_market, test_mtn)
+        price_set = test_asset_model.get_extended_prices(test_market)
         print("  The case ran without errors.")
-    except:
-        print("  The case encountered errors.")
+    except RuntimeWarning as result:
+        print("  The case encountered errors.", result)
+        price_set = []
 
     assert len(price_set) == 3, 'An unexpected number of prices was found'
     assert price_set[0].value == price0, 'The first price was not correct'
@@ -798,15 +775,10 @@ def test_get_extended_prices():
     assert price_set[2].value == price2, 'The third price was not correct'
 
     # ******************************************************************************************************************
-
     print("  Case 4. Modeled prices using the market's price model.")  # ***********************************************
     # The test setup is such that the local asset should use Methods 1 & 4 to find four to find 4 marginal prices.
-    # prices.
     now = datetime.now()
-    # test_asset = LocalAsset()
     test_asset_model = LocalAsset()
-    # test_asset.model = test_asset_model
-    # test_asset_model.object = test_asset
     test_asset_model.schedulingHorizon = timedelta(hours=3.5)  # Should cause asset to use prior market
 
     test_market = Market()
@@ -831,29 +803,24 @@ def test_get_extended_prices():
     assert len(test_market.priceModel) == 48, 'A price model must exist for all 2 * 24 hours'
 
     try:
-        price_set = test_asset_model.get_extended_prices(test_market, test_mtn)
+        price_set = test_asset_model.get_extended_prices(test_market)
         print("  The case ran without errors.")
-    except:
-        print("  The case encountered errors.")
+    except RuntimeWarning as result:
+        print("  The case encountered errors.", result)
+        price_set = []
 
-    assert len(price_set) == 4, 'An unexpected number of prices was found'
+    assert len(price_set) == 4, ('An unexpected number', len(price_set), ' of prices was found')
     assert price_set[0].value == price0, 'The first price was not correct'
     assert all([price_set[x].value == avg_price for x in range(1, len(price_set))]), \
         'Prices 1 - 4 were not correct'
 
     # ******************************************************************************************************************
     print("  Case 5. The market's default price value.")  # ************************************************************
-    # test_asset = None
-    # test_asset = LocalAsset()
 
-    test_asset_model = None
     test_asset_model = LocalAsset()
 
-    # test_asset.model = test_asset_model
-    # test_asset_model.object = test_asset
     test_asset_model.schedulingHorizon = timedelta(hours=4.5)
 
-    test_market = None
     test_market = Market()
     default_price = 1.2345
     test_market.defaultPrice = default_price
@@ -861,17 +828,17 @@ def test_get_extended_prices():
     test_market.intervalsToClear = 24
     test_market.intervalDuration = timedelta(hours=1)
     test_market.activationLeadTime = timedelta(days=2)
+    test_market.priorRefinedMarket = None
 
-    test_mtn = None
     test_mtn = TransactiveNode()
     test_mtn.markets = [test_market]
 
     assert type(test_market.defaultPrice) == float, 'A valid default price must be defined'
 
     try:
-        price_set = test_asset_model.get_extended_prices(test_market, test_mtn)
+        price_set = test_asset_model.get_extended_prices(test_market)
         print("  The case ran without errors.")
-    except:
+    except RuntimeWarning:
         print("  The case encountered errors.")
 
     assert len(price_set) == 5, 'The number of horizon prices was unexpected'

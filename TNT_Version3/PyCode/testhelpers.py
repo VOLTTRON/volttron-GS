@@ -162,7 +162,7 @@ def test_production():
         IntervalValue(test_object, ti, test_market, MeasurementType.ActiveVertex, av[1]),
         IntervalValue(test_object, ti, test_market, MeasurementType.ActiveVertex, av[2])]
 
-    ## CASE: Various marginal prices when there is more than one vertex
+    # CASE: Various marginal prices when there is more than one vertex
     test_prices = [-0.010, 0.000, 0.020, 0.0225, 0.030]
 
     p = [0] * len(test_prices)  # zeros(1, length(test_prices))
@@ -278,6 +278,7 @@ def test_prod_cost_from_formula():
 
 def test_prod_cost_from_vertices():
     from local_asset_model import LocalAsset
+    from market import Market
 
     # TEST_PROD_COST_FROM_VERTICES - tests function prod_cost_from_vertices()
     print('Running test_prod_cost_from_vertices()')
@@ -309,7 +310,7 @@ def test_prod_cost_from_vertices():
                                   IntervalValue(test_object, ti, test_market, MeasurementType.ActiveVertex, av[1]),
                                   IntervalValue(test_object, ti, test_market, MeasurementType.ActiveVertex, av[2])]
 
-    ## CASE: Various signed powers when there is more than one vertex
+    # CASE: Various signed powers when there is more than one vertex
     test_powers = [-50, 0, 50, 150, 250]
     pc = []
     for p in test_powers:
@@ -329,7 +330,7 @@ def test_prod_cost_from_vertices():
     else:
         print('- the production cost was correctly calculated')
 
-    ## CASE: One vertex (inelastic case, a constant)
+    # CASE: One vertex (inelastic case, a constant)
     test_object.activeVertices = [
         IntervalValue(test_object, ti, test_market, MeasurementType.ActiveVertex, av[0])]
 
@@ -346,7 +347,7 @@ def test_prod_cost_from_vertices():
     else:
         print('- made a correct assignment when there is one vertex')
 
-    ## CASE: No active vertices (error case):
+    # CASE: No active vertices (error case):
     test_object.activeVertices = []
 
     # print('off', 'all')
@@ -492,9 +493,9 @@ def test_are_different2():
 
 
 if __name__ == "__main__":
-    # test_is_hlh()
-    # test_order_vertices()
-    # test_production()
-    # test_prod_cost_from_formula()
-    # test_prod_cost_from_vertices()
+    # test_is_hlh()  # Relies on date parser this is not available.
+    test_order_vertices()
+    test_production()
+    test_prod_cost_from_formula()
+    test_prod_cost_from_vertices()
     test_are_different2()

@@ -69,7 +69,7 @@ from measurement_unit import MeasurementUnit
 from helpers import format_ts, format_date
 
 
-class MeterPoint():
+class MeterPoint:
     def __init__(self,
                  description='',
                  measurement_interval=timedelta(hours=1),
@@ -89,6 +89,7 @@ class MeterPoint():
         self.current_measurement = None
         self.lastUpdate = None
 
+    # TODO: Consider how/whether this use of datetime.utcnow() affects simulations.
     def set_meter_value(self, value, last_update=datetime.utcnow()):
         self.current_hour_measurements.append(value)
         self.lastUpdate = last_update

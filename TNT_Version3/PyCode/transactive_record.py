@@ -100,4 +100,5 @@ class TransactiveRecord:
         # self.voltageUncertainty = voltage_uncertainty  # relative [dimensionless]
 
         # Finally, always append the timestamp that captures when the record is created.
+        # TODO: Is this consistent with Timer() methods that are used with simulations?
         self.timeStamp = datetime.utcnow()

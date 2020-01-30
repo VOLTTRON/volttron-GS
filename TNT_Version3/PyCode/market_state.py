@@ -56,6 +56,7 @@
 
 # }}}
 
+
 class MarketState:
     """
     MarketState is an enumeration os states of TimeIntervals as defined by the Market(s) in which myTransactiveNode

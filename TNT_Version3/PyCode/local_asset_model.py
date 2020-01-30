@@ -67,8 +67,9 @@ from vertex import Vertex
 from interval_value import IntervalValue
 from measurement_type import MeasurementType
 from helpers import *
-from market import Market
+# from market import Market
 from time_interval import TimeInterval
+from timer import Timer
 
 """   # LOOK: These lines commented out in absence of Volttron Environment
 utils.setup_logging()
@@ -76,6 +77,7 @@ _log = logging.getLogger(__name__)
 """
 # 191218DJH: This class originally inherited from class Model. Model is being deleted. Its properties and methods are
 # being moved into this class.
+
 
 class LocalAsset(object):
     # A local asset model manages and represents a local asset object, meaning that it
@@ -160,7 +162,7 @@ class LocalAsset(object):
 
         return production_cost
 
-    ## SEALED - DONOT MODIFY
+    # SEALED - DO NOT MODIFY
     def schedule(self, market):
         """
         Have object schedule its power in active time intervals
@@ -234,7 +236,7 @@ class LocalAsset(object):
             # begin at the same time. This method slides with the market periods, which is not correct!
             # TODO: Eliminate or fix parameter default_powers, which has been defined independent of market period.
             # if len_powers > i:
-                # default_value = self.default_powers[i] if self.default_powers[i] is not None else self.defaultPower
+            #   default_value = self.default_powers[i] if self.default_powers[i] is not None else self.defaultPower
 
             if iv is None:  # A scheduled power does not exist for the indexed time interval
                 # Create an interval value and assign the default value
@@ -485,10 +487,6 @@ class LocalAsset(object):
         # Gather the active time intervals.
         time_intervals = market.timeIntervals
 
-        # TODO: Revisit why these next two extraneous lines were added. Tests work fine without them.
-        # time_interval_values = [t.startTime for t in time_intervals]
-        # self.dualCosts = [x for x in self.dualCosts if x.timeInterval.startTime in time_interval_values]
-
         # Index through the time intervals.
         # NOTE 1911DJH: The range in this for-loop has been corrected and now passes unit testing. I believe the code
         # had been modified to avoid revising the schedule for the first hour in Version 2. This is corrected by the
@@ -547,11 +545,6 @@ class LocalAsset(object):
 
         # Gather active time intervals.
         time_intervals = market.timeIntervals
-
-        # 1911DJH Cutting this that was NOT in original code. This seems like an unwise shortcut.
-        # time_interval_values = [t.startTime for t in time_intervals]
-        # self.productionCosts = [x for x in self.productionCosts if x.timeInterval.startTime in time_interval_values]
-        # TODO: Visit above-commented code that seems extraneous. Tests work without these lines.
 
         # Index through the active time intervals.
         for i in range(len(time_intervals)):
@@ -613,10 +606,6 @@ class LocalAsset(object):
         # Gather active time intervals.
         time_intervals = market.timeIntervals  # active TimeIntervals
 
-        # TODO: Why are these next two extraneous lines included? Tests work fine without them.
-        # time_interval_values = [t.startTime for t in time_intervals]
-        # self.activeVertices = [x for x in self.activeVertices if x.timeInterval.startTime in time_interval_values]
-
         # Index through active time intervals.
         for i in range(len(time_intervals)):
 
@@ -649,7 +638,7 @@ class LocalAsset(object):
         # av = [(x.timeInterval.name, x.value.marginalPrice, x.value.power) for x in self.activeVertices]
         #        _log.debug("{} asset model active vertices are: {}".format(self.name, av))
 
-    def get_extended_prices(self, market, this_transactive_node):
+    def get_extended_prices(self, market):  # 200120DJH This does not, after all, require a TransactiveNode parameter.
         """
         This method is available to facilitate estimation of opportunity cost for local assets that have a scheduling
         horizon that extends farther into the future than supplied by the market in forward time intervals. For example,
@@ -673,20 +662,18 @@ class LocalAsset(object):
 
         # The scheduling horizon is a distance into the future. The price horizon is initialized, then prices are found
         # from now until the end of the scheduling horizon.
+        # TODO: Check that this usage of Timer() is consistent with campus simulation process
         price_horizon = []
-        end_of_calculated_horizon = datetime.now()
+        end_of_calculated_horizon = Timer.get_cur_time()
         end_of_scheduling_horizon = end_of_calculated_horizon + self.schedulingHorizon
 
-        try:  # Case 1: Actual marginal prices offered by the market object that has requested the asset to schedule.
+        # Case 1: Actual marginal prices offered by the market object that has requested the asset to schedule.
 
-            # Get the existing marginal prices from the current market object:
-            market_prices = market.marginalPrices
+        # Get the existing marginal prices from the current market object:
+        market_prices = market.marginalPrices
 
-            if isinstance(market_prices, type(None)) or market_prices is None:
-                raise NameError('the market object has no marginal prices')
-            elif isinstance(market_prices, list) and len(market_prices) == 0:
-                raise NameError('the market object has no marginal prices')
-            else:
+        if not isinstance(market_prices, type(None)) and market_prices is not None:
+            if isinstance(market_prices, list) and len(market_prices) != 0:
                 price_horizon.extend(market_prices)
 
                 end_of_calculated_horizon = price_horizon[0].timeInterval.startTime + market.intervalDuration
@@ -695,135 +682,112 @@ class LocalAsset(object):
                     if end_time > end_of_calculated_horizon:
                         end_of_calculated_horizon = end_time
 
-                if end_of_calculated_horizon < end_of_scheduling_horizon:
-                    raise ("More prices are needed in the horizon")
-                else:
+                if end_of_calculated_horizon >= end_of_scheduling_horizon:
                     return price_horizon
 
-        except:
-            try:  # Case 2: Actual marginal prices in prior sequential markets that are similar to the market object.
-                # 191212DJH: This logic is greatly simplified by introducing the pointer priorMarketInSeries.
+        # Case 2: Actual marginal prices in prior sequential markets that are similar to the market object.
+        # 191212DJH: This logic is greatly simplified by introducing the pointer priorMarketInSeries.
+        if not isinstance(market.priorMarketInSeries, type(None)) and market.priorMarketInSeries is not None:
 
-                prior_market_in_series = market.priorMarketInSeries
+            prior_market_in_series = market.priorMarketInSeries
 
-                if isinstance(prior_market_in_series, type(None)) or prior_market_in_series is None:
+            # Get the marginal prices from the latest similar market.
+            market_prices = prior_market_in_series.marginalPrices
 
-                    raise NameError("The market is not pointing to its predecessor or no predecessor exists")
+            if not isinstance(market_prices, type(None)) and market_prices is not None:
+                if isinstance(market_prices, list) and len(market_prices) != 0:
 
-                else:
+                    # Find any market prices from the corrected market to add to the price horizon
+                    for x in range(len(market_prices)):
+                        interval_end_time = market_prices[x].timeInterval.startTime \
+                                            + market_prices[x].market.intervalDuration
+                        if interval_end_time > end_of_calculated_horizon:
+                            price_horizon.append(market_prices[x])
 
-                    # Get the marginal prices from the latest similar market.
-                    market_prices = prior_market_in_series.marginalPrices
+                    # Find the end of the calculated price horizon
+                    for x in range(len(price_horizon)):
+                        end_time = price_horizon[x].timeInterval.startTime \
+                                   + price_horizon[x].market.intervalDuration
+                        if end_time > end_of_calculated_horizon:
+                            end_of_calculated_horizon = end_time
 
-                    if isinstance(market_prices, type(None)) or market_prices is None:
-                        raise NameError('the similar market object has no marginal prices')
-                    elif isinstance(market_prices, list) and len(market_prices) == 0:
-                        raise NameError('the similar market object has no marginal prices')
-                    else:
-                        # Find any market prices from the corrected market to add to the price horizon
-                        for x in range(len(market_prices)):
-                            interval_end_time = market_prices[x].timeInterval.startTime \
-                                                + market_prices[x].market.intervalDuration
-                            if interval_end_time > end_of_calculated_horizon:
-                                price_horizon.append(market_prices[x])
-
-                        # Find the end of the calculated price horizon
-                        for x in range(len(price_horizon)):
-                            end_time = price_horizon[x].timeInterval.startTime \
-                                       + price_horizon[x].market.intervalDuration
-                            if end_time > end_of_calculated_horizon:
-                                end_of_calculated_horizon = end_time
-
-                        if end_of_calculated_horizon <= end_of_scheduling_horizon:
-                            raise ("More prices are needed in the horizon")
-                        else:
-                            return price_horizon
-
-            except:
-                try:  # Case 3. Actual marginal prices in prior markets that are being corrected by the market object.
-                    # Start by gathering similar prior markets that are in the market series being corrected
-                    # 191212DJH: This logic is simplified by introduction of pointer priorRefinedMarket
-                    prior_refined_market = market.priorRefinedMarket
-
-                    if isinstance(prior_refined_market, type(None)) or prior_refined_market is None:
-                        raise NameError("Market does not point to refined market, or refined market does not exist")
-
-                    else:
-
-                        # Get the marginal prices from the latest similar market.
-                        market_prices = prior_refined_market.marginalPrices
-
-                        if isinstance(market_prices, type(None)) or market_prices is None:
-                            raise NameError('the similar market object has no marginal prices')
-                        elif isinstance(market_prices, list) and len(market_prices) == 0:
-                            raise NameError('the similar market object has no marginal prices')
-                        else:
-                            # Find any market prices from the corrected market to add to the price horizon
-                            # TODO: This following logic might be sensitive to order of prices found
-                            for x in range(len(market_prices)):
-                                interval_end_time = market_prices[x].timeInterval.startTime \
-                                                    + market_prices[x].market.intervalDuration
-                                if interval_end_time > end_of_calculated_horizon:
-                                    price_horizon.append(market_prices[x])
-
-                            # Find the end of the calculated price horizon
-                            for x in range(len(price_horizon)):
-                                end_time = price_horizon[x].timeInterval.startTime \
-                                           + price_horizon[x].market.intervalDuration
-                                if end_time > end_of_calculated_horizon:
-                                    end_of_calculated_horizon = end_time
-
-                            if end_of_calculated_horizon <= end_of_scheduling_horizon:
-                                raise ("More prices are needed in the horizon")
-                            else:
-                                return price_horizon
-
-                except:
-                    try:  # Case 4. Modeled prices using the market's price model
-                        market_prices = []
-                        if market.priceModel is None:
-                            raise ('The market does not have a price model')
-                        while end_of_scheduling_horizon > end_of_calculated_horizon:
-                            price = market.model_prices(end_of_calculated_horizon)
-                            start_time = end_of_calculated_horizon.replace(minute=0, second=0)
-                            ti = TimeInterval(datetime.now(), timedelta(hours=1), market,
-                                              market.marketClearingTime, start_time)
-                            iv = IntervalValue(self, ti, market, None, price[0])
-                            market_prices.append(iv)
-                            end_of_calculated_horizon = end_of_calculated_horizon + timedelta(hours=1)
-
-                        if type(market_prices) is list and len(market_prices) > 0:
-                            price_horizon.extend(market_prices)
-
+                    if end_of_calculated_horizon >= end_of_scheduling_horizon:
                         return price_horizon
 
-                    except:
-                        try:  # Case 5. The market's default price value.
-                            market_prices = []
-                            price = market.defaultPrice
-                            while end_of_scheduling_horizon > end_of_calculated_horizon:
-                                start_time = end_of_calculated_horizon
-                                start_time.replace(minute=0, second=0, microsecond=0)
-                                ti = TimeInterval(datetime.now(), timedelta(hours=1), market,
-                                                  market.marketClearingTime, start_time)
-                                iv = IntervalValue(self, ti, market, MeasurementType.MarginalPrice, price)
-                                price_horizon.append(iv)
-                                end_of_calculated_horizon = end_of_calculated_horizon + timedelta(hours=1)
+        # Case 3. Actual marginal prices in prior markets that are being corrected by the market object.
+        # Start by gathering similar prior markets that are in the market series being corrected
+        # 191212DJH: This logic is simplified by introduction of pointer priorRefinedMarket
+        if not isinstance(market.priorRefinedMarket, type(None)) and market.priorRefinedMarket is not None:
 
-                            #if type(market_prices) is list and len(market_prices) > 0:
-                                #price_horizon.extend(market_prices)
+            prior_refined_market = market.priorRefinedMarket
 
-                            return price_horizon
+            # Get the marginal prices from the latest similar market.
+            market_prices = prior_refined_market.marginalPrices
 
-                        except:
-                            return price_horizon
+            if not isinstance(market_prices, type(None)) and market_prices is not None:
+
+                if isinstance(market_prices, list) and len(market_prices) != 0:
+
+                    # Find any market prices from the corrected market to add to the price horizon
+                    # TODO: This following logic might be sensitive to order of prices found
+                    for x in range(len(market_prices)):
+                        interval_end_time = market_prices[x].timeInterval.startTime \
+                                            + market_prices[x].market.intervalDuration
+                        if interval_end_time > end_of_calculated_horizon:
+                            price_horizon.append(market_prices[x])
+
+                    # Find the end of the calculated price horizon
+                    for x in range(len(price_horizon)):
+                        end_time = price_horizon[x].timeInterval.startTime \
+                                   + price_horizon[x].market.intervalDuration
+                        if end_time > end_of_calculated_horizon:
+                            end_of_calculated_horizon = end_time
+
+                    if end_of_calculated_horizon >= end_of_scheduling_horizon:
+                        return price_horizon
+
+        # Case 4. Modeled prices using the market's price model
+        market_prices = []
+        if market.priceModel is not None:
+            while end_of_scheduling_horizon > end_of_calculated_horizon:
+                price = market.model_prices(end_of_calculated_horizon)
+                start_time = end_of_calculated_horizon.replace(minute=0, second=0)
+                end_time = start_time + timedelta(hours=1)
+                duration = end_time - start_time
+                ti = TimeInterval(Timer.get_cur_time(), duration, market,
+                                  market.marketClearingTime, start_time)
+                iv = IntervalValue(self, ti, market, None, price[0])
+                market_prices.append(iv)
+                end_of_calculated_horizon = end_time
+
+            if type(market_prices) is list and len(market_prices) > 0:
+                price_horizon.extend(market_prices)
+
+            return price_horizon
+
+        # Case 5. The market's default price value.
+        # 191231DJH: This case presumes hour-long intervals.
+        market_prices = []
+        price = market.defaultPrice
+        while end_of_scheduling_horizon > end_of_calculated_horizon:
+            start_time = end_of_calculated_horizon
+            end_time = start_time + timedelta(hours=1)
+            end_time.replace(minute=0, second=0, microsecond=0)
+            duration = end_time - start_time
+            ti = TimeInterval(Timer.get_cur_time(), duration, market,
+                              market.marketClearingTime, start_time)
+            iv = IntervalValue(self, ti, market, MeasurementType.MarginalPrice, price)
+            price_horizon.append(iv)
+            end_of_calculated_horizon = end_time
+
+        return price_horizon
 
     def update_costs(self, market):
         """
         191218DJH: This method was originally inherited from class (Abstract)Model. The purpose was to prescribe the set
         of cost calculation that every asset (and neighbor) must perform. The class structure is being simplified. Class
         Model is being deleted, and its properties and methods are being moved to its children.
-        :param mkt:
+        :param market:
         :return:
         """
 

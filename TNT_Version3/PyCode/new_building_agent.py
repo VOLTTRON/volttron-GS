@@ -61,7 +61,6 @@ import gevent
 from dateutil import parser
 import uuid
 
-
 from volttron.platform.vip.agent import Agent, Core, PubSub, RPC, compat
 from volttron.platform.agent import utils
 from volttron.platform.agent.utils import (get_aware_utc_now, format_timestamp)
@@ -105,7 +104,9 @@ def setup_logging(name, log_file, level=logging.DEBUG):
     logger.addHandler(handler)
     return logger
 
-#ep_res_path = '/Users/ngoh511/Documents/projects/PycharmProjects/transactivenetwork/TNSAgent/tns/test_data/energyplus.txt'
+# ep_res_path = '/Users/ngoh511/Documents/projects/PycharmProjects/transactivenetwork/TNSAgent/tns/test_data/energyplus.txt'
+
+
 mixmarket_log = '/home/volttron/volttron/mixmarket'
 if not os.path.exists(mixmarket_log):
     _log2 = setup_logging('mixmarket', mixmarket_log + '.log')
@@ -114,6 +115,7 @@ else:
     _log2 = setup_logging('mixmarket', mixmarket_log + temp + '.log')
 
 __version__ = '0.1'
+
 
 class BuildingAgent(MarketAgent, TransactiveNode):
     def __init__(self, config_path, **kwargs):
@@ -157,7 +159,7 @@ class BuildingAgent(MarketAgent, TransactiveNode):
             self.simulation_start_time = parser.parse(self.config.get('simulation_start_time'))
             self.simulation_one_hour_in_seconds = int(self.config.get('simulation_one_hour_in_seconds'))
         except:
-            self.simulation_start_time = datetime.now()
+            self.simulation_start_time = Timer.get_cur_time()
             self.simulation_one_hour_in_seconds = 3600
 
         # Create market names to join
@@ -166,7 +168,7 @@ class BuildingAgent(MarketAgent, TransactiveNode):
         for i in range(24):
             self.market_names.append('_'.join([self.base_market_name, str(i)]))
 
-        Timer.created_time = datetime.now()
+        Timer.created_time = Timer.get_cur_time()
         Timer.simulation = self.simulation
         Timer.sim_start_time = self.simulation_start_time
         Timer.sim_one_hr_in_sec = self.simulation_one_hour_in_seconds

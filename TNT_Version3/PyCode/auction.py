@@ -55,17 +55,20 @@
 # under Contract DE-AC05-76RL01830
 
 # }}}
+
+
 from logging import warning
 
 from market import Market
 from direction import Direction
 from market_types import MarketTypes
 
+
 class Auction(Market):
     """
     Auction class child of Market
-    An Auction object may be a formal driver of myTransactiveNode's responsibilities within a formal auction. At least one
-    Market must exist (see the firstMarket object) to drive the timing with which new TimeIntervals are created.
+    An Auction object may be a formal driver of myTransactiveNode's responsibilities within a formal auction. At least
+    one Market must exist (see the firstMarket object) to drive the timing with which new TimeIntervals are created.
     """
     def __init__(self):
         # Properties and methods inherited from Market class:

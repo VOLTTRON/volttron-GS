@@ -111,7 +111,7 @@ def test_schedule():
     try:
         test_mdl.schedule(test_mkt)
         print('  - the method encountered no errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_mdl.scheduledPowers) == 1, '  - the method did not store a scheduled power'
@@ -131,7 +131,7 @@ def test_schedule():
     try:
         test_mdl.schedule(test_mkt)
         print('  - the method encountered no errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_mdl.scheduledPowers) == 1, '  - the method did not store a scheduled power'
@@ -186,7 +186,7 @@ def test_update_costs():
     try:
         test_mdl.update_costs(test_mkt)
         print('  - the method encountered no errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_mdl.productionCosts) == 1, '  - the method did not store a production cost'
@@ -212,7 +212,7 @@ def test_update_costs():
     try:
         test_mdl.update_costs(test_mkt)
         print('  - the method encountered no errors')
-    except:
+    except RuntimeWarning:
         print('  - ERRORS ENCOUNTERED')
 
     assert len(test_mdl.productionCosts) == 1, '  - the method did not store a production cost'

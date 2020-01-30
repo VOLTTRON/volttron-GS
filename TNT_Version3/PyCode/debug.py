@@ -57,44 +57,58 @@
 # }}}
 
 
-# BPA_RATE: BPA 2018-19 energy and demand rate tables
-# BPA establishes load-following energy and demand rates for two-year
-# periods. Use this class to simply refer to the appropriate table and its
-# month number(row) and hour type (row). Row 1 is HLH, row 2 is LLH.
-#
-# Examples: bpa_rate.energy(2,1) returns the HLH rate for February.
-#           bpa_rate.demand(3,2) returns the LLH demand rate for March.
+def test_aredifferent1(r, s, threshold):
+    import math
 
-# Constant bpa_rate properties
+    s_power=s[0][2]
+    s_mp=s[0][3]
 
-bpa_energy_rate = [
-    # HLH,     LLH       # [$/kWh]
-    [0.04196, 0.03660],  # Jan
-    [0.04120, 0.03660],  # Feb
-    [0.03641, 0.03346],  # Mar
-    [0.03233, 0.03020],  # Apr
-    [0.02929, 0.02391],  # May
-    [0.03037, 0.02197],  # Jun
-    [0.03732, 0.03171],  # Jul
-    [0.04077, 0.03527],  # Aug
-    [0.04060, 0.03485],  # Sep
-    [0.03940, 0.03515],  # Oct
-    [0.03993, 0.03740],  # Nov
-    [0.04294, 0.03740]  # dec
-]
+    r_power=r[0][2]
+    r_mp=r[0][3]
 
-bpa_demand_rate = [
-    # HLH,     LLH       # [$/kWh]
-    [11.45, 0.00],  # Jan
-    [11.15, 0.00],  # Feb
-    [9.28, 0.00],  # Mar
-    [7.68, 0.00],  # Apr
-    [6.49, 0.00],  # May
-    [6.92, 0.00],  # Jun
-    [9.63, 0.00],  # Jul
-    [10.98, 0.00],  # Aug
-    [10.91, 0.00],  # Sep
-    [10.45, 0.00],  # Oct
-    [10.65, 0.00],  # Nov
-    [11.83, 0.00]  # dec
-]
+    # Calculate the difference dmp in scheduled marginal prices.
+    dmp = abs(s_mp - r_mp)  # [$/kWh]
+
+    # Calculate the average mp_avg of the two scheduled marginal prices.
+    mp_avg = 0.5 * abs(s_mp + r_mp)  # [$/kWh]
+
+    # Calculate the difference dq betweent the scheduled powers.
+    dq = abs(-s_power - r_power)  # [avg. kW]
+
+    # Calculate the average q_avg of the two scheduled average powers.
+    q_avg = 0.5 * abs(r_power + -s_power)  # [avg. kW]
+
+
+    if q_avg != 0:
+        if len(s) == 1 or len(r) == 1:
+            d = dq / q_avg  # dimensionless
+        else:
+            d = math.sqrt((dq / q_avg) ** 2 + (dmp / mp_avg) ** 2)  # dimensionless
+    else:
+        d = 0
+
+    if d > threshold:
+        # The distance, or relative error, between the two scheduled points
+        # exceeds the threshold criterion. Return true to indicate that the
+        # two messages are significantly different.
+        is_diff = True
+
+    else:
+        # The distance, or relative error, between the two scheduled points
+        # is less than the threshold criterion. Return false, meaning that
+        # the two messages are not significantly different.
+        is_diff = False
+
+    print(is_diff)
+
+
+if __name__ == '__main__':
+    # Return: True   d = math.sqrt((dq / q_avg) ** 2 + (dmp / mp_avg) ** 2) = 0.04x
+    threshold = 0.02
+    r = [('20180622T020000', 0, 37.2684974345231, 0.022220484745369),
+         ('20180622T020000', 1, 0.0, 0.022219983435294),
+         ('20180622T020000', 2, 110.0, 0.022221463079283)]
+    s = [('20180622T020000', 0, -38.14998337529896, 0.021457224582343865),
+         ('20180622T020000', 1, -40.11329301604832, 0.01975728208437844),
+         ('20180622T020000', 2, -20.969231491568785, 0.03633327350909643)]
+    test_aredifferent1(r, s, threshold)
