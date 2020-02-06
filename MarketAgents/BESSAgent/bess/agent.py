@@ -64,13 +64,14 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 from volttron.pnnl.models import Model
+from volttron.platform.vip.agent import Agent, Core
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = "0.1"
 
 
-class BESSAgent(Aggregator, Model):
+class BESSAgent(TransactiveBase, Model):
     """
     The BESS Agent participates in Electricity Market as supplier of electricity.
     """
@@ -82,22 +83,83 @@ class BESSAgent(Aggregator, Model):
             config = {}
         self.agent_name = config.get("agent_name", "bess_agent")
         model_config = config.get("model_parameters", {})
+        TransactiveBase.__init__(self, config, **kwargs)
         Model.__init__(self, model_config, **kwargs)
         self.init_markets()
+        self.numHours = 24
+        self.indices = [None]*self.numHours
 
-    def translate_aggregate_demand(self, air_demand, index):
-        electric_demand_curve = PolyLine()
-        reserve_demand_curve = PolyLine()
-        oat = self.oat_predictions[index] if self.oat_predictions else None
-        bess_power_inject, bess_power_reserve, bess_soc = self.model.run_bess_optimization(self.market_prices,
-                                                                                           self.reserve_market_prices)
-        for i in range(0, len(self.market_prices)):
-            electric_demand_curve.add(Point(price=self.market_prices[i], quantity=bess_power_inject[i]))
-        self.consumer_demand_curve['electric'][index] = electric_demand_curve
-        for i in range(0, len(self.reserve_market_prices)):
-            reserve_demand_curve.add(Point(price=self.reserve_market_prices[i], quantity=bess_power_reserve[i]))
-        self.consumer_reserve_demand_curve['electric'][index] = reserve_demand_curve
+    @Core.receiver('onstart')
+    def onstart(self, sender, **kwargs):
+        _log.debug("BESS onstart")
+        # Subscriptions
+        self.vip.pubsub.subscribe(peer='pubsub',
+                                  prefix='mixmarket/calculate_demand',
+                                  callback=self._calculate_demand)
 
+    def offer_callback(self, timestamp, market_name, buyer_seller):
+        market_index = self.market_name.index(market_name)
+
+        self.indices[market_index] = market_name
+        optimization_ready = all([False if i is None else True for i in self.indices])
+        if optimization_ready:
+            _log.debug("BESS: market_prices = {}".format(self.market_prices))
+            _log.debug("BESS: reserve_market_prices = {}".format(self.reserve_market_prices))
+            bess_power_inject, bess_power_reserve, bess_soc = self.model.run_bess_optimization(self.market_prices,
+                                                                                               self.reserve_market_prices)
+            bess_power_inject = [-i for i in bess_power_inject]
+            _log.debug("BESS: translate_aggregate_demand bess_power_inject: {}, bess_power_reserve: {}".format(
+                bess_power_inject,
+                bess_power_reserve))
+            self.indices = [None] * self.numHours
+            price_min, price_max = self.determine_price_min_max()
+            _log.debug("BESS: price_min: {}, price_max: {}".format(price_min, price_max))
+            for name in self.market_name:
+                index = self.market_name.index(name)
+                electric_demand_curve = PolyLine()
+                electric_demand_curve.add(Point(bess_power_inject[index], price_min))
+                electric_demand_curve.add(Point(bess_power_inject[index], price_max))
+                self.demand_curve[market_index] = electric_demand_curve
+                self.make_offer(name, buyer_seller, electric_demand_curve)
+                _log.debug("BESS: make_offer: market name: {}, electric demand : Pt: {}, index: {}".format(name,
+                                                                                                           electric_demand_curve.points,
+                                                                                                           index))
+                self.update_flag[market_index] = True
+
+            self.vip.pubsub.publish(peer='pubsub',
+                                    topic='mixmarket/reserve_demand',
+                                    message={
+                                        "reserve_power": list(bess_power_reserve),
+                                        "sender": self.agent_name
+                                    })
+
+    def determine_price_min_max(self):
+        """
+        Determine minimum and maximum price from 24-hour look ahead prices.  If the TNS
+        market architecture is not utilized, this function must be overwritten in the child class.
+        :return:
+        """
+        prices = self.determine_prices()
+        price_min = prices[0]
+        price_max = prices[len(prices)-1]
+        return price_min, price_max
+
+    def determine_control(self, sets, prices, price):
+        return self.model.calculate_control(self.current_datetime)
+
+    def _calculate_demand(self, peer, sender, bus, topic, headers, message):
+        prices = message['prices']
+        reserve_prices = message['reserve_prices']
+        bess_power_inject, bess_power_reserve, bess_soc = self.model.run_bess_optimization(prices,
+                                                                                           reserve_prices)
+        bess_power_inject = [-i for i in bess_power_inject]
+        self.vip.pubsub.publish(peer='pubsub',
+                                topic='mixmarket/tess_bess_demand',
+                                message={
+                                    "power": bess_power_inject,
+                                    "reserve_power": bess_power_reserve,
+                                    "sender": self.agent_name
+                                })
 
 def main():
     """Main method called to start the agent."""
