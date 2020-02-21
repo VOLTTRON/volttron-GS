@@ -58,10 +58,10 @@
 
 
 from logging import warning
-
 from market import Market
 from direction import Direction
 from market_types import MarketTypes
+from warnings import warn
 
 
 class Auction(Market):
@@ -74,6 +74,7 @@ class Auction(Market):
         # Properties and methods inherited from Market class:
         super(Auction, self).__init__(market_type=MarketTypes.auction)
 
+    # TODO: On transition to the negotiation state, make sure the auction is not converged.
     def while_in_negotiation(self, mtn):
         """"
         In an auction, market state "Negotiation" is simply used to schedule local assets. There is no iteration of
@@ -91,58 +92,52 @@ class Auction(Market):
 
             # Each asset model is called upon to schedule itself:
             for x in range(len(mtn.localAssets)):
-                local_asset = mtn.localAssets[x]                          # the indexed local asset
+                local_asset = mtn.localAssets[x]  # the indexed local asset
 
                 # local_asset_model = x.model
                 local_asset.schedule(self)
 
             #  The single scheduling of local assets was all there was to do in this state, so call the auction
             #  object converged.
-            # TODO: Consider using return from local assets should scheduling be unsuccessful. Or confirm scheduling.
+            # TODO: Consider using return from local assets should scheduling be unsuccessful. Or confirm scheduling
+            #  asset by asset.
             self.converged = True
 
         else:  # While negotiations are converged, do these activities.
             # TODO: Consider logic that will recheck local asset schedules periodically or upon change.
             pass  # There's currently nothing to do here but wait.
 
-    def while_in_market_lead(self, mtn):
+    # TODO: Consider using TransactiveNode property "converged" to keep track of those downstream agents that have \
+    #  received their transactive signals. This would require setting the convergence flag to False prior to this state.
+    def while_in_market_lead(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its "MarketLead" market state. This method may be
         overwritten by child classes of Market to create alternative market behaviors during this market state.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: my transactive node agent object
         :return: None
         """
-        # TODO: This needs a convergence flag logic to assert that all bids are received and offers sent.
+        # TODO: This could use a convergence flag logic to assert that all bids are received and offers sent.
         # Identify the set of neighbor agents that are identified as "upstream" and "downstream".
-        upstream_agents = []
-        downstream_agents = []
 
-        for x in range(len(mtn.neighbors)):
-            neighbor = mtn.neighbors[x]                                         # the indexed neighbor
+        upstream_agents = [x for x in my_transactive_node.neighbors if x.upOrDown == Direction.upstream]
 
-            if neighbor.upOrDown == Direction.upstream:
+        downstream_agents = [x for x in my_transactive_node.neighbors if x.upOrDown == Direction.downstream]
 
-                # list of neighbor agents that are "upstream" (i.e., toward electricity supply)
-                upstream_agents.append(neighbor)
+        unassigned_agents = [x for x in my_transactive_node.neighbors if x.upOrDown != Direction.upstream
+                             and x.upOrDown != Direction.downstream]
 
-            elif neighbor.upOrDown == Direction.downstream:
-
-                # list of neighbor agents that are "downstream" (i.e., toward electricity demand)
-                downstream_agents.append(neighbor)
-
-            else:
-
-                print('Warning: Assigning neighbor ' + neighbor.name + ' the downstream direction')
-                neighbor.upOrDown = Direction.downstream
-                # raise Warning("A neighbor must be either 'upstream' nor 'downstream' for an auction market.")
+        for x in range(len(unassigned_agents)):
+            print('Warning: Assigning neighbor ' + unassigned_agents[x].name + ' the downstream direction')
+            warn('Assigning neighbor ' + unassigned_agents[x].name + ' the downstream direction')
+            unassigned_agents[x].upOrDown = Direction.downstream
 
         if len(upstream_agents) != 1:
             print('Warning: There should be precisely one upstream neighbor for an auction market')
-            # raise Warning('There should be precisely one upstream neighbor for an auction market')
+            warn('There should be precisely one upstream neighbor for an auction market')
 
         # Initialize a flag true if all downstream bids have been received. An aggregate auction bid can be constructed
         # only after all bids have been received from downstream agents (and from local assets, of course):
-        all_received = True                                                 # a local flag to this method
+        all_received = True  # a local flag to this method
 
         # Index through the downstream agents.
         for da in range(len(downstream_agents)):
@@ -165,7 +160,7 @@ class Auction(Market):
                 all_received = False
 
                 # and call on the downstream agent model to try and receive the signal again:
-                downstream_agent.receive_transactive_signal(mtn)
+                downstream_agent.receive_transactive_signal(my_transactive_node)
 
         # If all expected bids have been received from downstream agents, have the downstream neighbor models update
         # their vertices and schedule themselves. The result of this will be an updated set of active vertices for each
@@ -194,12 +189,12 @@ class Auction(Market):
                 if upstream_agent.transactive is True:
 
                     # Call on the upstream agent model to prepare its transactive signal.
-                    upstream_agent.prep_transactive_signal(mtn)
+                    upstream_agent.prep_transactive_signal(my_transactive_node)
 
                 # Send the transactive signal (i.e., aggregated bid) to the upstream agent if it is a transactive agent.
-                    upstream_agent.send_transactive_signal(mtn)
+                    upstream_agent.send_transactive_signal(my_transactive_node)
 
-    def while_in_delivery_lead(self, mtn):
+    def while_in_delivery_lead(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its "DeliveryLead" market state. This method may
         be overwritten by child classes of Market to create alternative market behaviors during this market state.
@@ -210,25 +205,25 @@ class Auction(Market):
         downstream_agents = []
         upstream_agents = []
 
-        for x in range(len(mtn.neighbors)):
-            neighbor = mtn.neighbors[x]                             # the indexed neighbor agent
+        downstream_agents = [x for x in my_transactive_node.neighbors if x.upOrDown == Direction.downstream]
 
-            if neighbor.upOrDown == Direction.downstream:
-                downstream_agents.append(neighbor)
+        upstream_agents = [x for x in my_transactive_node.neighbors if x.upOrDown == Direction.upstream]
 
-            elif neighbor.upOrDown == Direction.upstream:
-                upstream_agents.append(neighbor)
+        unassigned_agents = [x for x in my_transactive_node.neighbors if x.upOrDown != Direction.upstream
+                             and x.upOrDown != Direction.downstream]
 
-            else:
-                Warning('Assigning neighbor ' + neighbor.name + 'downstream direction.')
-                neighbor.upOrDown = Direction.downstream
-                raise warning("A neighbor must be neither 'upstream' nor 'downstream' for an auction market")
+        for x in range(len(unassigned_agents)):
+            print('Warning: Assigning neighbor ' + unassigned_agents[x].name + ' the downstream direction')
+            warn('Assigning neighbor ' + unassigned_agents[x].name + ' the downstream direction')
+            unassigned_agents[x].upOrDown = Direction.downstream
 
-        assert len(upstream_agents) == 1, "An auction must have precisely one upstream agent"
+        if len(upstream_agents) != 1:
+            print('Warning: There should be precisely one upstream neighbor for an auction market')
+            warn('There should be precisely one upstream neighbor for an auction market')
 
         # Initialize a flag true if all downstream bids have been received. An aggregate auction bid can be constructed
         # only after all bids have been received from downstream agents (and from local assets, of course):
-        all_received = True                                                 # a local parameter to this method
+        all_received = True  # a local parameter to this method
 
         # Clarify that we are referencing the lone upstream agent model.
         upstream_agent = upstream_agents[0]
@@ -238,8 +233,10 @@ class Auction(Market):
             # Create a list of the time interval names among the received transactive signal:
             received_time_intervals = []
 
+            # TODO: Consider using property "converged" as a flag for upstream agents that have received their \
+            #  transactive signals. The flag must be set false in the transition to this state.
             for rts in range(len(upstream_agent.receivedSignal)):
-                received_record = upstream_agent.receivedSignal[rts]        # the indexed received record
+                received_record = upstream_agent.receivedSignal[rts]  # the indexed received record
 
                 received_time_intervals.append(received_record.timeInterval)
 
@@ -252,7 +249,7 @@ class Auction(Market):
                 all_received = False
 
                 # Call on the upstream agent model to try and receive the signal again.
-                upstream_agent.receive_transactive_signal(mtn)
+                upstream_agent.receive_transactive_signal(my_transactive_node)
 
         # If offers have been received for all active market time intervals from the upstream agent,
         if all_received is True:
@@ -265,7 +262,7 @@ class Auction(Market):
                 downstream_agent = downstream_agents[x]                 # the indexed downstream agent
 
                 # prepare an aggregated offer for the downstream agent,
-                downstream_agent.prep_transactive_signal(mtn)
+                downstream_agent.prep_transactive_signal(my_transactive_node)
 
                 # and send it a transactive signal (i.e., an offer).
-                downstream_agent.send_transactive_signal(mtn)
+                downstream_agent.send_transactive_signal(my_transactive_node)
