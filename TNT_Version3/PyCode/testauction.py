@@ -168,7 +168,8 @@ def test_while_in_market_lead():
     print('  test_while_in_market_lead() ran to completion.\n')
 
 
-def test_while_in_deliver_lead():
+def test_while_in_delivery_lead():
+    # TODO: Finish test_while_in_delivery_lead()
     print('  Running test_while_in_delivery_lead().')
     print('    The test is not yet completed.')
     print('    CASE 1:')
@@ -180,7 +181,7 @@ def test_while_in_deliver_lead():
 
 if __name__ == '__main__':
     print('Running tests in testauction.py\n')
-    test_while_in_deliver_lead()
+    test_while_in_delivery_lead()
     test_while_in_market_lead()
     test_while_in_negotiation()
     print("Tests in testauction.py ran to completion.\n")

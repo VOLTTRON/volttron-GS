@@ -1079,10 +1079,6 @@ def test_update_vertices():
     test_model.minimumPower = 0
     test_model.lossFactor = 0  # eliminate losses from the calcs for now.
 
-    # Have the Neighbor model and object cross reference one another.
-    # test_object.model = test_model
-    # test_model.object = test_object
-
     # TEST 1
     print('- Test 1: No default vertex has been defined for the Neighbor')
 
@@ -1116,6 +1112,7 @@ def test_update_vertices():
     print('- Test 3: The Neighbor is transactive, but transactive records are not available')
     test_model.transactive = True
     test_model.defaultVertices = [Vertex(.2, 0, 200)]  # Changed
+    test_model.activeVertices = []
 
     try:
         test_model.update_vertices(test_market)
@@ -1129,8 +1126,9 @@ def test_update_vertices():
     assert vertex.power == 200 and vertex.marginalPrice == 0.2, '  - the vertex values are not as expected'
 
     # TEST 4
-    print('- Test 4: The Neighbor is transactive, and a transactive records are available to use')
+    print('- Test 4: The Neighbor is transactive, and transactive records are available to use')
     test_model.transactive = True
+    test_model.activeVertices = []
 
     # Create and store some received transactive records
     transactive_record1 = TransactiveRecord(time_interval=time_interval, record=1, marginal_price=0.15, power=0)
@@ -1162,6 +1160,7 @@ def test_update_vertices():
     # TEST 5
     print('- Test 5: The Neighbor is transactive with transactive records, and demand charges are in play')
     test_model.transactive = True
+    test_model.activeVertices = []
 
     # Create and store some received transactive records
     transactive_record1 = TransactiveRecord(time_interval=time_interval, record=1, marginal_price=0.15, power=0)

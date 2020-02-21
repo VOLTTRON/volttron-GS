@@ -660,20 +660,11 @@ class Neighbor:
         time_intervals = market.timeIntervals
         time_interval_values = [t.startTime for t in time_intervals]
 
-        # Delete any active vertices that are not in active time intervals. This prevents time intervals from
-        # accumulating indefinitely.
-        self.activeVertices = [x for x in self.activeVertices if x.timeInterval.startTime in time_interval_values]
-
         for i in range(len(time_intervals)):
 
             # Flag for logging demand charge 1st time only
             # TODO: Check this logic for logging demand charge
             dc_logged = False
-
-            # Keep active vertices that are not in the indexed time interval, but discard the one(s) in the indexed time
-            # interval. These shall be recreated in this iteration.
-            self.activeVertices = [x for x in self.activeVertices if
-                                   x.timeInterval.startTime != time_interval_values[i]]
 
             # Get the default vertices.
             default_vertices = self.defaultVertices

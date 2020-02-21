@@ -776,7 +776,7 @@ def test_get_extended_prices():
 
     # ******************************************************************************************************************
     print("  Case 4. Modeled prices using the market's price model.")  # ***********************************************
-    # The test setup is such that the local asset should use Methods 1 & 4 to find four to find 4 marginal prices.
+    # The test setup is such that the local asset should use Methods 1 & 4 to find four marginal prices.
     now = datetime.now()
     test_asset_model = LocalAsset()
     test_asset_model.schedulingHorizon = timedelta(hours=3.5)  # Should cause asset to use prior market
@@ -809,7 +809,11 @@ def test_get_extended_prices():
         print("  The case encountered errors.", result)
         price_set = []
 
-    assert len(price_set) == 4, ('An unexpected number', len(price_set), ' of prices was found')
+    # 200207DJH: The assignment of modeled prices now completes the prior successful method to the top of the next hour.
+    #            Thereafter, modeled prices are assigned through the top of the hour that exceeds the scheduling
+    #            horizon. Therefore, there is some variability in the count of
+    assert len(price_set) == 4 or len(price_set) == 5, \
+        ('An unexpected number', len(price_set), ' of prices was found')
     assert price_set[0].value == price0, 'The first price was not correct'
     assert all([price_set[x].value == avg_price for x in range(1, len(price_set))]), \
         'Prices 1 - 4 were not correct'

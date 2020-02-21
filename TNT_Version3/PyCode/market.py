@@ -74,6 +74,10 @@ from time_interval import TimeInterval
 from timer import Timer
 import os
 from market_types import MarketTypes
+from method import Method
+from warnings import warn
+from matplotlib import pyplot as plt
+
 
 # utils.setup_logging()
 # _log = logging.getLogger(__name__)
@@ -153,12 +157,12 @@ class Market:
 
         self.new_data_signal = False
 
-    def events(self, mtn):
+    def events(self, my_transactive_node):
         """
         This is the market state machine. Activities should be assigned to state transition events and to the states
         themselves using the supplied methods. This state machine should not itself be modified by implementers because
         doing so may affect alternative market methods' state models.
-        :param mtn: my transactive node agent that keeps track of market objects
+        :param: my_transactive_node: transactive node--this agent--that keeps track of market objects
         :return: None
         """
 
@@ -178,22 +182,21 @@ class Market:
             future_clearing_time = current_time + self.activationLeadTime \
                                    + self.negotiationLeadTime + self.marketLeadTime
             if self.nextMarketClearingTime < future_clearing_time:
-                self.spawn_markets(mtn, self.nextMarketClearingTime)
+                self.spawn_markets(my_transactive_node, self.nextMarketClearingTime)
                 self.isNewestMarket = False
 
         # EVENT 1B: TRANSITION FROM INACTIVE TO ACTIVE STATE ***********************************************************
         if self.marketState == MarketState.Inactive:
 
-            activation_start_time = self.marketClearingTime - self.marketLeadTime \
-                                    - self.negotiationLeadTime - self.activationLeadTime
+            activation_start_time = self.marketClearingTime - self.marketLeadTime - self.negotiationLeadTime \
+                                    - self.activationLeadTime
 
             if current_time >= activation_start_time:
-
                 # Change the market state to "Active."
                 self.marketState = MarketState.Active
 
                 # Call this replaceable method where appropriate actions can be taken.
-                self.transition_from_inactive_to_active(mtn)
+                self.transition_from_inactive_to_active(my_transactive_node)
 
         # EVENT 1C: ACTIONS WHILE IN THE ACTIVE STATE ******************************************************************
         # These are actions to be taken while the market object is in its initial "Active" market state.
@@ -201,7 +204,7 @@ class Market:
 
             # Place actions to be taken in this state in the following method. The method may be overwritten by child
             # classes of class Market.
-            self.while_in_active(mtn)
+            self.while_in_active(my_transactive_node)
 
         # EVENT 2A: TRANSITION FROM ACTIVE TO NEGOTIATION STATE ********************************************************
         # This is the transition from "Active" to "Negotiation" market states. Market state "Negotiation" begins at a
@@ -219,7 +222,7 @@ class Market:
 
                 # Place other transition actions in this following method. The method may be replaced.
                 # of class Market.
-                self.transition_from_active_to_negotiation(mtn)
+                self.transition_from_active_to_negotiation(my_transactive_node)
 
         # EVENT 2B: ACTIONS WHILE IN MARKET STATE NEGOTIATION **********************************************************
         # These are the actions while in the "Negotiation" market state.
@@ -230,7 +233,7 @@ class Market:
             # overwritten by child classes of class Market. Note that the actions during this state may be made
             # dependent upon a convergence flag.
 
-            self.while_in_negotiation(mtn)
+            self.while_in_negotiation(my_transactive_node)
 
         # EVENT 3A: TRANSITION FROM NEGOTIATION TO MARKET LEAD STATE ***************************************************
         # This is the transition from "Negotiation" to "MarketLead" market states.
@@ -247,7 +250,7 @@ class Market:
 
                 #  Place other transition actions in this following method. The method may be replaced.
                 #  of class Market.
-                self.transition_from_negotiation_to_market_lead(mtn)
+                self.transition_from_negotiation_to_market_lead(my_transactive_node)
 
         # EVENT 3B: ACTIONS WHILE IN THE MARKET LEAD STATE *************************************************************
         # These are the actions while in the "MarketLead" market state.
@@ -256,7 +259,7 @@ class Market:
 
             #  Specify actions for the market state "MarketLead" in this following method. The method may be
             #  overwritten by child classes of class Market.
-            self.while_in_market_lead(mtn)
+            self.while_in_market_lead(my_transactive_node)
 
         # EVENT 4A: TRANSITION FROM MARKET LEAD TO DELIVERY LEAD STATE *************************************************
         # This is the transition from "MarketLead" to "DeliveryLead" market states.
@@ -271,7 +274,7 @@ class Market:
                 self.marketState = MarketState.DeliveryLead
 
                 # Place other transition actions here. This following method may be replaced.
-                self.transition_from_market_lead_to_delivery_lead(mtn)
+                self.transition_from_market_lead_to_delivery_lead(my_transactive_node)
 
         # EVENT 4B: ACTIONS WHILE IN MARKET STATE DELIVERY LEAD ********************************************************
         # These are the actions while in the "DeliveryLead" market state.
@@ -280,7 +283,7 @@ class Market:
 
             # Place actions in this following method if they are to occur during market state "DeliveryLead." This
             # method may be overwritten by child classes of class Market.
-            self.while_in_delivery_lead(mtn)
+            self.while_in_delivery_lead(my_transactive_node)
 
         # EVENT 5A: TRANSITION FROM DELIVERY LEAD TO DELIVERY **********************************************************
         # This is the transition from "DeliveryLead" to "Delivery" market states. The start of market state "Delivery"
@@ -296,7 +299,7 @@ class Market:
                 self.marketState = MarketState.Delivery
 
                 # Other actions for this transition should be placed in the following method, which can be replaced.
-                self.transition_from_delivery_lead_to_delivery(mtn)
+                self.transition_from_delivery_lead_to_delivery(my_transactive_node)
 
         # EVENT 5B: ACTIONS WHILE IN MARKET STATE DELIVERY *************************************************************
         # These are the actions while in the "Delivery" market state.
@@ -305,7 +308,7 @@ class Market:
 
             # Place any actions to be conducted in market state "Delivery" in this following method. The method may be
             # overwritten by child classes of class Market.
-            self.while_in_delivery(mtn)
+            self.while_in_delivery(my_transactive_node)
 
         # EVENT 6A: TRANSITION FROM DELIVERY TO RECONCILE **************************************************************
         # This is the transition from "Delivery" to "Reconcile" market states. The Reconcile market state begins at a
@@ -322,7 +325,7 @@ class Market:
                 self.marketState = MarketState.Reconcile
 
                 # Other transition actions may be placed in this method.
-                self.transition_from_delivery_to_reconcile(mtn)
+                self.transition_from_delivery_to_reconcile(my_transactive_node)
 
         # EVENT 6A: ACTIONS WHILE IN MARKET STATE RECONCILE ************************************************************
         # These are the actions while in the "DeliveryLead" market state.
@@ -331,7 +334,7 @@ class Market:
 
             # Place actions in this following method if they should occur during market state "Reconcile." This method
             # may be overwritten by children of the Market class.
-            self.while_in_reconcile(mtn)
+            self.while_in_reconcile(my_transactive_node)
 
         # EVENT 7A: TRANSITION FROM RECONCILE TO EXPIRED ***************************************************************
         # This is the transition from "Reconcile" to "Expired" market states.
@@ -343,7 +346,7 @@ class Market:
                 self.marketState = MarketState.Expired
 
                 # Replace this method for other transitional actions.
-                self.transition_from_reconcile_to_expired(mtn)
+                self.transition_from_reconcile_to_expired(my_transactive_node)
 
         # EVENT 7B: WHILE EXPIRED **************************************************************************************
         # These are the actions while in the "Expired" market state. It should be pretty standard that market objects
@@ -356,11 +359,11 @@ class Market:
             self.timeIntervals = []
 
             # Remove the expired market object from the agent's list of markets.
-            mtn.markets.remove(self)
+            my_transactive_node.markets.remove(self)
 
             # NOTE: We let garbage collection finally delete the object once it is entirely out of scope.
 
-    def spawn_markets(self, mtn, new_market_clearing_time):
+    def spawn_markets(self, my_transactive_node, new_market_clearing_time):
         """
         This method is called when a test determines that a new market object may be needed. The base method creates the
         new market object, as will be normal for systems having only one market. This method must be replaced or
@@ -370,8 +373,8 @@ class Market:
         in another market series must be instantiated.
         (2) The markets in this series are instantiated by another market series. In this case, this method shoudl be
         replaced by a pass (no action).
-        mtn: my transactive node agent object
-        new_market_clearing_time: new market objects market clearing time
+        :param: my_transactive_node: my transactive node agent object
+        :param: new_market_clearing_time: new market objects market clearing time
         :return: None
         """
 
@@ -406,58 +409,58 @@ class Market:
         new_market.name = new_market.marketSeriesName.replace(' ', '_') + '_' + dt[:19]
 
         # Append the new market object to the list of market objects that is maintained by the agent.
-        mtn.markets.append(new_market)
+        my_transactive_node.markets.append(new_market)
 
         # Initialize the Market object's time intervals.
         new_market.check_intervals()
 
         # Initialize the marginal prices in the Market object's time intervals.
-        new_market.check_marginal_prices(mtn)
+        new_market.check_marginal_prices(my_transactive_node)
 
-    def transition_from_inactive_to_active(self, mtn):
+    def transition_from_inactive_to_active(self, my_transactive_node):
         """
         These actions, if any are taken as a market transitions from its inactive to its active market state.
-        :param mtn: TransactiveNode object
+        :param my_transactive_node: TransactiveNode object--this agent
         :return: None
         """
         pass
         return None
 
-    def while_in_active(self, mtn):
+    def while_in_active(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its initial "Active" market state. This method
         may be overwritten by child classes of Market to create alternative market behaviors during this market state.
         It will be rare for a market object to have actions in its Active state. It usually will immediately enter its
         Negotiation state.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
         pass
         return None
 
-    def transition_from_active_to_negotiation(self, mtn):
+    def transition_from_active_to_negotiation(self, my_transactive_node):
         """
         For activities that should accompany a market object's transition from market state "Active" to "Negotiation."
         This method may be overwritten by child classes of Market to create alternative market behaviors during this
         transition.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: my transactive node agent object
         :return: None
         """
         pass
         return None
 
-    def while_in_negotiation(self, mtn):
+    def while_in_negotiation(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its "Negotiation" market state. This method may
         be overwritten by child classes of Market to create alternative market behaviors during this market state.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: my transactive node agent object
         :return: None
         """
 
         # A convergence flag is available to distinguish actions to be undertaken while actively negotiating and others
         # while convergence has been obtained.
         if not self.converged:
-            self.balance(mtn)  # A consensus method conducts negotiations while in the negotiation state.
+            self.balance(my_transactive_node)  # A consensus method conducts negotiations while in negotiation state.
 
         else:
             # This is most likely a wait state while converged in the negotiation state.
@@ -465,54 +468,54 @@ class Market:
 
         return None
 
-    def transition_from_negotiation_to_market_lead(self, mtn):
+    def transition_from_negotiation_to_market_lead(self, my_transactive_node):
         """
         For activities that should accompany a market object's transition from market state "Negotiation" to
         "MarketLead." This method may be overwritten by child classes of Market to create alternative market behaviors
         during this transition.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
         pass
         return None
 
-    def while_in_market_lead(self, mtn):
+    def while_in_market_lead(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its "MarketLead" market state. This method may
         be overwritten by child classes of Market to create alternative market behaviors during this market state.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
         pass
         return None
 
-    def transition_from_market_lead_to_delivery_lead(self, mtn):
+    def transition_from_market_lead_to_delivery_lead(self, my_transactive_node):
         """
         For activities that should accompany a market object's transition from market state "MarketLead" to
         "DeliveryLead," (i.e., the clearing of the market). This method may be overwritten by child classes of Market
         to create alternative market behaviors during this transition.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
         pass
         return None
 
-    def while_in_delivery_lead(self, mtn):
+    def while_in_delivery_lead(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its "DeliveryLead" market state. This method may
         be overwritten by child classes of Market to create alternative market behaviors during this market state.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
         pass
         return None
 
-    def transition_from_delivery_lead_to_delivery(self, mtn):
+    def transition_from_delivery_lead_to_delivery(self, my_transactive_node):
         """
         For activities that should accompany a market object's transition from market state "DeliveryLead" to
         "Delivery." This method may be overwritten by child classes of Market to create alternative market behaviors
         during this transition.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
         # A good practice upon entering the delivery period is to update the market's price model using the final
@@ -523,11 +526,11 @@ class Market:
 
         return None
 
-    def while_in_delivery(self, mtn):
+    def while_in_delivery(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its "Delivery" market state. This method may be
         overwritten by child classes of Market to create alternative market behaviors during this market state.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
 
@@ -537,22 +540,22 @@ class Market:
         pass
         return None
 
-    def transition_from_delivery_to_reconcile(self, mtn):
+    def transition_from_delivery_to_reconcile(self, my_transactive_node):
         """
         For activities that should accompany a market object's transition from market state "Delivery" to "Reconcile."
         This method may be overwritten by child classes of Market to create alternative market behaviors during this
         transition.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--the agent
         :return: None
         """
         pass
         return None
 
-    def while_in_reconcile(self, mtn):
+    def while_in_reconcile(self, my_transactive_node):
         """
         For activities that should happen while a market object is in its "Reconcile" market state. This method may be
         overwritten by child classes of Market to create alternative market behaviors during this market state.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--this agent
         :return: None
         """
 
@@ -570,24 +573,24 @@ class Market:
             data.append(datum)
 
         # Append data for local assets:
-        for x in range(len(mtn.localAssets)):
-            vertices = [y for y in mtn.localAssets[x].activeVertices
+        for x in range(len(my_transactive_node.localAssets)):
+            vertices = [y for y in my_transactive_node.localAssets[x].activeVertices
                         if y.activeVertices.timeInterval.market == self]
 
             for z in range(len(vertices)):
-                datum = [mtn.localAssets[x].name,
+                datum = [my_transactive_node.localAssets[x].name,
                          vertices[z].timeInterval.name,
                          vertices[z].value.marginalPrice,
                          vertices[z].value.power]
                 data.append(datum)
 
         # Append data for neighbor data:
-        for x in range(len(mtn.neighbors)):
-            vertices = [y for y in mtn.neighbors[x].activeVertices
+        for x in range(len(my_transactive_node.neighbors)):
+            vertices = [y for y in my_transactive_node.neighbors[x].activeVertices
                         if y.activeVertices.timeInterval.market == self]
 
             for z in range(len(vertices)):
-                datum = [mtn.neighbors[x].name,
+                datum = [my_transactive_node.neighbors[x].name,
                          vertices[z].timeInterval.name,
                          vertices[z].value.marginalPrice,
                          vertices[z].value.power]
@@ -611,10 +614,10 @@ class Market:
         # Gather simpler marginal price data:
         price_data = []
 
-        for x in self.marginalPrices:  # LOOK. DOES THIS DIRECT INDEXING WORK?
+        for x in self.marginalPrices:  #
             datum = [self.name,
-                      x.timeInterval.startTime,
-                      x.value]
+                     x.timeInterval.startTime,
+                     x.value]
             price_data.append(datum)
 
         filename = self.name + ".csv"
@@ -631,12 +634,12 @@ class Market:
 
         return None
 
-    def transition_from_reconcile_to_expired(self, mtn):
+    def transition_from_reconcile_to_expired(self, my_transactive_node):
         """
         For activities that should accompany a market object's transition from market state "Reconcile" to "Expired."
         This method may be overwritten by child classes of Market to create alternative market behaviors during this
         transition.
-        :param mtn: my transactive node agent object
+        :param my_transactive_node: transactive node object--the agent
         :return: None
         """
         pass
@@ -644,23 +647,17 @@ class Market:
 
     def model_prices(self, date_time, new_price=None, k=14.0):
         """
-        Returns the average and standard deviation prices 
-        for the provided datetime in this market. If a price is provided, too,
-        then the price model is updated using this price in the given date and 
-        time.
-        Note: In order for this to work, the Market.priceModel table must be
-        initialized from its preceeding Market object of the same type, i.e., 
-        sharing the same market name.
-        INPUTS:
-            self: this market object
-            date_time: the date and time of the prediction or update. Only the hour
-                of this datetime is used in the current implementation.
+        Returns the average and standard deviation prices for the provided datetime in this market. If a new price is
+        provided, then the price model is updated using this price in the given date and time.
+        Note: In order for this to work, the Market.priceModel table must be initialized from its preceding Market
+              object of the same type, i.e., sharing the same market name.
 
-            new_price: [$/kWh] (optional) price provided to update the model for
-                the given date and time
-        OUTPUTS:
-            avg_price: [$/kWh] average model price for the given date and time
-            sd_price: [$/kWh] standard price deviation for given date and time
+        :param date_time: The date and time of the prediction or update.
+        :param new_price: [$/kWh] (optional) price provided to update the model for the given date and time.
+        :param k: [whole number] Iteration counter.
+
+        :return avg_price: [$/kWh] average model price for the given date and time
+        :return sd_price: [$/kWh] standard price deviation for given date and time
         """
         # Initialize the average and standard deviation prices.
         avg_price = None
@@ -675,76 +672,199 @@ class Market:
 
             if new_price is not None:
                 avg_price = ((k - 1.0) * avg_price + new_price) / k
-                sd_price = (((k - 1.0) * sd_price**2 + (avg_price - new_price)**2) / k)**0.5
+                sd_price = (((k - 1.0) * sd_price ** 2 + (avg_price - new_price) ** 2) / k) ** 0.5
                 self.priceModel[2 * h] = avg_price
                 self.priceModel[2 * h + 1] = sd_price
 
-        except:
-            pass
+        except RuntimeWarning as warning:
+            print('A price could not be found from the price model:', warning)
 
         return avg_price, sd_price
 
-    def assign_system_vertices(self, mtn):
-        # Collect active vertices from neighbor and asset models and reassign them with aggregate system information
-        # for all active time intervals.
-        #
-        # ASSUMPTIONS:
-        # - Active time intervals exist and are up-to-date
-        # - Local convergence has occurred, meaning that power balance, marginal price, and production costs have been
-        #   adequately resolved from the
-        # local agent's perspective
-        # - The active vertices of local asset models exist and are up-to-date.
-        # - The vertices represent available power flexibility.
-        # - The vertices include meaningful, accurate production-cost information.
-        # - There is agreement locally and in the network concerning the format and content of transactive records
-        #
-        # - Calls method mkt.sum_vertices in each time interval.
-        #
-        # INPUTS:
-        # mtn - TransactiveNode object
-        #
-        # OUTPUTS:
-        # - Updates mkt.activeVertices - vertices that define the net system balance and flexibility. The meaning of
-        #   the vertex properties are
-        # - marginalPrice: marginal price [$/kWh]
-        # - cost: total production cost at the vertex [$]. (A locally meaningful blended electricity price is (total
-        #   production cost / total production)).
-        # - power: system net power at the vertex (The system "clears" where system net power is zero.)
+    def assign_system_vertices(self, my_transactive_node):
+        """
+        Collect active vertices from neighbor and asset models and reassign them with aggregate system information
+        for all active time intervals.
 
-        time_interval_values = [t.startTime for t in self.timeIntervals]
+        ASSUMPTIONS:
+        - Active time intervals exist and are up-to-date
+        - Local convergence has occurred, meaning that power balance, marginal price, and production costs have been
+          adequately resolved from the
+        local agent's perspective
+        - The active vertices of local assets exist and are up-to-date.
+        - The vertices represent available power flexibility.
+        - The vertices include meaningful, accurate production-cost information.
+        - There is agreement locally and in the network concerning the format and content of transactive records.
 
-        # Delete any active vertices that are not in active time intervals. This prevents time intervals from
-        # accumulating indefinitely.
-        self.activeVertices = [x for x in self.activeVertices if x.timeInterval.startTime in time_interval_values]
+        Calls method sum_vertices in each time interval.
 
-        for ti in self.timeIntervals:
-            # Find and delete existing aggregate active vertices in the indexed time interval. These shall be recreated.
-            self.activeVertices = [x for x in self.activeVertices if x.timeInterval.startTime != ti.startTime]
+        INPUTS:
+        :param my_transactive_node: TransactiveNode object--the agent
 
-            # Call the utility method mkt.sum_vertices to recreate the aggregate vertices in the indexed time interval.
-            # (This method is separated out because it will be used by other methods.)
-            s_vertices = self.sum_vertices(mtn, ti)
+        OUTPUTS:
+        - Updates property activeVertices - vertices that define the net system balance and flexibility. The meaning of
+          the vertex properties are
+        - marginalPrice: marginal price [$/kWh]
+        - cost: total production cost at the vertex [$]. (A locally meaningful blended electricity price is (total
+          production cost / total production)).
+        - power: system net power at the vertex (The system "clears" where system net power is zero.)
+        """
 
-            # Create and store interval values for each new aggregate vertex v
-            for sv in s_vertices:
-                iv = IntervalValue(self, ti, self, MeasurementType.SystemVertex, sv)
-                self.activeVertices.append(iv)
+        for time_interval in self.timeIntervals:
+            # Find and delete existing aggregate active vertices in the indexed time interval. They will be recreated.
+            self.activeVertices = [x for x in self.activeVertices
+                                   if x.timeInterval.startTime != time_interval.startTime]
 
-    def balance(self, mtn):
+            # Call the utility sum_vertices to recreate the aggregate vertices in the indexed time interval. (This
+            # method is separated out because it will be used by other methods.)
+            summed_vertices = self.sum_vertices(my_transactive_node, time_interval)
+
+            # Create and store an interval value for each vertex.
+            for vertex in summed_vertices:
+                self.activeVertices.append(
+                    IntervalValue(
+                        self,
+                        time_interval,
+                        self,
+                        MeasurementType.SystemVertex,
+                        vertex
+                    )
+                )
+
+    def balance(self, my_transactive_node, k=1):
+        """
+        Balance current market
+        :param my_transactive_node: my transactive node object
+        :param k: iteration counter
+        :return:
+        """
+        # TODO: A test is badly needed for method balance().
+        # 202015DJH: The base balance method is being greatly simplified. Whereas it originally iterated to find a
+        #            marginal price in each active time interval, it now simply performs a single iteration using either
+        #            the iterative sub-gradient or interpolation approach. Iteration and preconditions may need to be
+        #            completed within the market's state machine.
+        # TODO: Consider having the balance method solve for both marginal price AND quantity.
+
+        # Gather the active time intervals in this market.
+        time_intervals = self.timeIntervals  # TimeIntervals
+
+        if self.method == Method.Interpolation:
+            self.assign_system_vertices(my_transactive_node)
+            # TODO: Un-comment this next debug code.
+            # av = [(x.timeInterval.name, x.value.marginalPrice, x.value.power) for x in self.activeVertices]
+            # _log.debug("{} market active vertices are: {}".format(self.name, av))
+
+        # Index through active time intervals.
+        for i in range(len(time_intervals)):
+            # Find the marginal price interval value for the corresponding indexed time interval.
+            marginal_price = find_obj_by_ti(self.marginalPrices, time_intervals[i])
+
+            # Extract its  marginal price value as a trial clearing price (that may be replaced).
+            if marginal_price is None or len(marginal_price) == 0:
+                cleared_marginal_price = self.defaultPrice
+                marginal_price = IntervalValue(self,
+                                               time_intervals[i],
+                                               self,
+                                               MeasurementType.MarginalPrice,
+                                               cleared_marginal_price
+                                               )
+                self.marginalPrices.append(marginal_price)
+            else:
+                cleared_marginal_price = marginal_price.value  # [$/kWh]
+
+            if self.method == Method.Subgradient:
+                # Find the net power corresponding to the indexed time interval.
+                net_power = find_obj_by_ti(self.netPowers, time_intervals[i])
+                total_generation = find_obj_by_ti(self.totalGeneration, time_intervals[i])
+                total_demand = find_obj_by_ti(self.totalDemand, time_intervals[i])
+
+                net_power = net_power.value / (total_generation.value - total_demand.value)
+
+                # Update the marginal price using sub-gradient search.
+                cleared_marginal_price = cleared_marginal_price - (net_power * 1e-1) / (10 + k)  # [$/kWh]
+
+            elif self.method == Method.Interpolation:
+                # Get the indexed active system vertices.
+                active_vertices = [x.value for x in self.activeVertices
+                                   if x.timeInterval.startTime == time_intervals[i].startTime]
+
+                # Order the system vertices in the indexed time interval by price and power.
+                active_vertices = order_vertices(active_vertices)
+
+                try:
+                    # Find the vertex that bookcases the balance point from the lower side.
+                    lower_active_vertex = [x for x in active_vertices if x.power < 0]
+                    if len(lower_active_vertex) == 0:
+                        warn('No load demand cases were found in ' + format(time_intervals[i].name))
+                        err_msg = "At {}, there is no point having power < 0".format(time_intervals[i].name)
+                    else:
+                        lower_active_vertex = lower_active_vertex[-1]
+
+                    # Find the vertex that bookcases the balance point from the upper side.
+                    upper_active_vertex = [x for x in active_vertices if x.power >= 0]
+                    if len(upper_active_vertex) == 0:
+                        warn('No supply power cases were found in ' + format(time_intervals[i].name))
+                        err_msg = "At {}, there is no point having power >= 0".format(time_intervals[i].name)
+                    else:
+                        upper_active_vertex = upper_active_vertex[0]
+
+                    # Interpolate the marginal price in the interval using a principle of similar triangles.
+                    power_range = upper_active_vertex.power - lower_active_vertex.power
+                    marginal_price_range = upper_active_vertex.marginalPrice - lower_active_vertex.marginalPrice
+                    if power_range == 0:
+                        warn('There is no power range to interpolate. Marginal price is not unique in '
+                             + format(time_intervals[i].name))
+                        err_msg = "At {}, power range is 0".format(time_intervals[i].name)
+                    cleared_marginal_price = - marginal_price_range * lower_active_vertex.power / power_range \
+                                             + lower_active_vertex.marginalPrice
+                    # TODO: Consider adding a feature to find each asset's and neighbor's cleared power at this point.
+                    #       This would require interpolation of the cleared average power, and the implication must be
+                    #       interpreted for each asset and neighbor.
+
+                except RuntimeWarning as warning:
+                    warn('No balance point was found in ' + format(time_intervals[i].name) + warning)
+                    """
+                    _log.error(err_msg)
+                    _log.error("{} failed to find balance point. "
+                               "Market active vertices: {}".format(mtn.name,
+                                                                   [(tis[i].name, x.marginalPrice, x.power)
+                                                                    for x in av]))
+                    """
+
+                    self.converged = False
+                    return
+
+            # Regardless of the method used, assign the cleared marginal price to the marginal price value for the
+            # indexed active time interval.
+            # 200205DJH: The intention here is that the marginal price is the actual IntervalValue object. Check that
+            #            it is assigned properly in its market list.
+            marginal_price.value = cleared_marginal_price  # [$/kWh]
+
+    def old_balance(self, mtn):
         """
         Balance current market
         :param mtn: my transactive node object
         :return:
         """
+        # TODO: Consider having the balance method solve for both marginal price AND quantity. The quantity is unique to
+        #  the local assets and neighbors. This improvement would facilitate current convergence issues that occur when
+        #  cost functions are linear, not quadratic. Partial quantities are allowed even though quantity is not a proper
+        #  function of marginal price. Note that this introduces new issues for assets that cannot be throttled down.
         self.new_data_signal = False
 
         # Check and update the time intervals at the beginning of the process. This should not need to be repeated in
         # process iterations.
+        # TODO: This check should be done within the market state machine, not here. Typically, it would be done once
+        #  for each clearing to check that market intervals are proper.
         self.check_intervals()
 
+        # TODO: This check should be done within the market state machine, not here. Typically, it would be done once
+        #  for each clearing to check that marginal prices exist for the market's forward time intervals.
         # Clean up or initialize marginal prices. This should not be repeated in process iterations.
         self.check_marginal_prices(mtn)
 
+        # TODO: Move this to the market state machine. Iterations to convergence, if any, should be moved to the state
+        #  machine methods.
         # Set a flag to indicate an unconverged condition.
         self.converged = False
 
@@ -752,14 +872,18 @@ class Market:
         # and demand and (2) dual costs. This local convergence says nothing about the additional convergence between
         # transactive neighbors and their calculations.
 
-        # TODO: Move iteration of the market balancing process to the market state machine, not here.
+        # TODO: Move iteration of the market balancing process to the market state machine, not here. Not all markets
+        #  iterate. A typical auction state machine will invoke one balancing operation. Others must iterate.
         # Initialize the iteration counter k
         k = 1
 
         while not self.converged and k < 100:
-            if self.new_data_signal:
-                self.converged = False
-                return
+            # 200205DJH: I'm not sure of this logic that was introduced by new_data_signal. I think it might be unique
+            # to the PNNL building model and should no longer be needed.
+            # TODO: Clean up logic introduced by new_data_signal.
+            # if self.new_data_signal:
+            #     self.converged = False
+            #     return
 
             # Invite all neighbors and local assets to schedule themselves based on current marginal prices
             self.schedule(mtn)
@@ -825,8 +949,7 @@ class Market:
 
             # Index through active time intervals.
             for i in range(len(tis)):
-                # Find the marginal price interval value for the
-                # corresponding indexed time interval.
+                # Find the marginal price interval value for the corresponding indexed time interval.
                 mp = find_obj_by_ti(self.marginalPrices, tis[i])
 
                 # Extract its  marginal price value.
@@ -898,68 +1021,55 @@ class Market:
                 return
 
     def calculate_blended_prices(self):
-        # Calculate the blended prices for active time intervals.
-        #
-        # The blended price is the averaged weighted price of all locally
-        # generated and imported energies. A sum is made of all costs of
-        # generated and imported energies, which are prices weighted by their
-        # corresponding energy. This sum is divided by the total generated and
-        # imported energy to get the average.
-        #
-        # The blended price does not include supply surplus and may therefore be
-        # a preferred representation of price for local loads and friendly
-        # neighbors, for which myTransactiveNode is not competitive and
-        # profit-seeking.
+        """
+        Calculate the blended prices for active time intervals.
 
-        # Update and gather active time intervals ti. It's simpler to
-        # recalculate the active time intervals than it is to check for
-        # errors.
+        The blended price is the averaged weighted price of all locally generated and imported energies. A sum is made
+        of all costs of generated and imported energies, which are prices weighted by their corresponding energy. This
+        sum is divided by the total generated and imported energy to get the average.
+
+        The blended price does not include supply surplus and may therefore be a preferred representation of price for
+        local loads and friendly neighbors, for which myTransactiveNode is not competitive and profit-seeking.
+        """
 
         self.check_intervals()
-        ti = self.timeIntervals
 
-        # Gather primal production costs of the time intervals.
-        pc = self.productionCosts
+        time_intervals = self.timeIntervals
 
-        # Perform checks on interval primal production costs to ensure smooth
-        # calculations. NOTE: This does not check the veracity of the
-        # primal costs.
+        production_costs = self.productionCosts
 
-        # CASE 1: No primal production costs have been populated for the various
-        # assets and neighbors. This results in termination of the
-        # process.
+        # Perform checks on interval primal production costs to ensure smooth calculations. NOTE: This does not check
+        # the veracity of the primal costs.
 
-        if pc is None or len(pc) == 0:  # isempty(pc)
+        if production_costs is None or len(production_costs) == 0:
+            warn('Production costs have not been calculated.')
             #            _log.warning('Primal costs have not yet been calculated.')
             return
 
-        # CASE 2: There is at least one active time interval for which primal
-        # costs have not been populated. This results in termination of the
-        # process.
-
-        elif len(ti) > len(pc):
+        elif len(time_intervals) > len(production_costs):
+            warn('There is at least one time interval without a prod. cost.')
             #            _log.warning('Missing primal costs for active time intervals.')
             return
 
-        # CASE 3: There is at least one extra primal production cost that does
-        # not refer to an active time interval. It will be removed.
-
-        elif len(ti) < len(pc):
+        elif len(time_intervals) < len(production_costs):
+            warn('Extra production cost(s) were found and will be removed.')
             #            _log.warning('Removing primal costs that are not among active time intervals.')
             self.productionCosts = [x for x in self.productionCosts if x.timeInterval in self.timeIntervals]
 
-        for i in range(len(ti)):
-            pc = find_obj_by_ti(self.productionCosts, ti[i])
-            tg = find_obj_by_ti(self.totalGeneration, ti[i])
-            bp = pc / tg
+        for time_interval in time_intervals:
+            # Calculate a blended price for this market time interval.
+            production_cost = find_obj_by_ti(self.productionCosts, time_interval)  # [$]
+            total_generation = find_obj_by_ti(self.totalGeneration, time_interval)  # [kWh]
+            blended_price = production_cost / total_generation  # [$/kWh]
 
-            self.blendedPrices1 = [x for x in self.blendedPrices1 if x != ti[i]]
-
-            val = bp
-            iv = IntervalValue(self, ti[i], self, MeasurementType.BlendedPrice, val)
-
-            # Append the blended price to the list of interval values
-            self.blendedPrices1.append(iv)
+            # Remove and replace any blended price in the current time interval.
+            self.blendedPrices1 = [x for x in self.blendedPrices1 if x != time_interval]
+            interval_value = IntervalValue(self,
+                                           time_interval,
+                                           self,
+                                           MeasurementType.BlendedPrice,
+                                           blended_price)
+            self.blendedPrices1.append(interval_value)
 
     # 1911DJH: This next code is really unnecessary now that market timing logic has been simplified. Knowing one
     # market clearing time, one may find the next by simply adding the market clearing interval.
@@ -970,45 +1080,43 @@ class Market:
     def check_intervals(self):
         # Check or create the set of instantiated TimeIntervals in this Market
 
-        # Create the array "steps" of interval's starting times that should be active. Assign the first based
-        # on the known market clearing time, which predates the delivery period by a delivery lead time.
-        steps = [self.marketClearingTime + self.deliveryLeadTime]  # First market interval start time
+        # Initialize the first interval starting time in this market.
+        starting_times = [self.marketClearingTime + self.deliveryLeadTime]
 
-        # The end of the market delivery time may be found from the first starting time using the number of intervals
-        # and their durations.
-        last_starting_time = steps[0] + self.intervalDuration * (self.intervalsToClear - 1)
+        # Find the last starting time in the market delivery period.
+        last_starting_time = starting_times[0] + self.intervalDuration * (self.intervalsToClear - 1)
 
         # Assign the remaining interval start times in the market delivery period.
-        while steps[-1] < last_starting_time:
-            steps.append(steps[-1] + self.intervalDuration)
+        while starting_times[-1] < last_starting_time:
+            starting_times.append(starting_times[-1] + self.intervalDuration)
 
         # Index through the needed TimeIntervals based on their start times.
-        for i in range(len(steps)):
+        for starting_time in starting_times:
+
             # This is a test to see whether the interval exists.
-            # Case 0: a new interval must be created
-            # Case 1: There is one match, the TimeInterval exists
-            # Otherwise: Duplicates exists and should be deleted.
-            tis = [x for x in self.timeIntervals if x.startTime == steps[i]]
-            tis_len = len(tis)
+            time_intervals = [x for x in self.timeIntervals if x.startTime == starting_time]
 
-            # No match was found. Create a new TimeInterval and append it to the list of time intervals.
-            if tis_len == 0:
+            if len(time_intervals) == 0:  # None was found. Append a new time interval to the list of time intervals.
+                self.timeIntervals.append(
+                    TimeInterval(
+                        Timer.get_cur_time(),
+                        self.intervalDuration,
+                        self,
+                        self.marketClearingTime,
+                        starting_time
+                    )
+                )
 
-                ti = TimeInterval(Timer.get_cur_time(), self.intervalDuration, self, self.marketClearingTime, steps[i])
-                self.timeIntervals.append(ti)
+            elif len(time_intervals) == 1:  # The TimeInterval already exists. There is really no problem.
+                pass  # All is OK. There's no action to take.
 
-            # The TimeInterval already exists. There is really no problem. 
-            elif tis_len == 1:
-                # All OK. No action to take.
-                pass
+            else:  # Duplicate time intervals exist. Remove all but one.
+                # First remove ALL the time intervals having the current starting time.
+                self.timeIntervals = [x for x in self.timeIntervals if x.startTime != starting_time]
+                # Then append one lone time interval for this starting time.
+                self.timeIntervals.append(time_intervals[0])
 
-            # Duplicate time intervals exist. Remove all but one.
-            else:
-                self.timeIntervals = [x for x in self.timeIntervals if x.startTime != steps[i]]
-                self.timeIntervals.append(tis[0])
-            # ****************************************************************************************** 1911DJH CHANGED
-
-    def check_marginal_prices(self, mtn, return_prices=None):
+    def check_marginal_prices(self, my_transactive_node, return_prices=None):
         """
         191212DJH: Much of the logic may be simplified upon the introduction of isNewestMarket flag and assertion that
         priorRefinedMarket points to the specific market object that is being refined or corrected.
@@ -1027,42 +1135,34 @@ class Market:
         5. If all above methods fail, market periods should be assigned the market's default price. See property
            Market.defaultPrice.
         INPUTS:
-           mtn      agent myTransactiveNode object
+        :param my_transactive_node: myTransactiveNode object--this agent
+        :param return_prices: For future functionality. (Return prices if True.)
         OUTPUTS:
            populates list of active marginal prices (see class IntervalValue)
         """
 
-        ti = self.timeIntervals
-
-        # Clean up the list of active marginal prices. Remove any active marginal prices that are not in active time
-        # intervals.
-        # TODO: This step is probably unnecessary using Python that has garbage cleanup(?).
-        self.marginalPrices = [x for x in self.marginalPrices if x.timeInterval in ti]
-
         # Index through active time intervals ti
-        for i in range(len(ti)):
+        for time_interval in self.timeIntervals:
 
-            # Initialize the marginal price value.
-            value = None
+            # Initialize the marginal price.
+            marginal_price = None
 
             # METHOD #1: If the market interval already has a price, you're done.
             # Check to see if a marginal price exists in the active time interval.
-            iv = find_obj_by_ti(self.marginalPrices, ti[i])
+            interval_value = find_obj_by_ti(self.marginalPrices, time_interval)
 
-            if iv is None:
+            if interval_value is None:
 
                 # METHOD #2. If the same time interval exists from the prior market clearing, its price may be used.
                 # This can be the case where similar successive markets' delivery periods overlap, e.g., a rolling
                 # window of 24 hours.
-                # 191212DJH: This logic is greatly simplified upon introduction of isNewestMarket flag. Also, only
-                # the prior market clearing really needs to be checked.
 
                 # The time interval will be found in prior markets of this series only if more than one time
                 # interval is cleared by each market.
                 if not isinstance(self.priorMarketInSeries, type(None)) \
                         and self.priorMarketInSeries is not None \
                         and self.intervalsToClear > 1 \
-                        and value is None:
+                        and marginal_price is None:
 
                     # Look for only the market just prior to this one, based on its market clearing time.
                     prior_market_in_series = self.priorMarketInSeries
@@ -1074,27 +1174,24 @@ class Market:
                     if len(prior_marginal_prices) != 0:
 
                         # Index through those prior marginal prices,
-                        for x in range(len(prior_marginal_prices)):
+                        for prior_marginal_price in prior_marginal_prices:
 
                             # and if any are found such that the currently indexed time interval lies within its
                             # timing,
-                            start_time = prior_marginal_prices[x].timeInterval.startTime
+                            start_time = prior_marginal_price.timeInterval.startTime
                             end_time = start_time + prior_market_in_series.intervalDuration
-                            if start_time <= ti[i].startTime < end_time:
-
+                            if start_time <= time_interval.startTime < end_time:
                                 # then capture this value for the new marginal price in this time interval,
-                                value = prior_marginal_prices[x].value
+                                marginal_price = prior_marginal_price.value
 
                 # METHOD #3. If this market corrects another prior market,  its cleared price should be used,
                 # e.g., a real-time market that corrects day-ahead market periods. This is indicated by naming a
                 # prior market name, which points to a series that is to be corrected.
-                # 191212DJH: The logic is significantly simplified by introduction of priorRefinedMarket
-                # pointer.
 
-                # If there is a prior market indicated and a marginal price value has not been found,
+                # If there is a prior market indicated and a marginal price has not been found,
                 elif not isinstance(self.marketToBeRefined, type(None)) \
                         and self.marketToBeRefined is not None \
-                        and value is None:
+                        and marginal_price is None:
 
                     # Read the this market's prior refined market name.
                     prior_market = self.marketToBeRefined
@@ -1106,135 +1203,127 @@ class Market:
                     if len(prior_marginal_prices) != 0:
 
                         # Some marginal prices were found in the most recent similar market.
-                        value = None
+                        marginal_price = None
 
-                        # Index through those prior marginal price,
-                        for x in range(len(prior_marginal_prices)):
-
-                            # and if any are found such that the currently indexed time interval lies within its
-                            # timing,
-                            start_time = prior_marginal_prices[x].timeInterval.startTime
+                        # Index through those prior marginal prices.
+                        for prior_marginal_price in prior_marginal_prices:
+                            # If any are found such that the currently indexed time interval lies within its timing,
+                            start_time = prior_marginal_price.timeInterval.startTime
                             end_time = start_time + prior_market.intervalDuration
-                            if start_time <= ti[i].startTime < end_time:
-                                # then capture this value for the new marginal price in this time interval,
-                                value = prior_marginal_prices[x].value
+                            if start_time <= time_interval.startTime < end_time:
+                                # capture this value as the marginal price in this time interval.
+                                marginal_price = prior_marginal_price.value
 
-                # METHOD #4. If there exists a price forecast model for this market, this model should be
-                # used to forecast price. See method Market.model_prices().
+                # METHOD #4. Use the price model to predict marginal price. See method Market.model_prices().
+                elif self.priceModel is not None and marginal_price is None:
+                    marginal_price = self.model_prices(time_interval.startTime)[0]
 
-                elif self.priceModel is not None and value is None:
-                    answer = self.model_prices(ti[i].startTime)
-                    value = answer[0]
-
-                # METHOD 5. If all above methods fail, market periods should be assigned the market's
-                # default price. See property Market.defaultPrice. However, if there is not default
-                # price, then the price should be assigned as NaN.
-
-                elif self.defaultPrice is not None and value is None:
-                    value = self.defaultPrice
+                # METHOD 5. If all above methods fail, market periods should be assigned the market's default price.
+                elif self.defaultPrice is not None and marginal_price is None:
+                    marginal_price = self.defaultPrice
 
                 else:
-                    value = None
+                    marginal_price = None
 
-                # Create an interval value for the new marginal price in the indexed time interval with either the
-                # default price or the marginal price from the previous active time interval.
-                iv = IntervalValue(self, ti[i], self, MeasurementType.MarginalPrice, value)
+                # Create an interval value for the new marginal price in the indexed time interval.
+                interval_value = IntervalValue(self, time_interval, self, MeasurementType.MarginalPrice, marginal_price)
 
-            # Append the marginal price value to the list of active marginal prices
-            self.marginalPrices.append(iv)
+            # Append the marginal price to the list of active marginal prices
+            self.marginalPrices.append(interval_value)
 
         return None
 
-    def schedule(self, mtn):
-        # Process called to
-        # (1) invoke all models to update the scheduling of their resources, loads, or neighbor
-        # (2) converge to system balance using sub-gradient search.
-        #
-        # mkt - Market object
-        # mtn - transactive node object
+    def schedule(self, my_transactive_node):
+        """
+        Process called to
+        (1) invoke all models to update the scheduling of their resources, loads, or neighbor
+        (2) converge to system balance using sub-gradient search.
+        :param: my_transactive_node: TransactiveNode object--this agent
+        """
 
-        # 1.2.1 Call resource models to update their schedules
-        # Call each local asset model m to schedule itself.
-        for la in mtn.localAssets:
-            la.schedule(self)
+        # Call each local asset to schedule itself.
+        for local_asset in my_transactive_node.localAssets:
+            local_asset.schedule(self)
 
-        # 1.2.2 Call neighbor models to update their schedules
-        # Call each neighbor model m to schedule itself
-        for n in mtn.neighbors:
-            n.schedule(self)
+        # Call each neighbor to schedule itself.
+        for neighbor in my_transactive_node.neighbors:
+            neighbor.schedule(self)
 
-    def sum_vertices(self, mtn, ti, ote=None):
+    def sum_vertices(self, my_transactive_node, time_interval, object_to_exclude=None):
         """
         Create system vertices with system information for a single time interval. An optional argument allows the
         exclusion of a transactive neighbor object, which is useful for transactive records and their corresponding
         demand or supply curves. This utility method should be used for creating transactive signals (by excluding the
         neighbor object), and for visualization tools that review the local system's net supply/demand curve.
+        :param: my_transactive_node:
+        :param: time_interval:
+        :param: object_to_exclude:
         """
-
+        # TODO: This has evolved to be a stand-alone, static function. Change to a static function.
         # Initialize a list of marginal prices mps at which vertices will be created.
-        mps = []
+        marginal_price_list = []
 
         # Index through the active neighbor objects
-        for i in range(len(mtn.neighbors)):
+        for i in range(len(my_transactive_node.neighbors)):
 
-            nm = mtn.neighbors[i]
+            neighbor = my_transactive_node.neighbors[i]
 
-            # Jump out of this iteration if neighbor model nm happens to be the "object to exclude" ote
-            if ote is not None and nm == ote:
+            # Jump out of this iteration if neighbor model nm happens to be the "object to exclude"
+            if object_to_exclude is not None and neighbor == object_to_exclude:
                 continue
 
             # Find the neighbor model's active vertices in this time interval
-            mp = find_objs_by_ti(nm.activeVertices, ti)  # IntervalValues
+            interval_values = find_objs_by_ti(neighbor.activeVertices, time_interval)  #
 
-            if len(mp) > 0:
+            if len(interval_values) > 0:
                 # At least one active vertex was found in the time interval. Extract the vertices from the interval
                 # values.
-                mp = [x.value for x in mp]  # Vertices
+                vertices = [x.value for x in interval_values]  #
 
-                if len(mp) == 1:
+                if len(vertices) == 1:
                     # There is one vertex. This means the power is constant for this neighbor. Enforce the policy of
                     # assigning infinite marginal price to constant vertices.
-                    mp = [float("inf")]  # marginal price [$/kWh]
+                    marginal_prices = [float("inf")]  # [$/kWh]
 
                 else:
                     # There are multiple vertices. Use the marginal price values from the vertices themselves.
-                    mp = [x.marginalPrice for x in mp]  # marginal prices [$/kWh]
+                    marginal_prices = [x.marginalPrice for x in vertices]  # [$/kWh]
 
-                mps.extend(mp)  # marginal prices [$/kWh]
+                marginal_price_list.extend(marginal_prices)  # marginal prices [$/kWh]
 
-        for i in range(len(mtn.localAssets)):
+        for i in range(len(my_transactive_node.localAssets)):
             # Change the reference to the corresponding local asset model
-            nm = mtn.localAssets[i]  # a local asset model
+            asset = my_transactive_node.localAssets[i]  # a local asset model
 
             # Jump out of this iteration if local asset model nm happens to be
-            # the "object to exclude" ote
-            if ote is not None and nm == ote:
+            # the "object to exclude"
+            if object_to_exclude is not None and asset == object_to_exclude:
                 continue
 
             # Find the local asset model's active vertices in this time interval.
-            mp = find_objs_by_ti(nm.activeVertices, ti)
+            interval_values = find_objs_by_ti(asset.activeVertices, time_interval)
 
-            if len(mp) > 0:
+            if len(interval_values) > 0:
                 # At least one active vertex was found in the time interval. Extract the vertices from the interval
                 # values.
-                mp = [x.value for x in mp]  # mp = [mp.value]  # Vertices
+                vertices = [x.value for x in interval_values]  #
 
-                # Extract the marginal prices from the vertices
-                if len(mp) == 1:
+                # Extract the marginal prices from the vertices.
+                if len(vertices) == 1:
                     # There is one vertex. This means the power is constant for this local asset. Enforce the policy of
                     # assigning infinite marginal price to constant vertices.
-                    mp = [float("inf")]  # marginal price [$/kWh]
+                    marginal_prices = [float("inf")]  # [$/kWh]
 
                 else:
                     # There are multiple vertices. Use the marginal price values from the vertices themselves.
-                    mp = [x.marginalPrice for x in mp]  # marginal prices [$/kWh]
+                    marginal_prices = [x.marginalPrice for x in vertices]  # marginal prices [$/kWh]
 
-                mps.extend(mp)  # marginal prices [$/kWh]
+                marginal_price_list.extend(marginal_prices)  # [$/kWh]
 
         # A list of vertex marginal prices have been created.
 
-        # Sort the marginal prices from least to greatest
-        mps.sort()  # marginal prices [$/kWh]
+        # Sort the marginal prices from least to greatest.
+        marginal_price_list.sort()  # [$/kWh]
 
         # Ensure that no more than two vertices will be created at the same marginal price. The third output of function
         # unique() is useful here because it is the index of unique entries in the original vector.
@@ -1243,297 +1332,270 @@ class Market:
         # Create a new vector of marginal prices. The first two entries are accepted because they cannot violate the
         # two-duplicates rule. The vector is padded with zeros, which should be computationally efficient. A counter is
         # used and should be incremented with new vector entries.
-        if len(mps) >= 3:
-            mps_new = [mps[0], mps[1]]
+        if len(marginal_price_list) >= 3:
+            marginal_price_list_new = [marginal_price_list[0], marginal_price_list[1]]
         else:
-            mps_new = list(mps)
+            marginal_price_list_new = list(marginal_price_list)
 
         # Index through the indices and append the new list only when there are fewer than three duplicates.
-        for i in range(2, len(mps)):
-            if mps[i] != mps[i - 1] or mps[i - 1] != mps[i - 2]:
-                mps_new.append(mps[i])
+        for i in range(2, len(marginal_price_list)):
+            if marginal_price_list[i] != marginal_price_list[i - 1] \
+                    or marginal_price_list[i - 1] != marginal_price_list[i - 2]:
+                marginal_price_list_new.append(marginal_price_list[i])
 
         # Trim the new list of marginal prices mps_new that had been padded with zeros and rename it mps.
         # mps = mps_new  # marginal prices [$/kWh]
 
-        # [180907DJH: THIS CONDITIONAL (COMMENTED OUT) WAS NOT QUITE RIGHT. A MARGINAL PRICE AT INFINITY IS MEANINGFUL
-        # ONLY IF THERE IS EXACTLY ONE VERTEX-NO FLEXIBILITY. OTHERWISE, IT IS SUPERFLUOUS AND SHOULD BE ELIMINATED.
-        # THIS MUCH SIMPLER APPROACH ENSURES THAT INFINITY IS RETAINED ONLY IF THERE IS A SINGLE MARGINAL PRICE.
-        # OTHERWISE, INFINITY MARGINAL PRICES ARE TRIMMED FROM THE SET.]
-        mps = [mps_new[0]]
-        for i in range(1, len(mps_new)):
-            if mps_new[i] != float('inf'):
-                mps.append(mps_new[i])
+        # 180907DJH: THIS CONDITIONAL (COMMENTED OUT) WAS NOT QUITE RIGHT. A MARGINAL PRICE AT INFINITY IS MEANINGFUL
+        #             ONLY IF THERE IS EXACTLY ONE VERTEX-NO FLEXIBILITY. OTHERWISE, IT IS SUPERFLUOUS AND SHOULD BE
+        #             ELIMINATED. THIS MUCH SIMPLER APPROACH ENSURES THAT INFINITY IS RETAINED ONLY IF THERE IS A SINGLE
+        #             MARGINAL PRICE. OTHERWISE, INFINITY MARGINAL PRICES ARE TRIMMED FROM THE SET.
+        marginal_price_list = [marginal_price_list_new[0]]
+        for i in range(1, len(marginal_price_list_new)):
+            if marginal_price_list_new[i] != float('inf'):
+                marginal_price_list.append(marginal_price_list_new[i])
 
         # A clean list of marginal prices has been created
 
         # Correct assignment of vertex power requires a small offset of any duplicate values. Index through the new list
         # of marginal prices again.
-        for i in range(1, len(mps)):
-            if mps[i] == mps[i - 1]:
-                # A duplicate has been found. Offset the first of the two by a very small number
-                mps[i - 1] = mps[i - 1] - 1e-10  # marginal prices [$/kWh]
+        for i in range(1, len(marginal_price_list)):
+            if marginal_price_list[i] == marginal_price_list[i - 1]:
+                # A duplicate has been found. Offset the first of the two by a very small number.
+                marginal_price_list[i - 1] = marginal_price_list[i - 1] - 1e-10  # [$/kWh]
 
         # Create vertices at the marginal prices. Initialize the list of vertices.
         vertices = []
 
         # Index through the cleaned list of marginal prices
-        for i in range(len(mps)):
+        for i in range(len(marginal_price_list)):
             # Create a vertex at the indexed marginal price value
-            iv = Vertex(mps[i], 0, 0)
+            interval_value = Vertex(marginal_price_list[i], 0, 0)
 
             # Initialize the net power pwr and total production cost pc at the indexed vertex
-            pwr = 0.0  # net power [avg.kW]
-            pc = 0.0  # production cost [$]
+            vertex_power = 0.0  # [avg.kW]
+            vertex_production_cost = 0.0  # [$]
 
             # Include power and production costs from neighbor models. Index through the active neighbor models.
-            for k in range(len(mtn.neighbors)):
-                nm = mtn.neighbors[k]
+            for k in range(len(my_transactive_node.neighbors)):
+                neighbor = my_transactive_node.neighbors[k]
 
-                if nm == ote:
+                if neighbor == object_to_exclude:
                     continue
 
                 # Calculate the indexed neighbor model's power at the indexed marginal price and time interval. NOTE:
                 # This must not corrupt the "scheduled power" at the converged system's marginal price.
-                p = production(nm, mps[i], ti)  # power [avg.kW]
+                neighbors_power = production(neighbor, marginal_price_list[i], time_interval)  # [avg.kW]
 
                 # Calculate the neighbor model's production cost at the indexed marginal price and time interval, and
                 # add it to the sum production cost pc. NOTE: This must not corrupt the "scheduled" production cost for
                 # this neighbor model.
-                pc = pc + prod_cost_from_vertices(nm, ti, p)  # production cost [$]
+                vertex_production_cost = vertex_production_cost \
+                                         + prod_cost_from_vertices(neighbor, time_interval, neighbors_power)
 
                 # Add the neighbor model's power to the sum net power at this vertex.
-                pwr = pwr + p  # net power [avg.kW]
+                vertex_power = vertex_power + neighbors_power  # [avg.kW]
 
             # Include power and production costs from local asset models. Index through the local asset models.
-            for k in range(len(mtn.localAssets)):
-                nm = mtn.localAssets[k]
+            for k in range(len(my_transactive_node.localAssets)):
+                asset = my_transactive_node.localAssets[k]
 
-                if nm == ote:
+                if asset == object_to_exclude:
                     continue
 
                 # Calculate the power for the indexed local asset model at the indexed marginal price and time interval.
-                p = production(nm, mps[i], ti)  # power [avg.kW]
+                assets_power = production(asset, marginal_price_list[i], time_interval)  # [avg.kW]
 
                 # Find the indexed local asset model's production cost and add it to the sum of production cost pc for
                 # this vertex.
-                pc = pc + prod_cost_from_vertices(nm, ti, p)  # production cost [$]
+                vertex_production_cost = vertex_production_cost \
+                                         + prod_cost_from_vertices(asset, time_interval, assets_power)  # [$]
 
                 # Add local asset power p to the sum net power pwr for this vertex.
-                pwr = pwr + p  # net power [avg.kW]
+                vertex_power = vertex_power + assets_power  # [avg.kW]
 
             # Save the sum production cost pc into the new vertex iv
-            iv.cost = pc  # sum production cost [$]
+            interval_value.cost = vertex_production_cost  # [$]
 
             # Save the net power pwr into the new vertex iv
-            iv.power = pwr  # net power [avg.kW]
+            interval_value.power = vertex_power  # [avg.kW]
 
             # Append Vertex iv to the list of vertices
-            vertices.append(iv)
+            vertices.append(interval_value)
 
         return vertices
 
-    def update_costs(self, mtn):
-        # Sum the production and dual costs from all modeled local resources, local loads, and neighbors, and then sum
-        # them for the entire duration of the time horizon being calculated.
-        #
-        # PRESUMPTIONS:
-        # - Dual costs have been created and updated for all active time intervals for all neighbor objects
-        # - Production costs have been created and updated for all active time intervals for all asset objects
-        #
-        # INTPUTS:
-        # mtn - my Transactive Node
-        #
-        # OUTPUTS:
-        # - Updates Market.productionCosts - an array of total production cost in each active time interval
-        # - Updates Market.totalProductionCost - the sum of production costs for the entire future time horizon of
-        #   active time intervals
-        # - Updates Market.dualCosts - an array of dual cost for each active time interval
-        # - Updates Market.totalDualCost - the sum of all the dual costs for the entire future time horizon of active
-        #   time intervals
+    def update_costs(self, my_transactive_node):
+        """
+        Sum the production and dual costs from all modeled local resources, local loads, and neighbors, and then sum
+        them for the entire duration of the time horizon being calculated.
+
+        PRESUMPTIONS:
+        - Dual costs have been created and updated for all active time intervals for all neighbor objects
+        - Production costs have been created and updated for all active time intervals for all asset objects
+
+        INPUTS:
+        :param: my_transactive_node - TransactiveNode object--this agent
+
+        OUTPUTS:
+        - Updates Market.productionCosts - an array of total production cost in each active time interval
+        - Updates Market.totalProductionCost - the sum of production costs for the entire future time horizon of
+          active time intervals
+        - Updates Market.dualCosts - an array of dual cost for each active time interval
+        - Updates Market.totalDualCost - the sum of all the dual costs for the entire future time horizon of active
+          time intervals
+        """
 
         # Call each LocalAsset to update its costs.
-        for la in mtn.localAssets:
-            la.update_costs(self)
+        for local_asset in my_transactive_node.localAssets:
+            local_asset.update_costs(self)
 
-        # Call each Neighbor to update its costs
-        for n in mtn.neighbors:
-            n.update_costs(self)
+        # Call each Neighbor to update its costs.
+        for neighbor in my_transactive_node.neighbors:
+            neighbor.update_costs(self)
 
-        for i in range(1, len(self.timeIntervals)):
-            ti = self.timeIntervals[i]
-            # Initialize the sum dual cost sdc in this time interval
-            sdc = 0.0  # [$]
+        for time_interval in self.timeIntervals:
 
-            # Initialize the sum production cost spc in this time interval
-            spc = 0.0  # [$]
+            sum_dual_cost = 0.0  # [$]
 
-            for la in mtn.localAssets:
-                iv = find_obj_by_ti(la.dualCosts, ti)
-                sdc = sdc + iv.value  # sum dual cost [$]
+            sum_production_cost = 0.0  # [$]
 
-                iv = find_obj_by_ti(la.productionCosts, ti)
-                spc = spc + iv.value  # sum production cost [$]
+            for local_asset in my_transactive_node.localAssets:
+                interval_value = find_obj_by_ti(local_asset.dualCosts, time_interval)
+                sum_dual_cost = sum_dual_cost + interval_value.value  # [$]
 
-            for n in mtn.neighbors:
-                iv = find_obj_by_ti(n.dualCosts, ti)
-                sdc = sdc + iv.value  # sum dual cost [$]
+                interval_value = find_obj_by_ti(local_asset.productionCosts, time_interval)
+                sum_production_cost = sum_production_cost + interval_value.value  # [$]
 
-                iv = find_obj_by_ti(n.productionCosts, ti)
-                spc = spc + iv.value  # sum production cost [$]
+            for neighbor in my_transactive_node.neighbors:
+                interval_value = find_obj_by_ti(neighbor.dualCosts, time_interval)
+                sum_dual_cost = sum_dual_cost + interval_value.value  # [$]
 
-            # Check to see if a sum dual cost exists in the indexed time interval
-            iv = find_obj_by_ti(self.dualCosts, ti)
+                interval_value = find_obj_by_ti(neighbor.productionCosts, time_interval)
+                sum_production_cost = sum_production_cost + interval_value.value  # [$]
 
-            if iv is None:
-                # No dual cost was found for the indexed time interval. Create
-                # an IntervalValue and assign it the sum dual cost for the
-                # indexed time interval
-                iv = IntervalValue(self, ti, self, MeasurementType.DualCost, sdc)  # an IntervalValue
+            # Check to see if a sum dual cost exists for this market in the indexed time interval.
+            interval_value = find_obj_by_ti(self.dualCosts, time_interval)
+
+            if interval_value is None:
+                # No dual cost was found for the indexed time interval. Create an IntervalValue and assign it the sum
+                # dual cost for the indexed time interval.
+                interval_value = IntervalValue(self, time_interval, self, MeasurementType.DualCost, sum_dual_cost)  #
 
                 # Append the dual cost to the list of interval dual costs
-                self.dualCosts.append(iv)  # = [mkt.dualCosts, iv]  # IntervalValues
+                self.dualCosts.append(interval_value)  # IntervalValues
 
             else:
-                # A sum dual cost value exists in the indexed time interval.
-                # Simply reassign its value
-                iv.value = sdc  # sum dual cost [$]
+                # A sum dual cost value exists in the indexed time interval. Simply reassign its value.
+                interval_value.value = sum_dual_cost  # [$]
 
             # Check to see if a sum production cost exists in the indexed time interval
-            iv = find_obj_by_ti(self.productionCosts, ti)
+            interval_value = find_obj_by_ti(self.productionCosts, time_interval)
 
-            if iv is None:
-                # No sum production cost was found for the indexed time
-                # interval. Create an IntervalValue and assign it the sum
-                # production cost for the indexed time interval
-                iv = IntervalValue(self, ti, self, MeasurementType.ProductionCost, spc)
+            if interval_value is None:
+                # No sum production cost was found for the indexed time interval. Create an IntervalValue and assign it
+                # the sum production cost for the indexed time interval.
+                interval_value = IntervalValue(self, time_interval, self, MeasurementType.ProductionCost,
+                                               sum_production_cost)
 
                 # Append the production cost to the list of interval production costs
-                self.productionCosts.append(iv)
+                self.productionCosts.append(interval_value)
 
             else:
-                # A sum production cost value exists in the indexed time
-                # interval. Simply reassign its value
-                iv.value = spc  # sum production cost [$]
+                # A sum production cost value exists in the indexed time interval. Simply reassign its value.
+                interval_value.value = sum_production_cost  # sum production cost [$]
 
-        # Sum total dual cost for the entire time horizon
+        # Sum total dual cost for the entire forward horizon.
         self.totalDualCost = sum([x.value for x in self.dualCosts])  # [$]
 
         # Sum total primal cost for the entire time horizon
         self.totalProductionCost = sum([x.value for x in self.productionCosts])  # [$]
 
-    def update_supply_demand(self, mtn):
-        # For each time interval, sum the power that is generated, imported, consumed, or exported for all modeled local
-        # resources, neighbors, and local load.
+    def update_supply_demand(self, my_transactive_node):
+        """
+        For each time interval, sum the power that is generated, imported, consumed, or exported for all modeled local
+        resources, neighbors, and local load.
+        :param: my_transactive_node: TransactiveNode object--this agent
+        """
 
-        # Extract active time intervals
-        time_intervals = self.timeIntervals  # active TimeIntervals
+        for time_interval in self.timeIntervals:
 
-        time_interval_values = [t.startTime for t in time_intervals]
-        # Delete netPowers not in active time intervals
-        self.netPowers = [x for x in self.netPowers if x.timeInterval.startTime in time_interval_values]
+            total_generation = 0.0  # [avg.kW]
 
-        # Index through the active time intervals ti
-        for i in range(1, len(time_intervals)):
-            # Initialize total generation tg
-            tg = 0.0  # [avg.kW]
+            total_demand = 0.0  # [avg.kW]
 
-            # Initialize total demand td
-            td = 0.0  # [avg.kW]
+            for local_asset in my_transactive_node.localAssets:
+                interval_value = find_obj_by_ti(local_asset.scheduledPowers, time_interval)
+                scheduled_power = interval_value.value  # [avg.kW]
 
-            # Index through local asset models m.
-            m = mtn.localAssets
+                if scheduled_power > 0:  # Generation case: Add positive powers to total generation.
+                    total_generation = total_generation + scheduled_power  # [avg.kW]
 
-            for k in range(len(m)):
-                mo = find_obj_by_ti(m[k].scheduledPowers, time_intervals[i])
+                else:  # Demand case: Add negative powers to total demand.
+                    total_demand = total_demand + scheduled_power  # [avg.kW]
 
-                # Extract and include the resource's scheduled power
-                p = mo.value  # [avg.kW]
+            for neighbor in my_transactive_node.neighbors:
+                # Find scheduled power for this neighbor in the indexed time interval.
+                interval_value = find_obj_by_ti(neighbor.scheduledPowers, time_interval)
+                scheduled_power = interval_value.value  # [avg.kW]
 
-                if p > 0:  # Generation
-                    # Add positive powers to total generation tg
-                    tg = tg + p  # [avg.kW]
+                if scheduled_power > 0:  # Generation case: Add positive power to total generation.
+                    total_generation = total_generation + scheduled_power  # [avg.kW]
 
-                else:  # Demand
-                    # Add negative powers to total demand td
-                    td = td + p  # [avg.kW]
+                else:  # Demand case: Add negative power to total demand.
+                    total_demand = total_demand + scheduled_power  # [avg.kW]
 
-            # Index through neighbors m
-            m = mtn.neighbors
+            # At this point, total generation and importation and total demand and exportation have been calculated for
+            # the indexed time interval.
 
-            for k in range(len(m)):
-                # Find scheduled power for this neighbor in the indexed time interval
-                mo = find_obj_by_ti(m[k].scheduledPowers, time_intervals[i])
-
-                # Extract and include the neighbor's scheduled power
-                p = mo.value  # [avg.kW]
-
-                if p > 0:  # Generation
-                    # Add positive power to total generation tg
-                    tg = tg + p  # [avg.kW]
-
-                else:  # Demand
-                    # Add negative power to total demand td
-                    td = td + p  # [avg.kW]
-
-            # At this point, total generation and importation tg, and total
-            # demand and exportation td have been calculated for the indexed
-            # time interval ti[i]
-
-            # Save the total generation in the indexed time interval
+            # Save the total generation in the indexed time interval.
 
             # Check whether total generation exists for the indexed time interval
-            iv = find_obj_by_ti(self.totalGeneration, time_intervals[i])
+            interval_value = find_obj_by_ti(self.totalGeneration, time_interval)
 
-            if iv is None:
-                # No total generation was found in the indexed time interval.
-                # Create an interval value.
-                iv = IntervalValue(self, time_intervals[i], self, MeasurementType.TotalGeneration, tg)  # IntervalValue
+            if interval_value is None:
+                # No total generation was found in the indexed time interval. Create an interval value.
+                interval_value = IntervalValue(self, time_interval, self, MeasurementType.TotalGeneration,
+                                               total_generation)
 
-                # Append the total generation to the list of total generations
-                self.totalGeneration.append(iv)
+                # Append the total generation to the list of total generations.
+                self.totalGeneration.append(interval_value)
 
             else:
-                # Total generation exists in the indexed time interval. Simply
-                # reassign its value.
-                iv.value = tg
+                # Total generation exists in the indexed time interval. Simply reassign its value.
+                interval_value.value = total_generation
 
-            # Calculate and save total demand for this time interval.
-            # NOTE that this formulation includes both consumption and
-            # exportation among total load.
+            # Calculate and save total demand for this time interval. NOTE that this formulation includes both
+            # consumption and exportation among total load.
 
-            # Check whether total demand exists for the indexed time interval
+            # Check whether total demand exists for the indexed time interval.
+            interval_value = find_obj_by_ti(self.totalDemand, time_interval)
+            if interval_value is None:
+                # No total demand was found in the indexed time interval. Create an interval value.
+                interval_value = IntervalValue(self, time_interval, self, MeasurementType.TotalDemand, total_demand)
 
-            iv = find_obj_by_ti(self.totalDemand, time_intervals[i])
-            if iv is None:
-                # No total demand was found in the indexed time interval. Create
-                # an interval value.
-                iv = IntervalValue(self, time_intervals[i], self, MeasurementType.TotalDemand, td)  # an IntervalValue
-
-                # Append the total demand to the list of total demands
-                self.totalDemand.append(iv)
+                # Append the total demand to the list of total demands.
+                self.totalDemand.append(interval_value)
 
             else:
                 # Total demand was found in the indexed time interval. Simply reassign it.
-                iv.value = td
+                interval_value.value = total_demand
 
-            # Update net power for the interval
-            # Net power is the sum of total generation and total load.
-            # By convention generation power is positive and consumption
-            # is negative.
+            # Update net power for the interval. Net power is the sum of total generation and total load. By convention,
+            # generation power is positive and consumption is negative.
 
             # Check whether net power exists for the indexed time interval
-            iv = find_obj_by_ti(self.netPowers, time_intervals[i])
+            interval_value = find_obj_by_ti(self.netPowers, time_interval)
 
-            if iv is None:
-                # Net power is not found in the indexed time interval. Create an interval value.
-                iv = IntervalValue(self, time_intervals[i], self, MeasurementType.NetPower, tg + td)
+            if interval_value is None:  # Net power is not found in the indexed time interval. Create an interval value.
+                interval_value = IntervalValue(self, time_interval, self, MeasurementType.NetPower,
+                                               total_generation + total_demand)
 
-                # Append the net power to the list of net powers
-                self.netPowers.append(iv)
-            else:
-                # A net power was found in the indexed time interval. Simply reassign its value.
-                iv.value = tg + td
+                # Append the net power, an IntervalValue, to the list of net powers.
+                self.netPowers.append(interval_value)
+
+            else:  # A net power was found in the indexed time interval. Simply reassign its value.
+                interval_value.value = total_generation + total_demand
 
         np = [(x.timeInterval.name, x.value) for x in self.netPowers]
         #        _log.debug("{} market netPowers are: {}".format(self.name, np))
@@ -1543,12 +1605,16 @@ class Market:
         If within an operating system that supports graphical data representations, this method plots a market's active
         vertices.
         """
+        # TODO: This needs to be reviewed. This should plot vertex power as a function of vertex price for a single
+        #       market time interval. I don't see that such a plot can be had from this method. Methods in the base
+        #       Transactive Network Template should be independent of platform. This depends on Volttron.
+        # 200211DJH: See method see_net_curve that provides a superior representation.
         time_intervals = self.timeIntervals
 
         def by_start_times(time_interval_list):
             return time_interval_list.startTime
 
-        time_intervals.sort(key=by_start_times)
+        time_intervals.sort(key=by_start_times)  # 200207DJH: Is this actually used by the method??
 
         import plotly.express as px
 
@@ -1557,3 +1623,79 @@ class Market:
 
         fig = px.line(df, x='Date', y='AAPL.High')
         fig.show()
+
+    def see_net_curve(self, time_interval=None, show=True):
+        """
+        Visualize the net supply/demand curve in this market for a given market period.
+        This should remain independent from any implementation platform, which probably means it must be called by an
+        active display interface.
+        :param time_interval:
+        :param show: [Boolean] Set False to not show figure (useful for testing)
+        :return:
+        """
+        positive_infinity = float('Inf')
+        negative_infinity = float('-Inf')
+        price_extension = 0.1  # [$/kWh]
+
+        if time_interval is None:
+            time_interval = self.timeIntervals[0]
+
+        vertices = [x.value for x in self.activeVertices if x.timeInterval == time_interval]
+
+        vertices = order_vertices(vertices)
+
+        # Extend the curve toward negative infinity marginal price.
+        if vertices[0].marginalPrice == negative_infinity:
+            vertices[0].marginalPrice = -price_extension
+        elif vertices[0].marginalPrice == positive_infinity:
+            vertices = [Vertex(-price_extension, 0, vertices[0].power)] + vertices
+        else:
+            vertices = [Vertex(vertices[0].marginalPrice - price_extension, 0, vertices[0].power)] + vertices
+
+        # Extend the curve toward positive infinity marginal price.
+        if vertices[-1].marginalPrice == positive_infinity:
+            vertices[-1].marginalPrice = price_extension
+        else:
+            vertices = vertices + [Vertex(vertices[-1].marginalPrice + price_extension, 0, vertices[-1].power)]
+
+        marginal_prices = [x.marginalPrice for x in vertices]
+        net_powers = [x.power for x in vertices]
+
+        fig, ax = plt.subplots()
+        ax.plot(marginal_prices, net_powers)
+
+        ax.set(xlabel='marginal price [$/kWh]',
+               ylabel='average power [kW]',
+               title=(self.name + 'Net Supply/Demand Curve ' + time_interval.name)
+               )
+        ax.grid()
+
+        if show is True:
+            plt.show()
+
+    def see_marginal_prices(self, show=True):
+        """
+        Visualize this market's current marginal prices for its active time intervals.
+        This should remain independent from any implementation platform, which probably means it must be called by an
+        active display interface.
+        :param show: [Boolean] Set False to not show figure (useful for testing)
+        :return:
+        """
+
+        marginal_prices = [x.value for x in self.marginalPrices]
+        marginal_prices.append(marginal_prices[-1])
+
+        start_times = [x.timeInterval.startTime for x in self.marginalPrices]
+        start_times.append(start_times[-1] + self.intervalDuration)
+
+        fig, ax = plt.subplots()
+        ax.step(start_times, marginal_prices, where='post')
+
+        ax.set(xlabel='interval starting times',
+               ylabel='marginal prices [$/kWh]',
+               title=(self.name + ' Marginal Prices')
+               )
+        ax.grid()
+
+        if show is True:
+            plt.show()

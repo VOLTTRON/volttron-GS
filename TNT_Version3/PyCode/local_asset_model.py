@@ -182,6 +182,7 @@ class LocalAsset(object):
         """
 
         self.schedule_engagement(market)  # only applied to LocalAsset class
+
         self.update_vertices(market)
 
         # Have the objects estimate their available reserve margin.
