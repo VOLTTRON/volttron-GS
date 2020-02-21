@@ -1,30 +1,34 @@
 {
-    "inputs" : {
-        "control_setpoint" : {
-            "name" : "control_setpoint",
-            "topic" : "building/device",
-            "field" : "control_setpoint"
+    'model': 'IBPSA.Utilities.IO.RESTClient.Examples.PIDTest',
+    'model_runtime': 361,
+    'result_file': 'PIDTest',
+    'mos_file_path': '/home/volttron/dymola/run_PID.mos',
+    'inputs' : {
+        'control_setpoint' : {
+            'name' : 'control_setpoint',
+            'topic' : 'building/device',
+            'field' : 'control_setpoint'
 
         },
-        "control_output" : {
-            "name" : "control_output",
-            "topic" : "building/device",
-            "field" : "control_output"
+        'control_output' : {
+            'name' : 'control_output',
+            'topic' : 'building/device',
+            'field' : 'control_output'
 
         }
     },
-    "outputs" : {
-        "measurement" : {
-            "name" : "measurement",
-            "topic" : "building/device",
-            "field" : "measurement",
-            "meta" : {"type": "Double", "unit": "none"}
+    'outputs' : {
+        'measurement' : {
+            'name' : 'measurement',
+            'topic' : 'building/device',
+            'field' : 'measurement',
+            'meta' : {'type': 'Double', 'unit': 'none'}
         },
-        "setpoint" : {
-            "name" : "setpoint",
-            "topic" : "building/device",
-            "field" : "control_setpoint",
-            "meta" : {"type": "Double", "unit": "none"}
+        'setpoint' : {
+            'name' : 'setpoint',
+            'topic' : 'building/device',
+            'field' : 'control_setpoint',
+            'meta' : {'type': 'Double', 'unit': 'none'}
         }        
      
     }

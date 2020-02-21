@@ -56,20 +56,16 @@
 # }}}
 
 import logging
-import os
 import socket
-import subprocess
 import sys
 import json
-
 from collections import defaultdict
 from gevent import monkey, sleep
-
-monkey.patch_socket()
 from volttron.platform.agent import utils
 from volttron.platform.vip.agent import Agent, Core, RPC
 from volttron.platform.scheduling import periodic
 
+monkey.patch_socket()
 utils.setup_logging()
 log = logging.getLogger(__name__)
 SUCCESS = 'SUCCESS'
@@ -81,6 +77,11 @@ class SocketServer:
     Socket server class that facilitates communication with Modelica.
     """
     def __init__(self, port, host):
+        """
+        Contstructor for SocketServer.
+        :param port: int; port to listen.
+        :param host: str; IP address, defaults to '127.0.0.1'
+        """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Bind socket server to IP and Port
@@ -88,7 +89,7 @@ class SocketServer:
         self.client = None
         self.received_data = None
         self.size = 4096
-        log.debug('Bound to %r on %r' % (port, host))
+        log.debug('Bound to %s on %s' % (port, host))
 
     def run(self):
         """
@@ -109,7 +110,7 @@ class SocketServer:
             # Reopen connection to receive communication as the
             # connection is closed by SocketServer after each transmittal.
             self.client, addr = self.sock.accept()
-            log.debug('Connected with ' + addr[0] + ':' + str(addr[1]))
+            log.debug('Connected with %s:%s', addr[0], addr[1])
             data = self.receive_data()
             # Python3 will send the data as a byte not a string
             data = data.decode('utf-8')
@@ -134,46 +135,85 @@ class SocketServer:
             return data
 
     def on_receive_data(self, data):
+        """
+        on_recieve_data stub.
+        :param data: data payload from Modelica.
+        :return:
+        """
         log.debug('Received %s', data)
+
+    def stop(self):
+        """
+        On stop close the socket.
+        :return:
+        """
+        if self.sock is not None:
+            self.sock.close()
 
 
 class ModelicaAgent(Agent):
+    """
+    Modelica agent allows co-simulation with Modelica and
+    Facilitates data exchange between VOLLTRON and Modelica model.
+    """
     def __init__(self, config_path, **kwargs):
+        """
+        Constructor for ModelicaAgent
+        :param config_path: str; path to config file
+        :param kwargs:
+        """
         super().__init__(**kwargs)
         config = utils.load_config(config_path)
-        # Set IP and port to bind to
+        # Set IP and port that SocketServer will bind
         self.remote_ip = config.get('remote_ip', '127.0.0.1')
         self.remote_port = config.get('remote_port', 8888)
+        self.socket_server = None
         # Read outputs dictionary and inputs dictionary
         outputs = config.get('outputs', {})
         inputs = config.get('inputs', {})
+        self.advance_topic = config.get("advance_simulation_topic")
 
+        # Initialize input related parameters.
         self.control_map = {}
         self.control_topic_map = {}
         self.controls_list_master = set()
         self.controls_list = []
         self.control_proceed = set()
+        self.current_control = None
+        self.time_step_interval = config.get('timestep_interval', 30)
+        self.time_step = 1
 
+        # Initialize output related parameters.
         self.data_map = {}
         self.data_map_master = None
         self.output_data = defaultdict(list)
-        self.current_control = None
-
-        self.data = None
-        self.timestep_interval = config.get('timestep_interval', 30)
         self.output_map = None
-        self.socket_server = None
 
         self.create_control_map(inputs)
         self.create_output_map(outputs)
-        self.test_topics = ['building/device/control_output', 'building/device/control_setpoint']
+        model = config.get("model")
+        run_time = config.get("model_runtime", 500)
+        result_file = config.get('result_file', 'result')
+        mos_file_path = config.get('mos_file_path', 'run.mos')
+        self.create_mos_file(model, run_time, result_file, mos_file_path)
+        self.run_time = run_time
+        # Testing parameters
+        self.data = None
+        self.test_topics = ['building/device/control_output',
+                            'building/device/control_setpoint']
         self.test_topics_master = list(self.test_topics)
+
+    def create_mos_file(self, model, run_time, result_file, mos_file_path):
+        write = 'simulateModel("{}", stopTime={}, method="dassl", resultFile="{}");\n'.format(model, run_time, result_file)
+        write_list = [write, "\n", "exit();"]
+        _file = open(mos_file_path, "w")
+        _file.writelines(write_list)
+        _file.close()
 
     def create_output_map(self, outputs):
         """
         Create the data_map necessary for tracking if all outputs
-        from Modelica are received for a timestep and publish that
-        information.
+        from Modelica are received for a timestep.
         :param outputs:
         :return:
         """
@@ -191,9 +231,9 @@ class ModelicaAgent(Agent):
 
     def create_control_map(self, inputs):
         """
-        Create the control_map, control_topic_map, and cotnrols_list.
-        control_map - Modelica point name to current input to Modelica
+        Create the control_topic_map, control_map, and cotnrols_list.
         control_topic_map - volttron topic to Modelica point name map
+        control_map - Modelica point name to current input to Modelica
         controls_list - list of all inputs.  Empty when all setpoints have been
         received
         information.
@@ -204,7 +244,11 @@ class ModelicaAgent(Agent):
         for name, info in inputs.items():
             topic = '/'.join([info['topic'], info['field']])
             self.control_topic_map[topic] = name
-            self.control_map[name] = {'value': 0, 'nextSampleTime': 1, 'enable': False}
+            self.control_map[name] = {
+                'value': 0,
+                'nextSampleTime': 1,
+                'enable': False
+            }
             self.controls_list_master = set(self.control_map.keys())
             self.controls_list = list(self.controls_list_master)
             log.debug('Control map %s', self.control_map)
@@ -218,10 +262,14 @@ class ModelicaAgent(Agent):
 
         if self.data is None:
             return
+
         topic = self.test_topics.pop()
         value = self.set_point('me', topic, 1.0)
         if not self.test_topics:
             self.test_topics = list(self.test_topics_master)
+        get_topic = "building/device/measurement"
+        get_value = self.get_point(get_topic)
+        log.debug("Get value %s - %s", get_topic, get_value)
 
     @Core.receiver('onstart')
     def start(self, sender, **kwargs):
@@ -231,23 +279,32 @@ class ModelicaAgent(Agent):
         :param kwargs: not used
         :return:
         """
+        if self.advance_topic is not None:
+            if isinstance(self.advance_topic, str) and self.advance_topic:
+                self.vip.pubsub.subscribe(peer='pubsub',
+                                          prefix=self.advance_topic,
+                                          callback=self.advance_simulation)
         self.start_socket_server()
 
     def start_socket_server(self):
         """
-        Instantiate the SocketServer to the configured IP and port.
-        Spawn an this as a gevent loop executing the run method of the SocketServer.
+        Instantiate the SocketServer to the configured IP
+        and port.  Spawn an this as a gevent loop
+        executing the run method of the SocketServer.
         :return:
         """
-        self.socket_server = SocketServer(port=self.remote_port, host=self.remote_ip)
+        self.socket_server = SocketServer(port=self.remote_port,
+                                          host=self.remote_ip)
         self.socket_server.on_receive_data = self.receive_modelica_data
         self.core.spawn(self.socket_server.run)
 
     def receive_modelica_data(self, data):
         """
-        If the data is a dictionary it is output data for by applications.
-        If data is a list it indicates that a control input can be sent to Modelica [point(str), time(int)]
-        :param data:
+        Receive a data payload from Modelica.
+        A data payload dictionary is output data for to publish to message bus.
+        A data payload lis indicates a control signal can be sent to
+        Modelica [point(str), time(int)].
+        :param data: data payload from Modelica.
         :return:
         """
         self.data = data
@@ -258,15 +315,17 @@ class ModelicaAgent(Agent):
             self.current_control = data
             name = data[0]
             self.control_proceed.add(name)
-            # If the controls_list is empty then all set points have been received
+            # If the controls_list is empty then all
+            # set points have been received.
             if not self.controls_list:
                 # Since Modelica sends each control list one at a time
                 # and expects a subsequent answer in the correct order
-                # an additional list of points is created to know when all messages have been
-                # sent to Modelica and it is time to reinitialize the controls_list.
+                # an additional list of points is created to know when
+                # all messages have been sent to Modelica and it is time
+                # to reinitialize the controls_list.
+                self.send_control_signal(self.current_control)
                 if self.control_proceed == self.controls_list_master:
                     self.reinit_control_lists()
-                self.send_control_signal(self.current_control)
 
     def reinit_control_lists(self):
         """
@@ -274,9 +333,10 @@ class ModelicaAgent(Agent):
         been received.
         :return:
         """
-        log.debug('Reinitiaize controls list')
+        log.debug('Reinitialize controls list')
         self.controls_list = list(self.controls_list_master)
         self.control_proceed = set()
+        self.current_control = None
 
     def send_control_signal(self, control):
         """
@@ -287,14 +347,19 @@ class ModelicaAgent(Agent):
         msg = {}
         name = control[0]
         _time = control[1]
-        # This is not required but for simplicity this agent uses a uniform
-        # value for the nextSampleTime parameter for all inputs to Modelica
-        self.control_map[name]['nextSampleTime'] = _time + self.timestep_interval
+        # This is not required but for simplicity
+        # this agent uses a uniform value for the
+        # nextSampleTime parameter for all inputs to Modelica.
+        next_sample_time = _time + self.time_step_interval
+        if next_sample_time > self.run_time:
+            next_sample_time = self.run_time
+        self.control_map[name]['nextSampleTime'] = next_sample_time
         msg[name] = self.control_map[name]
         msg = json.dumps(msg)
         msg = msg + '\0'
-        log.debug('SEND CONTROL: %s', msg)
-        # for Pyton3 this must be byte encoded.  For Python2 a string would be used.
+        log.debug('Send control input to Modelica: %s', msg)
+        # For Python3 this must be byte encoded.
+        # For Python2 a string would be used.
         msg = msg.encode()
         # Send the input to Modelica via the SocketServer.
         self.socket_server.client.send(msg)
@@ -302,10 +367,10 @@ class ModelicaAgent(Agent):
     def publish_modelica_data(self, data):
         """
         This function publishes the Modelica output data once all
-        outputs for a timestep have been received from modelica.  Uses an all publish
-        per device.  This means that outputs can be configured with the same
-        topic and will be published as topic/all consistent with the MasterDriver
-        topic/data format.
+        outputs for a timestep have been received from Modelica.
+        Uses an all publish per device.  This means that outputs
+        can be configured with the same topic and will be published
+        as topic/all consistent with the MasterDriver topic/data format.
         :param data: dictionary where key is Modelica point name and value is
         data information.
         :return:
@@ -325,9 +390,13 @@ class ModelicaAgent(Agent):
         for topic, value in self.output_data.items():
             self.data_map = dict(self.data_map_master)
             headers = {'Timestep': self.time_step}
+            publish_topic = "/".join([topic, "all"])
             log.debug('Publish - topic %s ----- payload %s', topic, value)
-            self.vip.pubsub.publish('pubsub', topic, headers=headers, message=value)
-            self.output_data[topic] = [{}, {}]
+            self.vip.pubsub.publish('pubsub',
+                                    publish_topic,
+                                    headers=headers,
+                                    message=value)
+            #self.output_data[topic] = [{}, {}]
 
     def construct_data_payload(self, data):
         """
@@ -350,7 +419,14 @@ class ModelicaAgent(Agent):
         self.stop()
         log.error(msg)
 
-    def stop(self):
+    @Core.receiver('onstop')
+    def stop(self, sender, **kwargs):
+        """
+        Call when agent is stopped close socket.
+        :param sender:
+        :param kwargs:
+        :return:
+        """
         if self.socket_server:
             self.socket_server.stop()
             self.socket_server = None
@@ -370,16 +446,26 @@ class ModelicaAgent(Agent):
         :rtype: any base python type
 
         """
-        pass
+        try:
+            topic_list = topic.split("/")
+            device_topic = "/".join(topic_list[:-1])
+            point = topic_list[-1]
+            # Retrieve data payload from the output_data.
+            data_payload = self.output_data[device_topic]
+            value = data_payload[0][point]
+        except KeyError as ex:
+            # No match for outputs
+            value = None
+            log.debug('Error on get_point %s', topic)
+        return value
 
     @RPC.export
     def set_point(self, requester_id, topic, value, **kwargs):
         """RPC method
 
         Sets the value of a specific point on a device.
-        Does not require the device be scheduled.
 
-        :param requester_id: Identifier given when requesting schedule.
+        :param requester_id: String value deprecated.
         :param topic: The topic of the point to set in the
                       format <device topic>/<point name>
         :param value: Value to set point to.
@@ -394,24 +480,34 @@ class ModelicaAgent(Agent):
         log.debug('Modelica agent handle_set')
         log.debug('topic: %s -- value: %s', topic, value)
         try:
+            # Retrieve modelica point name from the control_topic_map.
             name = self.control_topic_map[topic]
+            # Set the value and enable to true for active control
+            # next time a message is sent to Modelica.
             self.control_map[name]['value'] = value
             self.control_map[name]['enable'] = True
         except KeyError as ex:
-            log.debug('Topic does not match any know control points: %s', topic)
+            # No match for outputs
+            log.debug('Topic does not match any know control '
+                      'points: %s --- %s', topic, ex)
         try:
+            # Remove the point from the controls list
+            # once this list is empty we know we have received all the
+            # setpoints we are expecting and will send the messge to Modelica.
             self.controls_list.remove(name)
             log.debug('Controls list %s', self.controls_list)
             if not self.controls_list:
                 self.send_control_signal(self.current_control)
         except ValueError as ex:
-            log.warning('Received duplicate set point for topic: %s - name: %s', topic, name)
-            self.send_control_signal(self.current_control)
+            log.warning('Received duplicate set '
+                        'point for topic: %s - name: %s', topic, name)
+            if not self.controls_list:
+                self.send_control_signal(self.current_control)
         return value
 
     @RPC.export
     def revert_point(self, requester_id, topic, **kwargs):
-        '''RPC method
+        """RPC method
 
         Reverts the value of a specific point on a device to a default state.
         Does not require the device be scheduled.
@@ -423,19 +519,63 @@ class ModelicaAgent(Agent):
         :type topic: str
         :type requester_id: str
 
-        '''
-        pass
+        """
+        log.debug('Modelica agent revert_point')
+        log.debug('topic: %s', topic)
+        try:
+            # Retrieve modelica point name from the control_topic_map.
+            name = self.control_topic_map[topic]
+            # Set the value and enable to true for active control
+            # next time a message is sent to Modelica.
+            self.control_map[name]['enable'] = False
+        except KeyError as ex:
+            # No match for outputs
+            log.debug('Topic does not match any know '
+                      'control points: %s --- %s', topic, ex)
+            return FAILURE
+        try:
+            # Remove the point from the controls list
+            # once this list is empty we know we have received all the
+            # setpoints we are expecting and will send the messge to Modelica.
+            self.controls_list.remove(name)
+            log.debug('Controls list %s', self.controls_list)
+            if not self.controls_list:
+                self.send_control_signal(self.current_control)
+        except ValueError as ex:
+            log.warning('Received duplicate set point '
+                        'for topic: %s - name: %s', topic, name)
+            if not self.controls_list:
+                self.send_control_signal(self.current_control)
+        return SUCCESS
 
     def advance_simulation(self, peer, sender, bus, topic, headers, message):
-        pass
+        """
+        Pubsub callback to advance simulation to next timestep.
+        Will use current value for any setpoints that have not been received.
+        :param peer:
+        :param sender: sender is not used
+        :param bus:
+        :param topic: str
+        :param headers: empty, i.e., not used
+        :param message: empty, i.e., not used
+        :return:
+        """
+        # if current_control is None then Modelica is not accepting inputs
+        while self.current_control is None:
+            log.warning('Received advance but Modelica is '
+                        'not primed to take inputs!')
+            log.warning('Keep checking for Modelica to accept inputs!')
+            sleep(1)
+        self.controls_list = []
+        self.send_control_signal(self.current_control)
 
 
 def main(argv=sys.argv):
     """Main method called by the eggsecutable."""
     try:
         utils.vip_main(ModelicaAgent)
-    except Exception as e:
-        log.exception(e)
+    except Exception as ex:
+        log.exception(ex)
 
 
 if __name__ == '__main__':
