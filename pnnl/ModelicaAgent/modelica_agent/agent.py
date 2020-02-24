@@ -197,11 +197,6 @@ class ModelicaAgent(Agent):
         mos_file_path = config.get('mos_file_path', 'run.mos')
         self.create_mos_file(model, run_time, result_file, mos_file_path)
         self.run_time = run_time
-        # Testing parameters
-        self.data = None
-        self.test_topics = ['building/device/control_output',
-                            'building/device/control_setpoint']
-        self.test_topics_master = list(self.test_topics)
 
     def create_mos_file(self, model, run_time, result_file, mos_file_path):
         write = 'simulateModel("{}", stopTime={}, method="dassl", resultFile="{}");\n'.format(model, run_time, result_file)
@@ -252,24 +247,6 @@ class ModelicaAgent(Agent):
             self.controls_list_master = set(self.control_map.keys())
             self.controls_list = list(self.controls_list_master)
             log.debug('Control map %s', self.control_map)
-
-    @Core.schedule(periodic(30))
-    def next_timestep(self):
-        """
-        Testing function.
-        :return:
-        """
-
-        if self.data is None:
-            return
-
-        topic = self.test_topics.pop()
-        value = self.set_point('me', topic, 1.0)
-        if not self.test_topics:
-            self.test_topics = list(self.test_topics_master)
-        get_topic = "building/device/measurement"
-        get_value = self.get_point(get_topic)
-        log.debug("Get value %s - %s", get_topic, get_value)
 
     @Core.receiver('onstart')
     def start(self, sender, **kwargs):
@@ -396,7 +373,9 @@ class ModelicaAgent(Agent):
                                     publish_topic,
                                     headers=headers,
                                     message=value)
-            #self.output_data[topic] = [{}, {}]
+        if self.time_step >= self.run_time:
+            log.debug("Simulation has finished!")
+            self.exit()
 
     def construct_data_payload(self, data):
         """
@@ -415,9 +394,9 @@ class ModelicaAgent(Agent):
             self.output_data[topic][0].update({name: value})
             self.output_data[topic][1].update({name: meta})
 
-    def exit(self, msg):
+    def exit(self):
         self.stop()
-        log.error(msg)
+        sys.exit()
 
     @Core.receiver('onstop')
     def stop(self, sender, **kwargs):
