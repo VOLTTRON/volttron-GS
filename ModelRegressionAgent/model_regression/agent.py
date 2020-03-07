@@ -51,20 +51,21 @@
 # operated by BATTELLE for the UNITED STATES DEPARTMENT OF ENERGY
 # under Contract DE-AC05-76RL01830
 
-#}}}
+# }}}
 
 import os
 import sys
 import logging
+from collections import defaultdict
 from datetime import datetime as dt, timedelta as td
 from dateutil import parser
 
 import json
 from scipy.optimize import lsq_linear
-from volttron.platform.vip.agent import Agent, Core, PubSub, RPC, compat
+from volttron.platform.vip.agent import Agent, Core, PubSub, RPC
 from volttron.platform.agent import utils
 from volttron.platform.agent.utils import (get_aware_utc_now, format_timestamp)
-from volttron.platform.scheduling import cron, periodic
+from volttron.platform.scheduling import cron
 from volttron.platform.messaging import topics
 
 import numpy as np
@@ -82,338 +83,272 @@ _log = logging.getLogger(__name__)
 UTC_TZ = pytz.timezone('UTC')
 WORKING_DIR = os.getcwd()
 __version__ = 0.1
+HOLIDAYS = pd.to_datetime(CustomBusinessDay(calendar=calendar()).holidays)
 
 
-class UpdatingAgent(Agent):
-    def __init__(self, config_path, **kwargs):
-        super(UpdatingAgent, self).__init__(**kwargs)
-        config = utils.load_config(config_path)
-        self.site = config.get('campus', '')
-        self.building = config.get('building', '')
-        self.unit = config.get('unit', '')
-        self.subdevices = config.get('subdevices')
-        self.data_source = config.get('data_source', 'crate.prod')
-        self.device_points = config.get('device_points')
-        self.subdevice_points = config.get('subdevice_points')
-        self.post_processing = config.get('post_processing')
-        if self.device_points is None:
-            _log.warn('Missing device points in config')
-        if self.subdevice_points is None:
-            _log.warn('Missing subdevice points in config')
+def is_weekend_holiday(start, end, tz):
+    if start.astimezone(tz).date() in HOLIDAYS and \
+            end.astimezone(tz).date() in HOLIDAYS:
+        return True
+    if start.astimezone(tz).weekday() > 4 and \
+            end.astimezone(tz).weekday() > 4:
+        return True
+    return False
 
-        self.device = self.unit
-        if self.device == '':
-            _log.exception('Missing main device in config')
 
-        self.aggregate_in_min = 1
-        self.aggregate_freq = str(self.aggregate_in_min) + 'Min'
+class Device:
+    """
+    Container to store topics for historian query.
+    """
+    def __init__(self, site, building,
+                 device, subdevice,
+                 device_points, subdevice_points):
+        """
+        Device constructor.
+        :param site:
+        :param building:
+        :param device:
+        :param subdevice:
+        :param device_points:
+        :param subdevice_points:
+        """
+        self.device = device
+        key_map = defaultdict()
+        for token, point in subdevice_points.items():
+            topic = topics.RPC_DEVICE_PATH(campus=site,
+                                           building=building,
+                                           unit=device,
+                                           path=subdevice,
+                                           point=point)
+            key_map[token] = topic
+        for token, point in device_points.items():
+            topic = topics.RPC_DEVICE_PATH(campus=site,
+                                           building=building,
+                                           unit=device,
+                                           path='',
+                                           point=point)
+            key_map[token] = topic
+        self.input_data = key_map
 
-        self.training_schedule = int(config.get('training_schedule', 86400))
-        self.seconds_in_past = int(config.get('seconds_in_past', 86400))
 
-        self.model_struc = config.get('model_structure')
-        self.model_depen = config.get('model_dependent')
-        self.model_indepen = config.get('model_independent')
-        if self.model_struc is None or self.model_depen is None or self.model_indepen is None:
-            _log.exception('At least one of the model fields is missing in config')
-
-        self.periodic_count = 0
-        self.date_format = '%Y-%m-%d %H:%M:%S'
-        run_onstart = config.get("run_onstart", False)
-        if run_onstart:
-            self.wait_time = 0
-        else:
-            self.wait_time = int(config.get('wait_time', 10))
-
-        self.one_shot = config.get('one_shot', False)
-        self.regress_hourly = config.get('regress_hourly', True)
-
-        self.local_tz = pytz.timezone(config.get('local_tz', 'US/Pacific'))
-        # If one shot is true then start and end should be specified
-        if self.one_shot:
-            self.start = config.get('start')
-            self.end = config.get('end')
-        else:
-            self.end = dt.now(self.local_tz).replace(hour=0, minute=0, second=0, microsecond=0)
-            self.start = self.end - td(seconds=self.seconds_in_past)
-        self.aggregate_hourly = config.get('aggregate_hourly', False)
-        self.file_dict = {}
-
-        self.indepen_names = {}
-        for key, value in self.model_indepen.items():
-            self.indepen_names.update({key: self.model_indepen[key]['coefficient_name']})
-            if 'lower_bound' not in self.model_indepen[key].keys():
-                self.model_indepen[key].update({'lower_bound': '-infinity'})
-                _log.debug('Filling in -infinity for missing lower bound for coefficient *{}*'.format(key))
-            if 'upper_bound' not in self.model_indepen[key].keys():
-                self.model_indepen[key].update({'upper_bound': 'infinity'})
-                _log.debug('Filling in infinity for missing upper bound for coefficient *{}*'.format(key))
-
-        if self.post_processing is not None:
-            validate = self.validate_post_processor()
-            if not validate:
-                _log.warn("Post processing misconfigured! Agent will not attempt post-processing")
+class Regression:
+    """
+    Regression class contains the functions involved in performing
+    least squares regression.
+    """
+    def __init__(self,
+                 model_independent,
+                 model_dependent,
+                 model_struc,
+                 regress_hourly,
+                 shift_dependent_data,
+                 post_processing,
+                 debug):
+        """
+        Regression constructor.
+        :param model_independent: dict; independent regression parameters
+        :param model_dependent: list; dependent regression variable
+        :param model_struc: str; formula for regression
+        :param regress_hourly: bool; If true create hourly regression results
+        """
+        self.debug = debug
+        self.bounds = {}
+        self.regression_map = {}
+        self.model_independent = model_independent
+        self.model_dependent = model_dependent
+        self.regress_hourly = regress_hourly
+        self.intercept = None
+        self.create_regression_map()
+        self.model_struc = model_struc.replace("=", "~")
+        self.shift_dependent_data = shift_dependent_data
+        self.post_processing = post_processing
+        if not self.validate_regression():
+            _log.debug("Regression will fail!")
+            sys.exit()
+        if post_processing is not None:
+            if not self.validate_post_processor():
+                _log.warning("Post processing mis-configured! Agent will not attempt post-processing")
                 self.post_processing = None
 
-        self.input_data = {}
-        if self.subdevices:
-            for subdevice in self.subdevices:
-                inner_dict = {}
-                for map, point in self.subdevice_points.items():
-                    topic = topics.RPC_DEVICE_PATH(campus=self.site,
-                                                   building=self.building,
-                                                   unit=self.device,
-                                                   path=subdevice,
-                                                   point=point)
-                    inner_dict.update({map: topic})
-                for map, point in self.device_points.items():
-                    topic = topics.RPC_DEVICE_PATH(campus=self.site,
-                                                   building=self.building,
-                                                   unit=self.device,
-                                                   path='',
-                                                   point=point)
-                    inner_dict.update({map: topic})
-                self.input_data.update({subdevice: inner_dict})
-        else:
-            self.input_data[self.device] = {}
-            for point in self.device_points:
-                self.input_data[self.device][point] = topics.RPC_DEVICE_PATH(campus=self.site,
-                                                                             building=self.building,
-                                                                             unit=self.device,
-                                                                             path='',
-                                                                             point=point)
-
-    @Core.receiver('onstart')
-    def onstart(self, sender, **kwargs):
-        if not self.one_shot:
-            self.core.periodic(self.training_schedule, self.periodic_regression, wait=self.wait_time)
-        else:
+    def create_regression_map(self):
+        """
+        Create the regression map {device: regression parameters}.  Check the
+        bounds on regression coefficients and ensure that they are parsed to
+        type float.
+        :return: None
+        """
+        self.bounds = {}
+        for token, parameters in self.model_independent.items():
+            self.regression_map.update({token: parameters['coefficient_name']})
+            # If the bounds are not present in the configuration file
+            # then set the regression to be unbounded (-infinity, infinity).
+            if 'lower_bound' not in parameters:
+                self.model_independent[token].update({'lower_bound': np.NINF})
+                _log.debug('Coefficient: %s setting lower_bound to -infinity.', token)
+            if 'upper_bound' not in parameters:
+                self.model_independent[token].update({'upper_bound': np.inf})
+                _log.debug('Coefficient: %s setting upper_bound to infinity.', token)
+            # infinity and -infinity as strings should is set to
+            # np.NINF and np.inf (unbounded).  These are type float.
+            if self.model_independent[token]['lower_bound'] == '-infinity':
+                self.model_independent[token]['lower_bound'] = np.NINF
+            if self.model_independent[token]['upper_bound'] == 'infinity':
+                self.model_independent[token]['upper_bound'] = np.inf
+            # If the bounds in configuration file are strings
+            # then convert them to numeric value (float).  If
+            # a ValueError exception occurs then the string cannot be
+            # converted and the regression will be unbounded.
             try:
-                self.start = parser.parse(self.start)
-                self.start = self.local_tz.localize(self.start)
-                self.end = parser.parse(self.end)
-                self.end = self.local_tz.localize(self.end)
-            except (NameError, ValueError) as e:
-                _log.debug('One shot regression:  Start or end time not specified correctly!: *{}*'.format(e))
-                self.end = dt.now(self.local_tz).replace(hour=0, minute=0, second=0, microsecond=0)
-                self.start = self.end - td(seconds=self.seconds_in_past)
-            self.rpc_start = self.start.astimezone(UTC_TZ)
-            self.rpc_end = self.rpc_start + td(hours=1)
-            self.get_data()
-
-    @Core.receiver('onstop')
-    def stop(self, sender, **kwargs):
-        pass
-
-    def periodic_regression(self):
-        self.file_dict = {}
-        self.end = dt.now(self.local_tz).replace(hour=0, minute=0, second=0, microsecond=0)
-        self.start = self.end - td(seconds=self.seconds_in_past)
-        self.rpc_start = self.start.astimezone(UTC_TZ)
-        self.rpc_end = self.rpc_start + td(hours=1)
-        self.get_data()
-
-    def get_data(self):
-        if not self.validate_config():
-            _log.error('Config. file is not valid, exiting...')
-            return
-
-        # set up initial start and end times
-        self.periodic_count += 1
-        self.exec_start = utils.get_aware_utc_now()
-
-        _log.debug('Start regression localtime: {} - UTC converted: {}'.format(self.start, self.start.astimezone(pytz.UTC)))
-        _log.debug('End regression localtime: {} - UTC converted: {}'.format(self.end, self.end.astimezone(pytz.UTC)))
-
-        # iterate for each subdevice
-        for key1, value_dict in self.input_data.items():
-            agg_df = None
-            if self.start.tzinfo is None or self.start.tzinfo.utcoffset(self.start) is None:  # datetime is naive
-                self.rpc_start = self.local_tz.localize(self.start).astimezone(UTC_TZ)
-                self.rpc_end = self.rpc_start + td(hours=1)
-            else:
-                self.rpc_start = self.start.astimezone(UTC_TZ)
-                self.rpc_end = self.rpc_start + td(hours=1)
-
-            while self.rpc_start < self.end.astimezone(pytz.UTC):
-
-                # handle weekends
-                if self.rpc_start.astimezone(self.local_tz).weekday() > 4:
-                    self.rpc_start = self.rpc_start + td(hours=1)
-                    self.rpc_end = self.rpc_start + td(hours=1)
-                    continue
-
-                df = None
-                # get data via query to historian
-                for key2, value in value_dict.items():
-                    rpc_start_str = self.rpc_start.strftime(self.date_format)
-                    rpc_end_str = self.rpc_end.strftime(self.date_format)
-                    result = self.vip.rpc.call(self.data_source,
-                                               'query',
-                                               topic=value,
-                                               start=rpc_start_str,
-                                               end=rpc_end_str,
-                                               order='LAST_TO_FIRST',
-                                               external_platform='volttron collector').get(timeout=300)
-                    _log.debug(result)
-                    if not bool(result['values']):
-                        _log.debug('ERROR: empty RPC return for coefficient *{}* at {}'.format(key2, self.rpc_start))
-                        continue
-                    df2 = pd.DataFrame(result['values'], columns=['Date', key2])
-                    df2['Date'] = pd.to_datetime(df2['Date'])
-
-                    # Check with Sen if he is using this on updated RTU model
-                    if self.aggregate_hourly:
-                        df2 = df2.groupby([pd.Grouper(key='Date', freq='h')]).mean()
-                    else:
-                        df2 = df2.groupby([pd.Grouper(key='Date', freq=self.aggregate_freq)]).mean()
-                    df = df2 if df is None else pd.merge(df, df2, how='outer', left_index=True, right_index=True)
-                    _log.debug(df)
-
-                if agg_df is None:
-                    agg_df = df
-                else:
-                    agg_df = agg_df.append(df)
-                _log.debug('Aggregate dataframe:')
-                _log.debug(agg_df)
-
-                # increment by hour
-                self.rpc_start = self.rpc_start + td(hours=1)
-                self.rpc_end = self.rpc_start + td(hours=1)  #
-
-            _log.debug('Outputting dataframe:')
-            _log.debug(agg_df)
-            filename = '{}/data/{}-{} - {}.csv'.format(WORKING_DIR, self.start, self.end, key1)
-            self.file_dict[key1] = filename
+                if isinstance(self.model_independent[token]['lower_bound'], str):
+                    self.model_independent[token]['lower_bound'] = \
+                        float(self.model_independent[token]['lower_bound'])
+            except ValueError:
+                _log.debug("Could not convert lower_bound from string to float!")
+                _log.debug("Device: %s -- bound: %s", token, self.model_independent[token]["lower_bound"])
+                self.model_independent[token]['lower_bound'] = np.NINF
             try:
-                with open(filename, 'w+') as outfile:
-                    agg_df.to_csv(outfile, mode='a', index=True)
-                    _log.debug('*** Finished outputting data ***')
-            except Exception as e:
-                _log.error('File output failed, check whether the dataframe is empty - {}'.format(e))
+                if isinstance(self.model_independent[token]['upper_bound'], str):
+                    self.model_independent[token]['upper_bound'] = \
+                        float(self.model_independent[token]['upper_bound'])
+            except ValueError:
+                _log.debug("Could not convert lower_bound from string to float!")
+                _log.debug("Device: %s -- bound: %s", token, self.model_independent[token]["upper_bound"])
+                self.model_independent[token]['upper_bound'] = np.inf
+            # Final check on bounds if they are not float or ints then again
+            # set the regression to be unbounded.
+            if not isinstance(self.model_independent[token]["lower_bound"],
+                              (float, int)):
+                self.model_independent[token]['lower_bound'] = np.NINF
+            if not isinstance(self.model_independent[token]["upper_bound"],
+                              (float, int)):
+                self.model_independent[token]['upper_bound'] = np.inf
+            self.bounds[self.model_independent[token]['coefficient_name']] = [
+                self.model_independent[token]['lower_bound'],
+                self.model_independent[token]['upper_bound']
+            ]
 
-        # perform regression using data from each outputted file
-        for device, input_file in self.file_dict.items():
-            try:
-                df = pd.read_csv(input_file)
-                self.perform_regression(df, device)
-            except Exception as e:
-                _log.error('Failed to read and perform regression on file *{}* - {}'.format(input_file, e))
+        if 'Intercept' in self.regression_map:
+            self.intercept = self.regression_map.pop('Intercept')
+        elif 'intercept' in self.regression_map:
+            self.intercept = self.regression_map.pop('intercept')
 
-    def perform_regression(self, df, device):
-        df = df.reset_index()
-        df = df.drop(['index'], axis=1)
+    def validate_regression(self):
+        """
+        Return True if model_independent expressions and model_dependent parameters
+        are in the model_structure and return False if they are not.
+        :return: bool;
+        """
+        for regression_expr in self.regression_map:
+            if regression_expr not in self.model_struc:
+                _log.debug("Key: %s for model_independent is not in the model_structure!", regression_expr)
+                _log.debug("model_structure will not resolve for regression!")
+                return False
+        for regression_parameter in self.model_dependent:
+            if regression_parameter not in self.model_struc:
+                _log.debug("Value: %s for model_independent is not in the model_structure!", regression_parameter)
+                _log.debug("model_structure will not resolve for regression!")
+                return False
+        return True
 
-        holiday = CustomBusinessDay(calendar=calendar()).onOffset
-        try:
-            df['Date'] = pd.to_datetime(df['Date']).dt.tz_convert(self.local_tz)
-        except Exception as e:
-            _log.error('Failed to convert Date column to datetime object - {}'.format(e))
-        match = df["Date"].map(holiday)
-        df = df[match]
-
-        # process the coefficients from data by hour
-        out_df = None
+    def regression_main(self, df, device):
+        """
+        Main regression run method called by RegressionAgent.
+        :param df: pandas DataFrame; Aggregated but unprocessed data.
+        :param device: str; device name.
+        :return:
+        """
+        df, formula = self.process_data(df)
+        results_df = None
+        # If regress_hourly is True then linear least squares
+        # will be performed for each hour of the day.  Otherwise,
+        # one set of coefficients will be generated.
         num_val = 24 if self.regress_hourly else 1
         for i in range(num_val):
             if self.regress_hourly:
-                hour_df = df.loc[df['Date'].dt.hour == i]
+                # Query data frame for data corresponding to each hour i (0-23).
+                process_df = df.loc[df['Date'].dt.hour == i]
             else:
-                hour_df = df
-            _log.debug(hour_df)
-            filename = '{}/data/{}-hourly-{}.csv'.format(WORKING_DIR, device, i)
-            with open(filename, 'w+') as outfile:
-                hour_df.to_csv(outfile, mode='a', index=True)
-            coeffs, col_name_dict = self.calc_coeffs(hour_df)
-            out = pd.Series()
-            out = out.append(coeffs)
-            out_columns = out.index
-            out_values = out.values
-            out_dict = {}
-            for j in range(len(out_columns)):
-                out_dict.update({out_columns[j]: [out_values[j]]})
-            hour_out_df = pd.DataFrame.from_dict(out_dict)
-            _log.debug('Coefficients for hour {}'.format(str(i)))
-            _log.debug(hour_out_df)
-            if out_df is None:
-                out_df = hour_out_df
-            else:
-                out_df = out_df.append(hour_out_df)
+                process_df = df
 
-        # perform operations on columns
-        out_df = out_df.rename(columns=col_name_dict)
-        cols = out_df.columns.tolist()
-        cols.sort()
-        out_df = out_df[cols]
+            if self.debug:
+                filename = '{}/{}-hourly-{}.csv'.format(WORKING_DIR, device, i)
+                with open(filename, 'w') as outfile:
+                    process_df.to_csv(outfile, mode='w', index=True)
+
+            coefficient_dict = self.calc_coeffs(process_df, formula)
+
+            current_results = pd.DataFrame.from_dict(coefficient_dict)
+            _log.debug('Coefficients for index %s -- %s', i, current_results)
+            if results_df is None:
+                results_df = current_results
+            else:
+                results_df = results_df.append(current_results)
+
         if self.post_processing is not None:
-            out_df = self.post_processor(out_df)
+            results_df = self.post_processor(results_df)
 
-        _log.debug('Outputting dataframe: ')
-        _log.debug(out_df)
-        with open('{}/results/{}.csv'.format(WORKING_DIR, device), 'w+') as outfile:
-            out_df.to_csv(outfile, mode='a', index=False)
-        out_df.reset_index()
-        out_dict = out_df.to_dict(orient='list')
-        with open('{}/results/{}.json'.format(WORKING_DIR, device), 'w+') as outfile:
-            json.dump(out_dict, outfile, indent=4, separators=(',', ': '))
-        _log.debug('*** Finished outputting coefficients ***')
+        return results_df
 
-        exec_end = utils.get_aware_utc_now()
-        exec_dif = exec_end - self.exec_start
-        _log.debug('Execution start: {}, current time: {}, elapsed time: {}'.format(self.exec_start, exec_end, exec_dif))
-
-    def calc_coeffs(self, df):
-        formula = self.model_struc.replace('=', '~')
-
+    def process_data(self, df):
+        """
+        Evaluate data in df using formula.  new_df will have columns
+        corresponding to the coefficients which will be determined during
+        linear least squares regression.
+        :param df: pandas DataFrame;
+        :return:new_df (pandas DataFrame); formula (str)
+        """
+        formula = self.model_struc
         df = df.dropna()
-        model_indepen_alt = dict(self.indepen_names)
-
         new_df = pd.DataFrame()
-        self.intercept = None
-
-        if 'Intercept' in model_indepen_alt:  # TODO: make this work for lowercase 'intercept' as well
-            self.intercept = model_indepen_alt.pop('Intercept')
-        elif 'intercept' in model_indepen_alt:
-            self.intercept = model_indepen_alt.pop('intercept')
-
-        for independent, coeff in model_indepen_alt.items():
-            new_df[coeff] = df.eval(independent)
-            formula = formula.replace(independent, coeff)
-
-        for dependent in self.model_depen:
-            new_df[dependent] = df.eval(dependent)
+        # Evaluate independent regression parameters as configured in
+        # model_structure (model formula).
+        for independent, coefficient in self.regression_map.items():
+            new_df[coefficient] = df.eval(independent)
+            formula = formula.replace(independent, coefficient)
+        # Evaluate dependent regression parameters as configured in
+        # model_structure (model formula).
+        for token, evaluate in self.model_dependent.items():
+            new_df[token] = df.eval(evaluate)
+            if self.shift_dependent_data:
+                new_df[token] = new_df[token].shift(periods=1)
 
         new_df.dropna(inplace=True)
+        new_df["Date"] = df["Date"]
+        return new_df, formula
 
-        if model_indepen_alt is None:
-            model_indepen_alt = self.indepen_names
-
-        _log.debug('formula: {}'.format(formula))
-        y, x = patsy.dmatrices(formula, new_df, return_type='dataframe')
-        y = y[self.model_depen[0]]
-        if not any(x in self.model_indepen.keys() for x in ['Intercept', 'intercept']):
-            x = x.drop(columns=['Intercept', 'intercept'])
+    def calc_coeffs(self, df, formula):
+        """
+        Does linear least squares regression based on evaluated formula
+        and evaluated input data.
+        :param df: pandas DataFrame
+        :param formula: str
+        :return: fit (pandas Series of regression coefficients)
+        """
+        # create independent/dependent relationship by
+        # applying formula and data df
+        coefficient_dict = defaultdict(list)
+        dependent, independent = patsy.dmatrices(formula, df, return_type='dataframe')
+        y = dependent[self.model_dependent.keys()[0]]
+        if not any(x in self.model_independent.keys() for x in ['Intercept', 'intercept']):
+            x = independent.drop(columns=['Intercept', 'intercept'])
         else:
-            x = x.rename(columns={'Intercept': self.intercept})
+            x = independent.rename(columns={'Intercept': self.intercept})
             x = x.rename(columns={'intercept': self.intercept})
 
         bounds = [[], []]
         for coeff in x.columns:
             bounds[0].append(self.bounds[coeff][0])
             bounds[1].append(self.bounds[coeff][1])
-        _log.debug('*** Bounds: {} ***'.format(bounds))
 
-        scipy_result = scipy.optimize.lsq_linear(x, y, bounds=bounds)
-        coeffs_dict = dict(zip(x.columns, scipy_result.x))
-        _log.debug('\n***Scipy regression: ***')
-        _log.debug(scipy_result.x.tolist())
-        keys = model_indepen_alt.keys()
-        keys.sort()
-        fit = pd.Series()
-        for coeff, value in coeffs_dict.items():
-            fit = fit.set_value(coeff, value)
+        _log.debug('Bounds: %s *** for Coefficients %s', bounds, x.columns)
+        result = scipy.optimize.lsq_linear(x, y, bounds=bounds)
+        coeffs_map = tuple(zip(x.columns, result.x))
+        for coefficient, value in coeffs_map:
+            coefficient_dict[coefficient].append(value)
+        _log.debug('***Scipy regression: ***')
+        _log.debug(result.x.tolist())
 
-        return fit, model_indepen_alt
+        return coefficient_dict
 
     def post_processor(self, df):
         rdf = pd.DataFrame()
@@ -421,95 +356,346 @@ class UpdatingAgent(Agent):
             try:
                 rdf[key] = df.eval(value)
             except:
+                _log.warning("Post processing error on %s", key)
                 rdf[key] = df[key]
         return rdf
 
     def validate_post_processor(self):
-        independent_coefficients = set(self.indepen_names.values())
+        independent_coefficients = set(self.regression_map.values())
         validate_coefficients = set()
         for coefficient, processor in self.post_processing.items():
-            for key, name in self.indepen_names.items():
+            for key, name in self.regression_map.items():
                 if name in processor:
                     validate_coefficients.add(name)
                     break
         return validate_coefficients == independent_coefficients
 
-    def validate_config(self):
+
+class RegressionAgent(Agent):
+    """
+    Automated model regression agent.  Communicates with volttron
+    historian to query configurable device data.  Inputs data into a
+    configurable model_structure to generate regression coefficients.
+
+    Intended use is for automated updating of PNNL TCC models for
+    device flexibility determination.
+    """
+    def __init__(self, config_path, **kwargs):
+        """
+        Constructor for
+        :param config_path:
+        :param kwargs:
+        """
+        super(RegressionAgent, self).__init__(**kwargs)
+        config = utils.load_config(config_path)
+        self.debug = config.get("debug", True)
+        # Read equipment configuration parameters
+        site = config.get('campus', '')
+        building = config.get('building', '')
+        device = config.get('device', '')
+        subdevices = config.get('subdevices', [])
+        device_points = config.get('device_points')
+        subdevice_points = config.get('subdevice_points')
+
+        # VIP identity for the VOLTTRON historian
+        self.data_source = config.get('historian_vip', 'crate.prod')
+        # External platform for remote RPC call.
+        self.external_platform = config.get("external_platform")
+
+        if device_points is None and subdevice_points is None:
+            _log.warning('Missing device or subdevice points in config.')
+            _log.warning("Cannot perform regression! Exiting!")
+            sys.exit()
+        if not device and not subdevices:
+            _log.warning('Missing device topic(s)!')
+
+        model_struc = config.get('model_structure')
+        model_dependent = config.get('model_dependent')
+        model_independent = config.get('model_independent')
+        regress_hourly = config.get('regress_hourly', True)
+        shift_dependent_data = config.get("shift_dependent_data", False)
+        post_processing = config.get('post_processing')
+        if model_struc is None or model_dependent is None or model_independent is None:
+            _log.exception('At least one of the model fields is missing in config')
+            sys.exit()
+
+        device_list = subdevices if subdevices else [device]
+        self.device_list = {}
+        self.regression_list = {}
+        for unit in device_list:
+            self.device_list[unit] = Device(site, building, device, unit, device_points, subdevice_points)
+            self.regression_list[unit] = Regression(model_independent,
+                                                    model_dependent,
+                                                    model_struc,
+                                                    regress_hourly,
+                                                    shift_dependent_data,
+                                                    post_processing,
+                                                    self.debug)
+
+        # Aggregate data to this value of minutes
+        self.data_aggregation_frequency = config.get("data_aggregation_frequency", "h")
+
+        # This  sets up the cron schedule to run once every 10080 minutes
+        # Once every 7 days
+        self.run_schedule = config.get("run_schedule", "*/10080 * * * *")
+        self.training_interval = int(config.get('training_interval', 5))
+
+        self.exclude_weekends_holidays = config.get("exclude_weekends_holidays", True)
+        self.run_onstart = config.get("run_onstart", True)
+
+        self.one_shot = config.get('one_shot', False)
+
+        self.local_tz = pytz.timezone(config.get('local_tz', 'US/Pacific'))
+        # If one shot is true then start and end should be specified
+        if self.one_shot:
+            self.start = config.get('start')
+            self.end = config.get('end')
+
+        self.coefficient_results = {}
+        self.exec_start = None
+
+    @Core.receiver('onstart')
+    def onstart(self, sender, **kwargs):
+        """
+        onstart method handles scheduling regression execution.
+        Either cron schedule for periodic updating of model parameters
+        or one_shot to run once.
+        :param sender: str;
+        :param kwargs: None
+        :return: None
+        """
+        # TODO: team looking into how to make the call in that function
+        self.validate_historian_reachable()
+        if not self.one_shot:
+            self.core.schedule(cron(self.run_schedule), self.scheduled_run_process)
+            if self.run_onstart:
+                self.scheduled_run_process()
+        else:
+            try:
+                self.start = parser.parse(self.start)
+                self.start = self.local_tz.localize(self.start)
+                self.start = self.start.astimezone(UTC_TZ)
+                self.end = parser.parse(self.end)
+                self.end = self.local_tz.localize(self.end)
+                self.end = self.end.astimezone(UTC_TZ)
+            except (NameError, ValueError) as ex:
+                _log.debug('One shot regression:  start_time or end_time '
+                           'not specified correctly!: *%s*', ex)
+                self.end = dt.now(self.local_tz).replace(hour=0,
+                                                         minute=0,
+                                                         second=0,
+                                                         microsecond=0)
+                self.start = self.end - td(days=self.training_interval)
+            self.main_run_process()
+
+    def validate_historian_reachable(self):
+        _log.debug("Validate historian running.")
+        historian_reachable = False
         try:
-            if self.site == '':
-                _log.error('Missing campus in config')
-                return False
-            if self.building == '':
-                _log.error('Missing building in config')
-                return False
-            if self.subdevices is None:
-                _log.error('Missing list of subdevices in config')
-                return False
-            if len(set(self.subdevice_points.keys()).intersection(self.device_points.keys())) != 0:
-                _log.error('The same point is included in both device_points and subdevice_points in config')
-                return False
+            result = self.vip.rpc.call("platform.control",
+                                       'list_agents',
+                                       external_platform=self.external_platform).get(timeout=30)
+        except:
+            _log.debug("Connection to platform failed, cannot validate historian running!")
+            # TODO:  Update to schedule a rerun
+            sys.exit()
+        for agent_dict in result[0]:
+            if agent_dict["identity"] == self.data_source:
+                historian_reachable = True
+        return historian_reachable
 
-            spl = self.model_struc.split(' = ')
-            formula = self.model_depen[0] + ' ~ ' + spl[1]
+    @Core.receiver('onstop')
+    def stop(self, sender, **kwargs):
+        pass
 
-            # process bounds for each coefficient
-            lower_bounds = ()
-            upper_bounds = ()
-            self.bounds = {}
-            for key, value in self.model_indepen.items():
-                if self.model_indepen[key]['lower_bound'] == 'infinity':
-                    self.model_indepen[key]['lower_bound'] = np.inf
-                elif self.model_indepen[key]['lower_bound'] == '-infinity':
-                    self.model_indepen[key]['lower_bound'] = np.NINF
-                if self.model_indepen[key]['upper_bound'] == 'infinity':
-                    self.model_indepen[key]['upper_bound'] = np.inf
-                elif self.model_indepen[key]['upper_bound'] == '-infinity':
-                    self.model_indepen[key]['upper_bound'] = np.NINF
+    def scheduled_run_process(self):
+        self.end = get_aware_utc_now().replace(hour=0,
+                                               minute=0,
+                                               second=0, microsecond=0)
+        if self.exclude_weekends_holidays:
+            training_interval = self.calculate_start_offset()
+        else:
+            training_interval = self.training_interval
+        self.start = self.end - td(days=training_interval)
+        self.main_run_process()
 
-                try:
-                    if self.model_indepen[key]['lower_bound'].replace('-', '').isdigit():
-                        self.model_indepen[key]['lower_bound'] = int(self.model_indepen[key]['lower_bound'])
-                except AttributeError as e:
-                    _log.debug('Lower bound for *{}* is not a string, no need to try to set to int - {}'.format(key, e))
+    def calculate_start_offset(self):
+        """
+        The regression interval is a number of days of data
+        to include in regression ending at midnight of the current day.
+        If this date interval contains weekends or holidays and
+        exclude_weekends_holidays is True then the start date must be
+        made earlier to compensate for the weekends and holidays.
+        :return:
+        """
+        increment = 0
+        for _day in range(1, self.training_interval + 1):
+            training_date = (self.end - td(days=_day)).astimezone(self.local_tz)
+            if training_date.date() in HOLIDAYS:
+                increment += 1
+            elif training_date.weekday() > 4 and \
+                    training_date.weekday() > 4:
+                increment += 1
+        return self.training_interval + increment
 
-                try:
-                    if self.model_indepen[key]['upper_bound'].replace('-', '').isdigit():
-                        self.model_indepen[key]['upper_bound'] = int(self.model_indepen[key]['upper_bound'])
-                except AttributeError as e:
-                    _log.debug('Upper bound for *{}* is not a string, no need to try to set to int - {}'.format(key, e))
+    def main_run_process(self):
+        """
+        Main run process for RegressionAgent.  Calls data query methods
+        and regression methods.  Stores each devices result.
+        :return:
+        """
 
-                self.bounds[self.model_indepen[key]['coefficient_name']] = \
-                    [self.model_indepen[key]['lower_bound'], self.model_indepen[key]['upper_bound']]
+        self.exec_start = utils.get_aware_utc_now()
+        _log.debug('Start regression - UTC converted: {}'.format(self.start))
+        _log.debug('End regression UTC converted: {}'.format(self.end))
 
-                lower_bounds += (self.model_indepen[key]['lower_bound'],)
-                upper_bounds += (self.model_indepen[key]['upper_bound'],)
-            self.bounds_alt = (lower_bounds, upper_bounds)
+        # iterate for each device or subdevice in the device list
+        for name, device in self.device_list.items():
+            self.exec_start = utils.get_aware_utc_now()
+            df = self.query_historian(device.input_data)
+            df = self.localize_df(df, name)
+            result = self.regression_list[name].regression_main(df, name)
+            result.reset_index()
+            result = result.to_dict(orient='list')
+            self.coefficient_results[name] = result
+            if self.debug:
+                with open('{}/{}_results.json'.format(WORKING_DIR, name), 'w+') as outfile:
+                    json.dump(result, outfile, indent=4, separators=(',', ': '))
+                _log.debug('*** Finished outputting coefficients ***')
 
-            formula_indep = spl[1]
-            for key, value in self.model_indepen.items():
-                if self.model_indepen[key]['lower_bound'] > self.model_indepen[key]['upper_bound']:
-                    _log.error('Lower bound is greater than upper bound for coefficient *{}*'.format(key))
-                    return False
-                if key not in formula and key != 'intercept' and key != 'Intercept':
-                    _log.error('Coefficient *{}* is not present in formula'.format(key))
-                    return False
-                if key in formula_indep:
-                    formula_indep = formula_indep.replace(key, '')
-            for char in formula_indep:
-                if char != ' ' and char != '+' and char != '-':
-                    _log.error('There is a coefficient in the formula not included in model_independent')
-                    return False
+            exec_end = utils.get_aware_utc_now()
+            exec_dif = exec_end - self.exec_start
+            _log.debug("Regression for %s duration: %s", device, exec_dif)
 
+    def query_historian(self, device_info):
+        """
+        Query VOLTTRON historian for all points in device_info
+        for regression period.  All data will be combined and aggregated
+        to a common interval (i.e., 1Min).
+        :param device_info: dict; {regression token: query topic}
+        :return:
+        """
+        aggregated_df = None
+        rpc_start = self.start
+        rpc_end = rpc_start + td(hours=8)
+        # get data via query to historian
+        # Query loop for device will continue until start > end
+        # or all data for regression period is obtained.
+        while rpc_start < self.end.astimezone(pytz.UTC):
+            df = None
+            # If exclude_weekend_holidays is True then do not query for
+            # these times.  Reduces rpc calls and message bus traffic.
+            if self.exclude_weekends_holidays:
+                if is_weekend_holiday(rpc_start, rpc_end, self.local_tz):
+                    rpc_start = rpc_start + td(hours=8)
+                    rpc_end = rpc_start + td(minutes=479)
+                    if rpc_end > self.end.astimezone(UTC_TZ):
+                        rpc_end = self.end.astimezone(UTC_TZ)
+                    continue
+
+            for token, topic in device_info.items():
+                rpc_start_str = format_timestamp(rpc_start)
+                rpc_end_str = format_timestamp(rpc_end)
+                _log.debug("RPC start {} - RPC end {}".format(rpc_start_str, rpc_end_str))
+                # Currently historian is limited to 1000 records per query.
+                result = self.vip.rpc.call(self.data_source,
+                                           'query',
+                                           topic=topic,
+                                           start=rpc_start_str,
+                                           end=rpc_end_str,
+                                           order='FIRST_TO_LAST',
+                                           count=1000,
+                                           external_platform=self.external_platform).get(timeout=300)
+                _log.debug(result)
+                if not bool(result['values']):
+                    _log.debug('ERROR: empty RPC return for '
+                               'coefficient *%s* at %s', token, rpc_start)
+                    continue
+                # TODO:  check if enough data is present and compensate for significant missing data
+                data = pd.DataFrame(result['values'], columns=['Date', token])
+                data['Date'] = pd.to_datetime(data['Date'])
+
+                # Data is aggregated to some common frequency.
+                # This is important if data has different seconds/minutes.
+                # For minute trended data this is set to 1Min.
+                data = data.groupby([pd.Grouper(key='Date', freq=self.data_aggregation_frequency)]).mean()
+                df = data if df is None else pd.merge(df, data, how='outer', left_index=True, right_index=True)
+
+            if aggregated_df is None:
+                aggregated_df = df
+            else:
+                aggregated_df = aggregated_df.append(df)
+
+            # Currently 8 hours is the maximum interval that the historian
+            # will support for one minute data.  1000 max records can be
+            # returned per query and each query has 2 fields timestamp, value.
+            # Note:  If trending is at sub-minute interval this logic would
+            # need to be revised to account for this or the count in historian
+            # could be increased.
+            rpc_start = rpc_start + td(hours=8)
+            if rpc_start + td(minutes=479) <= self.end.astimezone(pytz.UTC):
+                rpc_end = rpc_start + td(minutes=479)  #
+            else:
+                rpc_end = self.end.astimezone(pytz.UTC)
+        return aggregated_df
+
+    def localize_df(self, df, device):
+        """
+        Data from the VOLTTRON historian will be in UTC timezone.
+        Regressions typically are meaningful for localtime as TCC
+        agents utilize local time for predictions and control.
+        :param df:
+        :param device:
+        :return:
+        """
+        df = df.reset_index()
+        try:
+            # Convert UTC time to local time in configuration file.
+            df['Date'] = df['Date'].dt.tz_convert(self.local_tz)
         except Exception as e:
-            _log.error('Unhandled exception when validating config. - *{}*'.format(e))
-            return False
-        return True
+            _log.error('Failed to convert Date column to localtime - {}'.format(e))
+        if self.debug:
+            filename = '{}/{}-{} - {}.csv'.format(WORKING_DIR, self.start, self.end, device)
+            try:
+                with open(filename, 'w+') as outfile:
+                    df.to_csv(outfile, mode='a', index=True)
+                    _log.debug('*** Finished outputting data ***')
+            except Exception as e:
+                _log.error('File output failed, check whether the dataframe is empty - {}'.format(e))
+
+        # Weekends and holidays will only be present if
+        # one_shot is true.  For scheduled regression those
+        # days are excluded from query to historian.
+        if self.exclude_weekends_holidays:
+            holiday = CustomBusinessDay(calendar=calendar()).onOffset
+            match = df["Date"].map(holiday)
+            df = df[match]
+        return df
+
+    @RPC.export
+    def get_coefficients(self, device_id, **kwargs):
+        """
+        TCC agent can do RPC call to get latest regression coefficients.
+        :param device_id: str; device/subdevice
+        :param kwargs:
+        :return:
+        """
+        if self.coefficient_results:
+            try:
+                result = self.coefficient_results[device_id]
+            except KeyError as ex:
+                _log.debug("device_id provided is not known: %s", device_id)
+                result = None
+        else:
+            _log.debug("No regression results exist: %s", device_id)
+            result = None
+        return result
 
 
 def main(argv=sys.argv):
     '''Main method called by the eggsecutable.'''
     try:
-        utils.vip_main(UpdatingAgent)
+        utils.vip_main(RegressionAgent)
     except Exception as e:
         _log.exception('unhandled exception - {}'.format(e))
 
