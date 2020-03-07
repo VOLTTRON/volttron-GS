@@ -464,8 +464,11 @@ class RegressionAgent(Agent):
         :param kwargs: None
         :return: None
         """
-        # TODO: team looking into how to make the call in that function
-        self.validate_historian_reachable()
+        # TODO: note in function.  reschedule do not exit.
+        if not self.validate_historian_reachable():
+            _log.debug("Cannot verify historian is running!")
+            sys.exit()
+
         if not self.one_shot:
             self.core.schedule(cron(self.run_schedule), self.scheduled_run_process)
             if self.run_onstart:
@@ -502,6 +505,7 @@ class RegressionAgent(Agent):
         for agent_dict in result[0]:
             if agent_dict["identity"] == self.data_source:
                 historian_reachable = True
+
         return historian_reachable
 
     @Core.receiver('onstop')
