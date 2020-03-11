@@ -56,7 +56,7 @@
 import os
 import sys
 import logging
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from datetime import datetime as dt, timedelta as td
 from dateutil import parser
 
@@ -94,6 +94,23 @@ def is_weekend_holiday(start, end, tz):
             end.astimezone(tz).weekday() > 4:
         return True
     return False
+
+
+def sort_list(lst):
+    sorted_list = []
+    for item in lst:
+        if "+" in item:
+            sorted_list.append(item)
+            lst.remove(item)
+        elif "-" in item:
+            sorted_list.append(item)
+            lst.remove(item)
+        elif "*" in item:
+            sorted_list.append(item)
+            lst.remove(item)
+    for item in lst:
+        sorted_list.append(item)
+    return sorted_list
 
 
 class Device:
@@ -156,7 +173,7 @@ class Regression:
         """
         self.debug = debug
         self.bounds = {}
-        self.regression_map = {}
+        self.regression_map = OrderedDict()
         self.model_independent = model_independent
         self.model_dependent = model_dependent
         self.regress_hourly = regress_hourly
@@ -181,8 +198,9 @@ class Regression:
         :return: None
         """
         self.bounds = {}
+        regression_map = {}
         for token, parameters in self.model_independent.items():
-            self.regression_map.update({token: parameters['coefficient_name']})
+            regression_map.update({token: parameters['coefficient_name']})
             # If the bounds are not present in the configuration file
             # then set the regression to be unbounded (-infinity, infinity).
             if 'lower_bound' not in parameters:
@@ -230,10 +248,14 @@ class Regression:
                 self.model_independent[token]['upper_bound']
             ]
 
-        if 'Intercept' in self.regression_map:
-            self.intercept = self.regression_map.pop('Intercept')
-        elif 'intercept' in self.regression_map:
-            self.intercept = self.regression_map.pop('intercept')
+        if 'Intercept' in regression_map:
+            self.intercept = regression_map.pop('Intercept')
+        elif 'intercept' in regression_map:
+            self.intercept = regression_map.pop('intercept')
+        tokens = regression_map.keys()
+        tokens = sort_list(tokens)
+        for token in tokens:
+            self.regression_map[token] = regression_map[token]
 
     def validate_regression(self):
         """
@@ -418,6 +440,13 @@ class RegressionAgent(Agent):
         regress_hourly = config.get('regress_hourly', True)
         shift_dependent_data = config.get("shift_dependent_data", False)
         post_processing = config.get('post_processing')
+        # All parameters related to running in simulation - for time keeping only
+        self.simulation = config.get("simulation", False)
+        self.simulation_data_topic = config.get("simulation_data_topic", "devices")
+        simulation_interval = config.get("simulation_regression_interval", 15)
+        self.simulation_regression_interval = td(days=simulation_interval)
+        self.simulation_initial_time = None
+
         if model_struc is None or model_dependent is None or model_independent is None:
             _log.exception('At least one of the model fields is missing in config')
             sys.exit()
@@ -473,7 +502,10 @@ class RegressionAgent(Agent):
             sys.exit()
 
         if not self.one_shot:
-            self.core.schedule(cron(self.run_schedule), self.scheduled_run_process)
+            if not self.simulation:
+                self.core.schedule(cron(self.run_schedule), self.scheduled_run_process)
+            else:
+                self.simulation_setup()
             if self.run_onstart:
                 self.scheduled_run_process()
         else:
@@ -494,18 +526,33 @@ class RegressionAgent(Agent):
                 self.start = self.end - td(days=self.training_interval)
             self.main_run_process()
 
+    def simulation_setup(self):
+        _log.debug("Running with simulation using topic %s",
+                   self.simulation_data_topic)
+        self.vip.pubsub.subscribe(peer="pubsub",
+                                  prefix=self.simulation_data_topic,
+                                  callback=self.simulation_time_handler)
+
+    def simulation_time_handler(self, peer, sender, bus, topic, header, message):
+        current_time = parser.parse(header["Date"])
+        if self.simulation_initial_time is None:
+            self.simulation_initial_time = current_time
+        if current_time - self.simulation_initial_time >= self.simulation_regression_interval:
+            self.simulation_run_process(current_time)
+
     def validate_historian_reachable(self):
-        _log.debug("Validate historian running.")
+        _log.debug("Validate historian running vip: %s - platform %s",
+                   self.data_source, self.external_platform)
         historian_reachable = False
         try:
-            result = self.vip.rpc.call("platform.control",
+            result = self.vip.rpc.call("control",
                                        'list_agents',
                                        external_platform=self.external_platform).get(timeout=30)
         except:
             _log.debug("Connection to platform failed, cannot validate historian running!")
             # TODO:  Update to schedule a rerun
             sys.exit()
-        for agent_dict in result[0]:
+        for agent_dict in result:
             if agent_dict["identity"] == self.data_source:
                 historian_reachable = True
 
@@ -519,6 +566,17 @@ class RegressionAgent(Agent):
         self.end = get_aware_utc_now().replace(hour=0,
                                                minute=0,
                                                second=0, microsecond=0)
+        if self.exclude_weekends_holidays:
+            training_interval = self.calculate_start_offset()
+        else:
+            training_interval = self.training_interval
+        self.start = self.end - td(days=training_interval)
+        self.main_run_process()
+
+    def simulation_run_process(self, current_time):
+        self.end = current_time.replace(hour=0,
+                                        minute=0,
+                                        second=0, microsecond=0)
         if self.exclude_weekends_holidays:
             training_interval = self.calculate_start_offset()
         else:
