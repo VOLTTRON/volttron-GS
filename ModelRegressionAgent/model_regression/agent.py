@@ -113,6 +113,9 @@ class Device:
         :param subdevice_points:
         """
         self.device = device
+        base_record_list = ["tnc", site, building, device, subdevice, "update_model"]
+        base_record_list = list(filter(lambda a: a != "", base_record_list))
+        self.record_topic = '/'.join(base_record_list)
         key_map = defaultdict()
         for token, point in subdevice_points.items():
             topic = topics.RPC_DEVICE_PATH(campus=site,
@@ -561,15 +564,23 @@ class RegressionAgent(Agent):
             result = self.regression_list[name].regression_main(df, name)
             result.reset_index()
             result = result.to_dict(orient='list')
-            self.coefficient_results[name] = result
+            self.coefficient_results[device.record_topic] = result
             if self.debug:
                 with open('{}/{}_results.json'.format(WORKING_DIR, name), 'w+') as outfile:
                     json.dump(result, outfile, indent=4, separators=(',', ': '))
                 _log.debug('*** Finished outputting coefficients ***')
-
+            self.publish_coefficients()
             exec_end = utils.get_aware_utc_now()
             exec_dif = exec_end - self.exec_start
             _log.debug("Regression for %s duration: %s", device, exec_dif)
+
+    def publish_coefficients(self):
+        """
+        Publish coefficients for each device.
+        :return:
+        """
+        for topic, message in self.coefficient_results.items():
+            self.vip.pubsub.publish("pubsub", topic, {}, message).get(timeout=10)
 
     def query_historian(self, device_info):
         """

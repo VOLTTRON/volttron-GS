@@ -92,7 +92,7 @@ class firstorderzone(object):
         self.zt_predictions[market_index] = _set
 
     def predict(self, _set, sched_index, market_index, occupied):
-        if self.smc_interval is not None or market_index == -1:
+        if self.parent.market_number == 1:
             oat = self.oat
             zt = self.zt
             occupied = self.sfs if self.sfs is not None else occupied
@@ -174,7 +174,7 @@ class rtuzone(object):
         q = self.get_t(_set, sched_index, market_index, occupied, dc=False)
 
     def init_predictions(self, output_info):
-        if self.single_market_contol_interval is not None:
+        if self.parent.market_number == 1:
             return
         occupied = self.check_future_schedule(self.current_datetime)
         if occupied:
@@ -184,7 +184,7 @@ class rtuzone(object):
         q = self.model.predict(_set, -1, -1, occupied, False)
 
     def get_t(self, temp_stpt, sched_index, market_index, occupied, dc=True):
-        if self.smc_interval is not None:
+        if self.parent.market_number == 1:
             oat = self.oat
             zt = self.zt
             runtime = self.parent.single_market_contol_interval
@@ -220,7 +220,7 @@ class rtuzone(object):
         off_condition = ops[1][0]
         off_operator = ops[1][1]
         prediction_array = [zt]
-        for i in xrange(runtime):
+        for i in range(runtime):
             _log.debug("{} - temperature: {} - setpoint: {} - on: {} - current_time: {} - index: {} - loop: {}".format(
                 self.parent.agent_name,
                 zt,
