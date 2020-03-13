@@ -1,6 +1,6 @@
 import importlib
 import logging
-import utils
+from volttron.platform.agent import utils
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
