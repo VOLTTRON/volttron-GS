@@ -47,6 +47,14 @@ class firstorderzone(object):
         self.a2 = coefficients["a2"]
         self.a3 = coefficients["a3"]
         self.a4 = coefficients["a4"]
+        message = {
+            "a1": self.a1,
+            "a2": self.a2,
+            "a3": self.a3,
+            "a4": self.a4
+        }
+        topic_suffix = "MODEL_COEFFICIENTS"
+        self.parent.publish_record(topic_suffix, message)
 
     def update_data(self):
         pass
