@@ -65,7 +65,8 @@ class TransactiveBase(MarketAgent):
         # set actuation parameters for device control
         actuate_topic = config.get("actuation_enable_topic", "default")
         if actuate_topic == "default":
-            self.actuate_topic = '/'.join([base_record_list, 'actuate'])
+            base_record_list.append('actuate')
+            self.actuate_topic = '/'.join(base_record_list)
         else:
             self.actuate_topic = actuate_topic
         self.actuate_onstart = config.get("actuation_enabled_onstart", False)
