@@ -24,3 +24,4 @@ class Model(object):
 
     def get_q(self, _set, sched_index, market_index, occupied):
         q = self.model.predict(_set, sched_index, market_index, occupied)
+        return q
