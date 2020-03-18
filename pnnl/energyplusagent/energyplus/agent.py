@@ -675,7 +675,6 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         elif arry[2] < self.eplus_outputs and len(arry) < self.eplus_outputs + 6:
             self.exit('Got message with ' + arry[2] + ' inputs. Expecting ' + str(self.eplus_outputs) + '.')
         else:
-            print("shit")
             if float(arry[5]):
                 self.time = float(arry[5])
             for key in input:
