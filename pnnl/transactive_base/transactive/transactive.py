@@ -596,7 +596,7 @@ class TransactiveBase(MarketAgent):
         if self.current_datetime is None:
             return index
         schedule_index = index + self.current_datetime.hour + 1
-        if schedule_index > 24:
+        if schedule_index >= 24:
             schedule_index = schedule_index - 24
         return schedule_index
 
