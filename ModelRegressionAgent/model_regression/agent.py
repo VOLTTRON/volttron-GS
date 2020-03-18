@@ -535,9 +535,13 @@ class RegressionAgent(Agent):
 
     def simulation_time_handler(self, peer, sender, bus, topic, header, message):
         current_time = parser.parse(header["Date"])
+        _log.debug("Simulation time handler current_time: %s", current_time)
         if self.simulation_initial_time is None:
             self.simulation_initial_time = current_time
-        if current_time - self.simulation_initial_time >= self.simulation_regression_interval:
+        retraining_time_delta = current_time - self.simulation_initial_time
+        _log.debug("Simulation time handler time delta: %s",
+                   retraining_time_delta)
+        if retraining_time_delta >= self.simulation_regression_interval:
             self.simulation_run_process(current_time)
 
     def validate_historian_reachable(self):
@@ -583,6 +587,7 @@ class RegressionAgent(Agent):
             training_interval = self.training_interval
         self.start = self.end - td(days=training_interval)
         self.main_run_process()
+        self.simulation_initial_time = None
 
     def calculate_start_offset(self):
         """
