@@ -71,6 +71,9 @@ class firstorderzone(object):
             sched_index = self.parent.current_datetime.hour
         else:
             zt = self.zt_predictions[market_index]
+            if zt is None:
+                zt = self.get_input_value(self.zt_name)
+
             if self.parent.oat_predictions:
                 oat = self.parent.oat_predictions[market_index]
             else:
