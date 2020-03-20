@@ -425,7 +425,7 @@ class RegressionAgent(Agent):
         # VIP identity for the VOLTTRON historian
         self.data_source = config.get('historian_vip', 'crate.prod')
         # External platform for remote RPC call.
-        self.external_platform = config.get("external_platform")
+        self.external_platform = config.get("external_platform", "")
 
         if device_points is None and subdevice_points is None:
             _log.warning('Missing device or subdevice points in config.')
@@ -485,6 +485,8 @@ class RegressionAgent(Agent):
 
         self.coefficient_results = {}
         self.exec_start = None
+        _log.debug("Validate historian running vip: %s - platform %s",
+                   self.data_source, self.external_platform)
 
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
@@ -497,9 +499,9 @@ class RegressionAgent(Agent):
         :return: None
         """
         # TODO: note in function.  reschedule do not exit.
-        if not self.validate_historian_reachable():
-            _log.debug("Cannot verify historian is running!")
-            sys.exit()
+        #if not self.validate_historian_reachable():
+        #    _log.debug("Cannot verify historian is running!")
+        #    sys.exit()
 
         if not self.one_shot:
             if not self.simulation:
@@ -674,7 +676,7 @@ class RegressionAgent(Agent):
             for token, topic in device_info.items():
                 rpc_start_str = format_timestamp(rpc_start)
                 rpc_end_str = format_timestamp(rpc_end)
-                _log.debug("RPC start {} - RPC end {}".format(rpc_start_str, rpc_end_str))
+                _log.debug("RPC start {} - RPC end {} - topic {}".format(rpc_start_str, rpc_end_str, topic))
                 # Currently historian is limited to 1000 records per query.
                 result = self.vip.rpc.call(self.data_source,
                                            'query',
