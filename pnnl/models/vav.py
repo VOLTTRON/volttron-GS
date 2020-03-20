@@ -41,7 +41,7 @@ class firstorderzone(object):
         if set(coefficients.keys()) != self.coefficients:
             _log.warning("Missing required coefficient to update model")
             _log.warning("Provided coefficients %s -- required %s",
-                         coefficients.keys(), self.coefficients)
+                         list(coefficients.keys()), self.coefficients)
             return
         self.a1 = coefficients["a1"]
         self.a2 = coefficients["a2"]

@@ -289,7 +289,7 @@ class TransactiveBase(MarketAgent):
 
         _log.debug("update actuation {}".format(state))
         if self.actuation_enabled and not bool(state):
-            for output_info in self.outputs.values():
+            for output_info in list(self.outputs.values()):
                 topic = output_info["topic"]
                 release = output_info["release"]
                 actuator = output_info["actuator"]
@@ -608,7 +608,7 @@ class TransactiveBase(MarketAgent):
         :return:
         """
         try:
-            return self.inputs[mapped].values()[0]
+            return list(self.inputs[mapped].values())[0]
         except KeyError:
             return None
 
