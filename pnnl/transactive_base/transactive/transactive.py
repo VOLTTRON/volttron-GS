@@ -17,21 +17,33 @@ from volttron.platform.messaging import topics, headers as headers_mod
 from volttron.platform.jsonrpc import RemoteError
 from volttron.platform.vip.agent import errors
 
+from volttron.pnnl.models import Model
 _log = logging.getLogger(__name__)
 setup_logging()
 __version__ = '0.3'
 
 
-class TransactiveBase(MarketAgent):
+class TransactiveBase(MarketAgent, Model):
     def __init__(self, config, **kwargs):
-        super(TransactiveBase, self).__init__(**kwargs)
+        MarketAgent.__init__(self, **kwargs)
         default_config = {
             "campus": "campus",
             "building": "building",
-            "input_data_timezone": "US/Pacific",
-            "actuate_enable_topic": "",
-
+            "device": "device",
+            "agent_name": "",
+            "actuation_method": "periodic",
+            "control_interval": 900,
+            "market_name": "electric",
+            "input_data_timezone": "UTC",
+            "actuation_enable_topic": "tnc/actuate",
+            "actuation_enabled_onstart": False,
+            "price_multiplier": 1.0,
+            "inputs": [],
+            "outputs": [],
+            "schedule": {},
+            "model_parameters": {},
         }
+        # Initaialize run parameters
         self.actuation_enabled = False
         self.actuation_disabled = False
         self.current_datetime = None
@@ -44,90 +56,125 @@ class TransactiveBase(MarketAgent):
         self.off_setpoint = None
         self.occupied = False
         self.mapped = None
-        self.oat_predictions = []
         self.market_prices = {}
         self.day_ahead_prices = []
         self.last_24_hour_prices = []
         self.input_topics = set()
-        self.inputs = {}
-        self.outputs = {}
-        self.schedule = {}
+
         self.commodity = "Electricity"
-
-        campus = config.get("campus", "")
-        building = config.get("building", "")
-        device = config.get("device", "")
-        subdevice = config.get("subdevice", "")
-
-        base_record_list = ["tnc", campus, building, device, subdevice]
-        base_record_list = list(filter(lambda a: a != "", base_record_list))
-        self.record_topic = '/'.join(base_record_list)
-        # set actuation parameters for device control
-        actuate_topic = config.get("actuation_enable_topic", "default")
-        if actuate_topic == "default":
-            base_record_list.append('actuate')
-            self.actuate_topic = '/'.join(base_record_list)
-        else:
-            self.actuate_topic = actuate_topic
-        self.actuate_onstart = config.get("actuation_enabled_onstart", False)
-        self.actuation_method = config.get("actuation_method", "periodic")
-        self.actuation_rate = config.get("control_interval", 300)
-
-        self.price_multiplier = config.get("price_multiplier", 1.0)
-        self.default_min_price = 0.01
-        self.default_max_price = 0.1
-        self.default_price = config.get("fallback_price", 0.05)
-        input_data_tz = config.get("input_data_timezone", "UTC")
-        self.input_data_tz = dateutil.tz.gettz(input_data_tz)
-        inputs = config.get("inputs", [])
-        self._outputs = config.get("outputs", [])
-        schedule = config.get("schedule", {})
-
-        self.init_inputs(inputs)
-        self.init_schedule(schedule)
-        market_name = config.get("market_name", "electric")
-
-        tns_integration = config.get("tns", True)
-        if tns_integration:
-            self.market_number = 24
-            self.single_market_contol_interval = None
-        else:
-            self.market_number = 1
-            self.single_market_contol_interval = config.get("single_market_contol_interval", 15)
-
-        self.market_name = []
-        for i in range(self.market_number):
-            self.market_name.append('_'.join([market_name, str(i)]))
-
         self.update_flag = []
         self.demand_curve = []
         self.actuation_price_range = None
         self.prices = []
+        self.default_min_price = 0.01
+        self.default_max_price = 0.1
+        self.market_name = []
 
-    @Core.receiver('onstart')
-    def setup(self, sender, **kwargs):
+        # Variables declared in configure_main
+        self.record_topic = None
+        self.market_number = None
+        self.single_market_contol_interval = None
+        self.inputs = {}
+        self.outputs = {}
+        self.schedule = {}
+        self.actuation_method = None
+        self.actuate_onstart = None
+        self.input_data_tz = None
+        self.actuation_rate = None
+        self.actuate_topic = None
+        self.price_multiplier = None
+        if config:
+            self.default_config = config
+        else:
+            self.default_config = default_config
+        self.vip.config.set_default("config", self.default_config)
+        self.vip.config.subscribe(self.configure_main,
+                                  actions=["NEW", "UPDATE"],
+                                  pattern="config")
+
+    def configure_main(self, config_name, action, contents, **kwargs):
+        config = self.default_config.copy()
+        config.update(contents)
+
+        if action == "NEW" or "UPDATE":
+            campus = config.get("campus", "")
+            building = config.get("building", "")
+            device = config.get("device", "")
+            subdevice = config.get("subdevice", "")
+
+            base_record_list = ["tnc", campus, building, device, subdevice]
+            base_record_list = list(filter(lambda a: a != "", base_record_list))
+            self.record_topic = '/'.join(base_record_list)
+            self.actuate_onstart = config.get("actuation_enabled_onstart", False)
+            self.actuation_method = config.get("actuation_method")
+            self.actuation_rate = config.get("control_interval")
+            actuate_topic = config.get("actuation_enable_topic", "default")
+            if actuate_topic == "default":
+                base_record_list.append('actuate')
+                self.actuate_topic = '/'.join(base_record_list)
+            else:
+                self.actuate_topic = actuate_topic
+            self.price_multiplier = config.get("price_multiplier")
+            input_data_tz = config.get("input_data_timezone")
+            self.input_data_tz = dateutil.tz.gettz(input_data_tz)
+            inputs = config.get("inputs", [])
+            schedule = config.get("schedule")
+            self.clear_input_subscriptions()
+            self.input_topics = set()
+            self.init_inputs(inputs)
+            self.init_schedule(schedule)
+            outputs = config.get("outputs")
+            self.init_outputs(outputs)
+            self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
+            self.init_input_subscriptions()
+            market_name = config.get("market_name", "electric")
+            tns = config.get("tns")
+            #  VOLTTRON MarketService does not allow "leaving"
+            #  markets.  Market participants can choose not to participate
+            #  in the market process by sending False during the reservation
+            #  phase.  This means that once the markets in market_name are
+            #  joined the deployment can only be changed from an TNS market
+            #  to single time step market by rebuilding both the agent
+            #  and the VOLTTRON MarketService.
+            if not self.market_name and tns is not None:
+                if tns:
+                    self.market_number = 24
+                    self.single_market_contol_interval = None
+                else:
+                    self.market_number = 1
+                    self.single_market_contol_interval = config.get("single_market_contol_interval", 15)
+                self.market_name = []
+                for i in range(self.market_number):
+                    self.market_name.append('_'.join([market_name, str(i)]))
+                self.init_markets()
+                model_config = config.get("model_parameters")
+
+                Model.__init__(self, model_config, **kwargs)
+                self.setup()
+
+    def setup(self, **kwargs):
         """
         On start.
         :param sender:
         :param kwargs:
         :return:
         """
-        self.init_outputs(self._outputs)
-        self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
-        self.init_input_subscriptions()
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='mixmarket/start_new_cycle',
                                   callback=self.update_prices)
         self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix="/".join([self.record_topic, "update_model"]),
+                                  prefix="/".join([self.record_topic,
+                                                   "update_model"]),
                                   callback=self.update_model)
 
     def init_markets(self):
         """
-        Join markets.  For TNS will join 24 markets.
+        Join markets.  For TNS will join 24 market or 1 market
+        for real-time price scenario.
         :return: None
         """
         for market in self.market_name:
+            _log.debug("Join market: %s  --  %s", self.core.identity, market)
             self.join_market(market, BUYER, None, self.offer_callback,
                              None, self.price_callback, self.error_callback)
             self.update_flag.append(False)
@@ -217,6 +264,17 @@ class TransactiveBase(MarketAgent):
                                       prefix=topic,
                                       callback=self.update_input_data)
 
+    def clear_input_subscriptions(self):
+        """
+        Create topic subscriptions for devices.
+        :return:
+        """
+        for topic in self.input_topics:
+            _log.debug('Unubscribing to: ' + topic)
+            self.vip.pubsub.unsubscribe(peer='pubsub',
+                                        prefix=topic,
+                                        callback=self.update_input_data)
+
     def init_schedule(self, schedule):
         """
         Parse schedule for use in determining occupancy.
@@ -232,16 +290,19 @@ class TransactiveBase(MarketAgent):
                     self.schedule[_day] = {"start": start, "end": end}
                 else:
                     self.schedule[_day] = schedule_info
+        else:
+            self.occupied = True
 
     def init_actuation_state(self, actuate_topic, actuate_onstart):
-        if self._outputs:
+        if self.outputs:
             self.vip.pubsub.subscribe(peer='pubsub',
                                       prefix=actuate_topic,
                                       callback=self.update_actuation_state)
             if actuate_onstart:
                 self.update_actuation_state(None, None, None, None, None, True)
         else:
-            _log.info("{} - cannot initialize actuation state, no configured outputs.".format(self.agent_name))
+            _log.info("%s - cannot initialize actuation state, "
+                      "no configured outputs.", self.core.identity)
 
     def check_schedule(self, dt):
         current_schedule = self.schedule[dt.weekday()]
@@ -257,7 +318,7 @@ class TransactiveBase(MarketAgent):
             return
         _start = current_schedule["start"]
         _end = current_schedule["end"]
-        if _start < self.current_datetime.time() < _end:
+        if _start <= self.current_datetime.time() < _end:
             self.occupied = True
             if not self.actuation_enabled:
                 self.update_actuation_state(None, None, None, None, None, True)
@@ -282,7 +343,8 @@ class TransactiveBase(MarketAgent):
     def update_actuation_state(self, peer, sender, bus, topic, headers, message):
         state = message
         if sender is not None:
-            _log.debug("%s actuation disabled %s", self.agent_name, not bool(state))
+            _log.debug("%s actuation disabled %s",
+                       self.core.identity, not bool(state))
             if self.actuation_disabled and not (bool(state)):
                 return
             self.actuation_disabled = not bool(state)
@@ -354,11 +416,11 @@ class TransactiveBase(MarketAgent):
         try:
             self.vip.rpc.call(actuator,
                               'set_point',
-                              self.agent_name,
+                              self.core.identity,
                               point_topic,
-                              value).get(timeout=10)
+                              value).get(timeout=15)
         except (RemoteError, gevent.Timeout, errors.VIPError) as ex:
-            _log.warning("Failed to set {} - ex: {}".format(point_topic, str(ex)))
+            _log.warning("Failed to set %s - ex: %S", point_topic, str(ex))
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         for name, output in self.outputs.items():
@@ -380,7 +442,10 @@ class TransactiveBase(MarketAgent):
 
         schedule_index = self.determine_schedule_index(market_index)
         market_time = self.current_datetime + td(hours=market_index + 1)
-        occupied = self.check_future_schedule(market_time)
+        if self.schedule:
+            occupied = self.check_future_schedule(market_time)
+        else:
+            occupied = True
 
         demand_curve = self.create_demand_curve(market_index,
                                                 schedule_index,
@@ -399,7 +464,7 @@ class TransactiveBase(MarketAgent):
         :return:
         """
         _log.debug("%s create_demand_curve - index: %s - sched: %s",
-                   self.agent_name,  market_index, sched_index)
+                   self.core.identity,  market_index, sched_index)
         demand_curve = PolyLine()
         prices = self.determine_prices()
         for control, price in zip(self.ct_flexibility, prices):
@@ -417,7 +482,7 @@ class TransactiveBase(MarketAgent):
             "Commodity": self.commodity
         }
         _log.debug("%s debug demand_curve - curve: %s",
-                   self.agent_name, demand_curve.points)
+                   self.core.identity, demand_curve.points)
         self.publish_record(topic_suffix, message)
         return demand_curve
 
@@ -429,15 +494,15 @@ class TransactiveBase(MarketAgent):
                     price = self.market_prices[market_index]
                     _log.warning("%s - market %s did not clear, "
                                  "using market_prices!",
-                                 self.agent_name, market_name)
+                                 self.core.identity, market_name)
                 except IndexError:
                     _log.warning("%s - market %s did not clear, and exception "
                                  "was raised when accessing market_prices!",
-                                 self.agent_name, market_name)
+                                 self.core.identity, market_name)
             else:
                 _log.warning("%s - market %s did not clear, "
                              "and no market_prices!",
-                             self.agent_name, market_name)
+                             self.core.identity, market_name)
         if self.demand_curve and self.demand_curve[market_index].points:
             cleared_quantity = self.demand_curve[market_index].x(price)
         else:
@@ -445,7 +510,7 @@ class TransactiveBase(MarketAgent):
 
         schedule_index = self.determine_schedule_index(market_index)
         _log.debug("%s price callback market: %s, price: %s, quantity: %s",
-                   self.agent_name, market_name, price, quantity)
+                   self.core.identity, market_name, price, quantity)
         topic_suffix = "MarketClear"
         message = {
             "MarketIndex": market_index,
@@ -474,7 +539,7 @@ class TransactiveBase(MarketAgent):
         :return:
         """
 
-        _log.error("%s - error for Market: %s", self.agent_name, market_name)
+        _log.error("%s - error for Market: %s", self.core.identity, market_name)
         _log.error("buyer_seller : %s - error: %s - aux: %s",
                    buyer_seller, error_message, aux)
 
@@ -559,7 +624,7 @@ class TransactiveBase(MarketAgent):
             current_datetime = parse(headers.get("Date"))
         except TypeError:
             _log.debug("%s could not parse Datetime in input data payload!",
-                       self.agent_name)
+                       self.core.identity)
             current_datetime = None
         if current_datetime is not None:
             self.current_datetime = current_datetime.astimezone(self.input_data_tz)

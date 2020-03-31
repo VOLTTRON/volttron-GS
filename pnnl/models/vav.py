@@ -24,7 +24,7 @@ class firstorderzone(object):
         self.zt_name = data_names.ZT
         self.zdat_name = data_names.ZDAT
         self.zaf_name = data_names.ZAF
-
+        print("MODEL: {}".format(self.a1))
         self.oat = self.get_input_value(self.oat_name)
         self.sfs = self.get_input_value(self.sfs_name)
         self.zt = self.get_input_value(self.zt_name)
