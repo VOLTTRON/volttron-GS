@@ -125,7 +125,7 @@ class ControlContainer(object):
         return all_on_devices
 
     def ingest_data(self, time_stamp, data):
-        for device in self.devices.itervalues():
+        for device in self.devices.values():
             device.ingest_data(time_stamp, data)
 
 
@@ -148,7 +148,7 @@ class DeviceStatus(object):
         self.logging_topic = logging_topic
 
     def ingest_data(self, time_stamp, data):
-        for topic, point in self.device_topic_map.iteritems():
+        for topic, point in self.device_topic_map.items():
             if topic in data:
                 self.current_device_values[point] = data[topic]
                 _log.debug("DEVICE_STATUS: {} - {} current device values: {}".format(topic,
@@ -251,7 +251,7 @@ class ControlManager(object):
             self.device_topics |= controls.device_topics
 
     def ingest_data(self, time_stamp, data):
-        for control in self.controls.itervalues():
+        for control in self.controls.values():
             control.ingest_data(time_stamp, data)
 
     def get_control_info(self, device_id, state):
@@ -395,7 +395,7 @@ class ControlSetting(object):
         return value
 
     def ingest_data(self, time_stamp, data):
-        for topic, point in self.device_topic_map.iteritems():
+        for topic, point in self.device_topic_map.items():
             if topic in data:
                 self.current_device_values[point] = data[topic]
 

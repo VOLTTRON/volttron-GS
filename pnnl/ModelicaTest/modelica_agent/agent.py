@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*- {{{
 # vim: set fenc=utf-8 ft=python sw=4 ts=4 sts=4 et:
 
-# Copyright (c) 2018, Battelle Memorial Institute
+# Copyright (c) 2017, Battelle Memorial Institute
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -16,7 +16,7 @@
 #    distribution.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# 'AS IS' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
 # A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
 # OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
@@ -53,55 +53,73 @@
 # PACIFIC NORTHWEST NATIONAL LABORATORY
 # operated by BATTELLE for the UNITED STATES DEPARTMENT OF ENERGY
 # under Contract DE-AC05-76RL01830
-
 # }}}
 
-import sys
 import logging
+import socket
+import sys
+import json
+from collections import defaultdict
+from gevent import monkey, sleep
 from volttron.platform.agent import utils
-from volttron.pnnl.models import Model
-from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
+from volttron.platform.vip.agent import Agent, Core, RPC
+from volttron.platform.scheduling import periodic
 
-
-_log = logging.getLogger(__name__)
+monkey.patch_socket()
 utils.setup_logging()
-__version__ = "0.3"
-
-LTL = "light"
-OCC = "occ"
+log = logging.getLogger(__name__)
 
 
-class LightAgent(TransactiveBase, Model):
+class ModelicaTest(Agent):
     """
-    Transactive control lighting agent.
+    Modelica test.
     """
-
     def __init__(self, config_path, **kwargs):
-        try:
-            config = utils.load_config(config_path)
-        except StandardError:
-            config = {}
-        self.agent_name = config.get("agent_name", "light_control")
-        TransactiveBase.__init__(self, config, **kwargs)
-        model_config = config.get("model_parameters", {})
-        Model.__init__(self, model_config, **kwargs)
-        self.init_markets()
+        """
+        Constructor for ModelicaAgent
+        :param config_path: str; path to config file
+        :param kwargs:
+        """
+        super().__init__(**kwargs)
+        config = utils.load_config(config_path)
+        # Set IP and port that SocketServer will bind
 
-    def init_predictions(self, output_info):
+        # Read outputs dictionary and inputs dictionary
+        inputs = config.get('inputs', {})
+        self.advance_simulation_topic = config.get("advance_simulation_topic")
+        self.advance_time = config.get("advance_interval", 30)
+        if self.advance_simulation is not None:
+            self.core.periodic(self.advance_time, self.advance_simulation, wait=self.advance_time)
+
+    def advance_simulation(self):
+        """
+        Testing function.
+        :return:
+        """
+        self.vip.pubsub.publish('pubsub',
+                                self.advance_simulation_topic,
+                                headers={},
+                                message={})
+
+    @Core.receiver('onstart')
+    def start(self, sender, **kwargs):
+        """
+        ON agent start call function to instantiate the socket server.
+        :param sender: not used
+        :param kwargs: not used
+        :return:
+        """
         pass
 
-    def update_state(self, market_index, sched_index, price):
-        self.update_flag[market_index] = True
 
-
-def main():
-    """Main method called to start the agent."""
-    utils.vip_main(LightAgent, version=__version__)
+def main(argv=sys.argv):
+    """Main method called by the eggsecutable."""
+    try:
+        utils.vip_main(ModelicaTest)
+    except Exception as ex:
+        log.exception(ex)
 
 
 if __name__ == '__main__':
     # Entry point for script
-    try:
-        sys.exit(main())
-    except KeyboardInterrupt:
-        pass
+    sys.exit(main())

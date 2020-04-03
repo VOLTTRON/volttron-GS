@@ -71,7 +71,7 @@ utils.setup_logging()
 __version__ = '0.3'
 
 
-@time_cls_methods
+#@time_cls_methods
 class VAVAgent(TransactiveBase, Model):
     """
     The SampleElectricMeterAgent serves as a sample of an electric meter that
@@ -88,6 +88,7 @@ class VAVAgent(TransactiveBase, Model):
         model_config = config.get("model_parameters", {})
         Model.__init__(self, model_config, **kwargs)
         self.init_markets()
+
 
     def init_predictions(self, output_info):
         pass

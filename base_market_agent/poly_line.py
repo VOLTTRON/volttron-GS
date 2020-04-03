@@ -284,20 +284,35 @@ class PolyLine:
         p1_qmax = max([point[0] for point in pl_1])
         p1_qmin = min([point[0] for point in pl_1])
 
+        p2_qmax = max([point[0] for point in pl_2])
+        p2_qmin = min([point[0] for point in pl_2])
+
         p1_pmax = max([point[1] for point in pl_1])
         p2_pmax = max([point[1] for point in pl_2])
+
         p1_pmin = min([point[1] for point in pl_1])
         p2_pmin = min([point[1] for point in pl_2])
         # The lines don't intersect, add the auxillary information
-        if p1_pmax < p2_pmax and p1_pmax < p2_pmin:
+        if p1_pmax <= p2_pmax and p1_pmax <=p2_pmin:
             quantity = p1_qmin
-            price = p1_pmax
-        elif p2_pmin < p1_pmin and p2_pmax < p1_pmin:
+            price = p2_pmax
+
+        elif p2_pmin <=p1_pmin and p2_pmax <=p1_pmin:
             quantity = p1_qmax
-            price = p1_pmin
+            price = p2_pmin
+
+        elif p2_qmax >= p1_qmin and p2_qmax >= p1_qmax:
+            quantity = np.mean([point[0] for point in pl_1])
+            price = np.mean([point[1] for point in pl_1])
+
+        elif p2_qmin <= p1_qmin and p2_qmin <= p1_qmax:
+            quantity = p2_qmax
+            price = p1_pmax
+
         else:
-            quantity = None
             price = None
+            quantity = None
+
         return quantity, price
 
     @staticmethod
@@ -366,4 +381,3 @@ class PolyLine:
         aux['SPx,DPn'] = cmp(supply_max_price, demand_min_price)
         aux['SPx,DPx'] = cmp(supply_max_price, demand_max_price)
         return aux
-

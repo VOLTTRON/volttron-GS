@@ -50,8 +50,8 @@ from volttron.platform.agent.base_market_agent.error_codes import NOT_FORMED, SH
 from volttron.platform.agent.base_market_agent.buy_sell import BUYER, SELLER
 from volttron.platform.messaging.topics import MARKET_AGGREGATE, MARKET_CLEAR, MARKET_ERROR, MARKET_RECORD
 
-from offer_manager import OfferManager
-from reservation_manager import ReservationManager
+from .offer_manager import OfferManager
+from .reservation_manager import ReservationManager
 
 _tlog = logging.getLogger('transitions.core')
 _tlog.setLevel(logging.WARNING)
@@ -59,7 +59,7 @@ _log = logging.getLogger(__name__)
 utils.setup_logging()
 
 
-class MarketFailureError(StandardError):
+class MarketFailureError(Exception):
     """Base class for exceptions in this module."""
     def __init__(self, market_name, market_state, object_type, participant):
         name = role = ''

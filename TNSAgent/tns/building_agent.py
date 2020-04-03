@@ -299,7 +299,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
                     self.vip.pubsub.publish(peer='pubsub',
                                             topic='mixmarket/start_new_cycle',
                                             message={"prices": self.prices[-24:],
-                                                     "hour": now.hour})
+                                                     "Date": format_timestamp(now)})
                 else:
                     temps = [x.value for x in weather_service.predictedValues]
                     temps = temps[-24:]
@@ -308,7 +308,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
                                             topic='mixmarket/start_new_cycle',
                                             message={"prices": self.prices[-24:],
                                                      "temp": temps,
-                                                     "hour": now.hour})
+                                                     "Date": format_timestamp(now)})
 
     def balance_market(self, run_cnt):
         market = self.markets[0]  # Assume only 1 TNS market per node

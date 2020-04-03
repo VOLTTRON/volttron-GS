@@ -654,7 +654,7 @@ class ILCAgent(Agent):
         power_sort.sort(reverse=True)
         exp_power = 0
 
-        for n in xrange(len(self.bldg_power)):
+        for n in range(len(self.bldg_power)):
             exp_power += power_sort[n][1] * smoothing_constant * (1.0 - smoothing_constant) ** n
 
         exp_power += power_sort[-1][1] * (1.0 - smoothing_constant) ** (len(self.bldg_power))
@@ -763,9 +763,6 @@ class ILCAgent(Agent):
             # TODO: Refactor this code block.  Disparate code paths for simulation and real devices is undesireable
             if self.sim_running:
                 gevent.sleep(0.25)
-                while self.sim_time >= 15:
-                    _log.debug("HOLDING {}".format(self.sim_time))
-                    gevent.sleep(1)
                 self.vip.pubsub.publish("pubsub", "applications/ilc/advance", headers={}, message={})
 
     def check_load(self):
@@ -779,10 +776,10 @@ class ILCAgent(Agent):
 
         if self.demand_limit is not None:
             if self.avg_power > self.demand_limit + self.demand_threshold:
-                result = "Current load of {} kW exceeds demand limit of {} kW.".format(self.avg_power, self.demand_limit)
+                result = "Current load of {} kW exceeds demand limit of {} kW.".format(self.avg_power, self.demand_limit+self.demand_threshold)
                 self.curtail_load()
-            if self.avg_power < self.demand_limit - self.demand_threshold:
-                result = "Current load of {} kW is below demand limit of {} kW.".format(self.avg_power, self.demand_limit)
+            elif self.avg_power < self.demand_limit - self.demand_threshold:
+                result = "Current load of {} kW is below demand limit of {} kW.".format(self.avg_power, self.demand_limit-self.demand_threshold)
                 self.augment_load()
             else:
                 result = "Current load of {} kW meets demand goal of {} kW.".format(self.avg_power, self.demand_limit)
@@ -952,10 +949,11 @@ class ILCAgent(Agent):
                     control_load = 0.0
                     break
                 load_point_values.append((load_arg[0], value))
-                try:
-                    control_load = float(load_equation.subs(load_point_values))
-                except:
-                    _log.debug("Could not convert expression for load estimation: ")
+                #try:
+                _log.debug("LOAD_EQUATION: {} - {} - {}".format(point_to_get, load_equation, load_point_values))
+                control_load = float(load_equation.subs(load_point_values))
+                #except:
+                #    _log.debug("Could not convert expression for load estimation: ")
 
         try:
             revert_value = self.vip.rpc.call(device_actuator, "get_point", control_pt).get(timeout=30)
