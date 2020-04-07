@@ -1,14 +1,14 @@
-from poly_line import PolyLine
-from point import Point
+from .poly_line import PolyLine
+from .point import Point
 
-def Remove(duplicate): 
+def remove(duplicate):
     final_list = [] 
     for num in duplicate: 
         if num not in final_list: 
             final_list.append(num) 
     return final_list
 
-line1=PolyLine()
+line1 = PolyLine()
 line1.add(Point(price=0.01,quantity=10))
 line1.add(Point(price=0.1,quantity=10))
 line1.add(Point(price=0.3,quantity=5))
@@ -27,7 +27,7 @@ line3.add(Point(price=0.35,quantity=0))
 
 a=line1.vectorize()[1]+line2.vectorize()[1]
 
-print(Remove(a)) 
+print(remove(a))
 
 #print PolyLine.intersection(line1,line2)
 
