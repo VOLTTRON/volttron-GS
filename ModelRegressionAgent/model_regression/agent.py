@@ -283,6 +283,7 @@ class Regression:
         :return:
         """
         df, formula = self.process_data(df)
+        
         results_df = None
         # If regress_hourly is True then linear least squares
         # will be performed for each hour of the day.  Otherwise,
@@ -296,12 +297,13 @@ class Regression:
                 process_df = df
 
             if self.debug:
-                filename = '{}/{}-hourly-{}.csv'.format(WORKING_DIR, device, i)
+                filename = '{}/{}-hourly-{}-{}.csv'.format(WORKING_DIR, device, i, format_timestamp(dt.now()))
                 with open(filename, 'w') as outfile:
                     process_df.to_csv(outfile, mode='w', index=True)
 
-            coefficient_dict = self.calc_coeffs(process_df, formula)
-
+            coefficient_dict = self.calc_coeffs(process_df, formula, device)
+            if not coefficient_dict:
+               return None
             current_results = pd.DataFrame.from_dict(coefficient_dict)
             _log.debug('Coefficients for index %s -- %s', i, current_results)
             if results_df is None:
@@ -341,7 +343,7 @@ class Regression:
         new_df["Date"] = df["Date"]
         return new_df, formula
 
-    def calc_coeffs(self, df, formula):
+    def calc_coeffs(self, df, formula, device):
         """
         Does linear least squares regression based on evaluated formula
         and evaluated input data.
@@ -366,7 +368,14 @@ class Regression:
             bounds[1].append(self.bounds[coeff][1])
 
         _log.debug('Bounds: %s *** for Coefficients %s', bounds, x.columns)
-        result = scipy.optimize.lsq_linear(x, y, bounds=bounds)
+        _log.debug('value of x = {}'.format(x)) 
+        _log.debug('value of y = {}'.format(y))
+        try:
+            result = scipy.optimize.lsq_linear(x, y, bounds=bounds)
+        except:
+            e = sys.exc_info()[0]
+            _log.debug("Least square error - %s", e)
+            return coefficient_dict
         coeffs_map = tuple(zip(x.columns, result.x))
         for coefficient, value in coeffs_map:
             coefficient_dict[coefficient].append(value)
@@ -415,6 +424,7 @@ class RegressionAgent(Agent):
         config = utils.load_config(config_path)
         self.debug = config.get("debug", True)
         # Read equipment configuration parameters
+        self.regression_inprogress = False
         site = config.get('campus', '')
         building = config.get('building', '')
         device = config.get('device', '')
@@ -471,6 +481,10 @@ class RegressionAgent(Agent):
         # Once every 7 days
         self.run_schedule = config.get("run_schedule", "*/10080 * * * *")
         self.training_interval = int(config.get('training_interval', 5))
+        if self.training_interval < 5 and "h" in self.data_aggregation_frequency:
+            _log.debug("There is a limited number of days in regression!!")
+            _log.debug("Update aggregation frequency for hourly to 15 minute!")
+            self.data_aggregation_frequency = "15min"
 
         self.exclude_weekends_holidays = config.get("exclude_weekends_holidays", True)
         self.run_onstart = config.get("run_onstart", True)
@@ -578,6 +592,7 @@ class RegressionAgent(Agent):
             training_interval = self.training_interval
         self.start = self.end - td(days=training_interval)
         self.main_run_process()
+        self.regression_inprogress = False
 
     def simulation_run_process(self, current_time):
         self.end = current_time.replace(hour=0,
@@ -590,6 +605,7 @@ class RegressionAgent(Agent):
         self.start = self.end - td(days=training_interval)
         self.main_run_process()
         self.simulation_initial_time = None
+        self.regression_inprogress = False
 
     def calculate_start_offset(self):
         """
@@ -616,7 +632,9 @@ class RegressionAgent(Agent):
         and regression methods.  Stores each devices result.
         :return:
         """
-
+        if self.regression_inprogress:
+            return
+        self.regression_inprogress = True
         self.exec_start = utils.get_aware_utc_now()
         _log.debug('Start regression - UTC converted: {}'.format(self.start))
         _log.debug('End regression UTC converted: {}'.format(self.end))
@@ -627,6 +645,9 @@ class RegressionAgent(Agent):
             df = self.query_historian(device.input_data)
             df = self.localize_df(df, name)
             result = self.regression_list[name].regression_main(df, name)
+            if result is None:
+                _log.debug("ERROR for regression for %s", name)
+                continue
             result.reset_index()
             result = result.to_dict(orient='list')
             self.coefficient_results[device.record_topic] = result
@@ -634,18 +655,17 @@ class RegressionAgent(Agent):
                 with open('{}/{}_results.json'.format(WORKING_DIR, name), 'w+') as outfile:
                     json.dump(result, outfile, indent=4, separators=(',', ': '))
                 _log.debug('*** Finished outputting coefficients ***')
-            self.publish_coefficients()
+            self.publish_coefficients(device.record_topic, result)
             exec_end = utils.get_aware_utc_now()
             exec_dif = exec_end - self.exec_start
             _log.debug("Regression for %s duration: %s", device, exec_dif)
 
-    def publish_coefficients(self):
+    def publish_coefficients(self, topic, result):
         """
         Publish coefficients for each device.
         :return:
         """
-        for topic, message in self.coefficient_results.items():
-            self.vip.pubsub.publish("pubsub", topic, {}, message).get(timeout=10)
+        self.vip.pubsub.publish("pubsub", topic, {}, result).get(timeout=10)
 
     def query_historian(self, device_info):
         """
@@ -694,7 +714,6 @@ class RegressionAgent(Agent):
                 # TODO:  check if enough data is present and compensate for significant missing data
                 data = pd.DataFrame(result['values'], columns=['Date', token])
                 data['Date'] = pd.to_datetime(data['Date'])
-
                 # Data is aggregated to some common frequency.
                 # This is important if data has different seconds/minutes.
                 # For minute trended data this is set to 1Min.
