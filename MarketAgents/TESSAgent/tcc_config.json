@@ -1,0 +1,61 @@
+{
+  "config_directory": "/home/volttron/transactivecontrol1/MarketAgents/config/building1",
+  "AHU": {
+    "AHU1": [
+      "100_CLGSETP",
+      "102_CLGSETP",
+      "118_CLGSETP",
+      "119_CLGSETP",
+      "120_CLGSETP",
+      "121_CLGSETP",
+      "123A_CLGSETP",
+      "123B_CLGSETP",
+      "127A_CLGSETP",
+      "127B_CLGSETP",
+      "129_CLGSETP",
+      "131_CLGSETP",
+      "136_CLGSETP",
+      "133_CLGSETP",
+      "142_CLGSETP",
+      "143_CLGSETP",
+      "150_CLGSETP"
+    ],
+    "AHU2": [
+      "002_CLGSETP"
+    ],
+    "AHU3": [
+      "104_CLGSETP",
+      "105_CLGSETP",
+      "108_CLGSETP",
+      "112_CLGSETP",
+      "107_CLGSETP",
+      "116_CLGSETP"
+    ],
+    "AHU4": [
+      "004_CLGSETP"
+    ]
+  },
+  "LIGHT": [
+      "102_LIGHT",
+      "118_LIGHT",
+      "119_LIGHT",
+      "120_LIGHT",
+      "123A_LIGHT",
+      "123B_LIGHT",
+      "127A_LIGHT",
+      "127B_LIGHT",
+      "129_LIGHT",
+      "131_LIGHT",
+      "136_LIGHT",
+      "133_LIGHT",
+      "142_LIGHT",
+      "143_LIGHT",
+      "150_LIGHT",
+      "104_LIGHT",
+      "105_LIGHT",
+      "108_LIGHT",
+      "112_LIGHT",
+      "107_LIGHT",
+      "116_LIGHT"
+  ]
+}

@@ -57,12 +57,17 @@
 # }}}
 
 import sys
+import gevent
+from dateutil.parser import parse
 import logging
 from volttron.platform.agent import utils
 from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregator
+from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
+from volttron.platform.agent.base_market_agent.poly_line_factory import PolyLineFactory
 from volttron.pnnl.models import Model
+from .tcc_market import PredictionManager
 from volttron.platform.vip.agent import Agent, Core
 from volttron.platform.agent.math_utils import mean, stdev
 from volttron.platform.agent.base_market_agent.buy_sell import BUYER, SELLER
@@ -72,7 +77,7 @@ utils.setup_logging()
 __version__ = "0.1"
 
 
-class TESSAgent(Aggregator, Model):
+class TESSAgent(TransactiveBase, Model):
     """
     The TESS Agent participates in Electricity Market as consumer of electricity at fixed price.
     It participates in internal Chilled Water market as supplier of chilled water at fixed price.
@@ -83,9 +88,18 @@ class TESSAgent(Aggregator, Model):
             config = utils.load_config(config_path)
         except Exception.StandardError:
             config = {}
+        tcc_config_directory = config.get("tcc_config_directory", "tcc_config.json")
+        try:
+            self.tcc_config = utils.load_config(tcc_config_directory)
+        except:
+            _log.error("Could not locate tcc_config_directory in tess config file!")
+            self.core.stop()
+        self.first_day = True
+        self.iteration_count = 0
+        self.tcc = None
         self.agent_name = config.get("agent_name", "tess_agent")
         model_config = config.get("model_parameters", {})
-        Aggregator.__init__(self, config, **kwargs)
+        TransactiveBase.__init__(self, config, **kwargs)
         Model.__init__(self, model_config, **kwargs)
         self.numHours = 24
         self.cooling_load = [None] * self.numHours
@@ -100,55 +114,24 @@ class TESSAgent(Aggregator, Model):
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='mixmarket/calculate_demand',
                                   callback=self._calculate_demand)
+        self.vip.pubsub.subscribe(peer='pubsub',
+                                  prefix='mixmarket/make_tcc_predictions',
+                                  callback=self.make_tcc_predictions())
+        self.tcc = PredictionManager(self.tcc_config)
 
-    def aggregate_callback(self, timestamp, market_name, buyer_seller, agg_demand):
-        if buyer_seller == BUYER:
-            market_index = self.supplier_market.index(market_name)
-            #_log.debug("{} - received aggregated {} curve - {}".format(self.agent_name, market_name, agg_demand.points))
-            self.aggregate_demand[market_index] = agg_demand
-            success = self.translate_aggregate_demand(agg_demand, market_index)
+    def offer_callback(self, timestamp, market_name, buyer_seller):
+        # Verify that all tcc predictions for day have finished
+        while self.tcc.calculating_predictions:
+            gevent.sleep(1)
 
-            if self.consumer_market and success:
-                for market_base, market_list in self.consumer_market.items():
-                    _log.debug("TESS: market_list: {}".format(market_list))
-                    for index in range(0, len(market_list)):
-                        if self.consumer_demand_curve[market_base][index] is not None:
-                            success, message = self.make_offer(market_list[index], BUYER, self.consumer_demand_curve[market_base][index])
-
-                            # Database code for data analysis
-                            topic_suffix = "/".join([self.agent_name, "DemandCurve"])
-                            message = {
-                                "MarketIndex": market_index,
-                                "Curve": self.consumer_demand_curve[market_base][market_index].tuppleize(),
-                                "Commodity": market_base
-                            }
-                            _log.debug("{} debug demand_curve - curve: {}".format(self.agent_name,
-                                                                                  self.consumer_demand_curve[market_base][market_index].points))
-                            self.publish_record(topic_suffix, message)
-            elif self.supplier_market and success:
-                #_log.debug("TESS: supplier_market: {}, market_index: {}".format(self.supplier_market, market_index))
-                for index in range(0, len(self.supplier_market)):
-                    success, message = self.make_offer(self.supplier_market[index], SELLER, self.supplier_curve[market_index])
-            else:
-                _log.warn("{} - No markets to submit supply curve!".format(self.agent_name))
-                success = False
-
-            if success:
-                _log.debug("{}: make a offer for {}".format(self.agent_name, market_name))
-            else:
-                _log.debug("{}: offer for the {} was rejected".format(self.agent_name, market_name))
-
-    def translate_aggregate_demand(self, chilled_water_demand, index):
-        _log.debug("TESS: translate_aggregate_demand, chilled_water_demand: {}".format(chilled_water_demand.points))
-        #_log.debug("TESS: translate_aggregate_demand, index: {}".format(index))
-        _log.debug("TESS: translate_aggregate_demand, oat_predictions: {}".format(self.oat_predictions))
-        #_log.debug("TESS: length of chilled_water: {}".format(len(chilled_water_demand.points)))
-        # point.x = quantity, point.y = price
-        # Assuming points.x is cooling load, points.y is price
-        price = self.market_prices[index]
-        self.cooling_load[index] = chilled_water_demand.x(price)
-        success = None
-        self.indices[index] = index
+        for idx in range(24):
+            price = self.market_prices[idx]
+            self.cooling_load[idx] = self.tcc.chilled_water_demand[idx].x(price)
+        # Only need to do this once so return on all
+        # other call backs
+        if market_name != self.market_name[0]:
+            return
+        # Check just for good measure
         optimization_ready = all([False if i is None else True for i in self.cooling_load])
         if optimization_ready:
             _log.debug("TESS: market_prices = {}".format(self.market_prices))
@@ -156,26 +139,25 @@ class TESSAgent(Aggregator, Model):
             _log.debug("TESS: oat_predictions = {}".format(self.oat_predictions))
             _log.debug("TESS: cooling_load = {}".format(self.cooling_load))
             T_out = [-0.05 * (t - 14.0) ** 2 + 30.0 for t in range(1, 25)]
+            # do optimization to obtain power and reserve power
             tess_power_inject, tess_power_reserve = self.model.run_tess_optimization(self.market_prices,
-                                                                                        self.reserve_market_prices,
-                                                                                        self.oat_predictions,
-                                                                                        #T_out,
-                                                                                        self.cooling_load)
-            tess_power_inject = [i*-1 for i in tess_power_inject]
-            self.cooling_load_copy = self.cooling_load[:]
-            self.cooling_load = [None]*self.numHours
-            _log.debug("TESS: translate_aggregate_demand tess_power_inject: {}, tess_power_reserve: {}".format(
-                tess_power_inject,
-                tess_power_reserve))
+                                                                                     self.reserve_market_prices,
+                                                                                     self.oat_predictions,
+                                                                                     # T_out,
+                                                                                     self.cooling_load)
+            tess_power_inject = [i * -1 for i in tess_power_inject]
+            self.cooling_load = [None] * self.numHours
+            _log.debug("TESS: offer_callback tess_power_inject: {}, tess_power_reserve: {}".format(tess_power_inject,
+                                                                                                   tess_power_reserve))
             price_min, price_max = self.determine_price_min_max()
             _log.debug("TESS: price_min: {}, price_max: {}".format(price_min, price_max))
             for i in range(0, len(self.market_prices)):
                 electric_demand_curve = PolyLine()
                 electric_demand_curve.add(Point(tess_power_inject[i], price_min))
                 electric_demand_curve.add(Point(tess_power_inject[i], price_max))
-                market_base_name = list(self.consumer_demand_curve.keys())
-                _log.debug("TESS: MARKET BASE NAME:{0} {1}".format(market_base_name, i))
-                self.consumer_demand_curve[market_base_name[0]][i] = electric_demand_curve
+                electric_demand_tess_tcc = [self.tcc.electric_demand[i], electric_demand_curve]
+                aggregate_electric = PolyLineFactory.combine(electric_demand_tess_tcc, 11)
+                self.make_offer(self.market_name[i], buyer_seller, aggregate_electric)
                 _log.debug("TESS: electric demand : Pt: {}".format(electric_demand_curve.points))
 
             self.vip.pubsub.publish(peer='pubsub',
@@ -184,10 +166,11 @@ class TESSAgent(Aggregator, Model):
                                         "reserve_power": list(tess_power_reserve),
                                         "sender": self.agent_name
                                     })
-            success = True
-        return success
 
     def _calculate_demand(self, peer, sender, bus, topic, headers, message):
+        """
+
+        """
         prices = message['prices']
         reserve_prices = message['reserve_prices']
         tess_power_inject, tess_power_reserve = self.model.run_tess_optimization(prices,
@@ -203,6 +186,36 @@ class TESSAgent(Aggregator, Model):
                                     "sender": self.agent_name
                                 })
 
+    def make_tcc_predictions(self, peer, sender, bus, topic, headers, message):
+        """
+        Run tcc predictions for building electric and chilled water market.
+        Message sent by campus agent on topic 'mixmarket/make_tcc_predictions'.
+
+        message = dict; {
+            "converged": bool - market converged
+            "prices": array - next days 24 hour hourly demand prices,
+            "reserved_prices": array - next days 24 hour hourly reserve prices
+            "start_of_cycle": bool - start of cycle
+            "hour": int for current hour,
+            "prediction_date": string - prediction date,
+            "temp": array - next days 24 hour hourly outdoor temperature predictions
+        }
+        """
+        new_cycle = message["start_of_cycle"]
+        if new_cycle and self.first_day and self.iteration_count > 0:
+            self.first_day = False
+            self.iteration_count = 1
+        elif new_cycle:
+            self.iteration_count = 1
+        else:
+            self.iteration_count += 1
+        _log.debug("new_cycle %s - first_day %s - iteration_count %s",
+                   new_cycle, self.first_day, self.iteration_count)
+        oat_predictions = message["temp"]
+        prices = message["price"]
+        _date = parse(message["prediction_date"])
+        self.tcc.do_predictions(prices, oat_predictions, _date, new_cycle=new_cycle, first_day=self.first_day)
+
     def determine_control(self, sets, prices, price):
         return self.model.calculate_control(self.current_datetime, self.cooling_load_copy)
 
@@ -216,6 +229,7 @@ class TESSAgent(Aggregator, Model):
         price_min = prices[0]
         price_max = prices[len(prices)-1]
         return price_min, price_max
+
 
 def main():
     """Main method called to start the agent."""

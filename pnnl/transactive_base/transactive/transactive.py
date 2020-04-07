@@ -128,7 +128,7 @@ class TransactiveBase(MarketAgent, Model):
             self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
             self.init_input_subscriptions()
             market_name = config.get("market_name", "electric")
-            tns = config.get("tns")
+            tns = config.get("tns", True)
             #  VOLTTRON MarketService does not allow "leaving"
             #  markets.  Market participants can choose not to participate
             #  in the market process by sending False during the reservation
@@ -159,13 +159,6 @@ class TransactiveBase(MarketAgent, Model):
         :param kwargs:
         :return:
         """
-<<<<<<< HEAD
-        _log.debug("Transactive base onstart")
-        self.init_outputs(self._outputs)
-        self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
-        self.init_input_subscriptions()
-=======
->>>>>>> 8ac1be6456e742a08625ce40c2a1518946a884e7
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='mixmarket/start_new_cycle',
                                   callback=self.update_prices)

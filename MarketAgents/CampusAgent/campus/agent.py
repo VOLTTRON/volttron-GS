@@ -58,6 +58,7 @@ import sys
 import logging
 import datetime
 from datetime import datetime
+from datetime import timedelta as td
 from dateutil import parser
 
 
@@ -190,13 +191,24 @@ class CampusAgent(MarketAgent):
 
     def start_mixmarket(self, converged, price, price_reserved, start_of_cycle):
         now = Timer.get_cur_time()
-
+        prediction_day = now + td(days=1)
         _log.info("Getting weather prediction at {}...".format(now))
         temps = self.get_weather_next_day(now)
         self.mix_market_running = True
         _log.info("Starting mixmarket at {}...".format(now))
         _log.debug("CAMPUS: HR: {}, sending prices : {}".format(now.hour, price))
         _log.debug("CAMPUS: HR: {}, sending reserve prices: {}".format(now.hour, price_reserved))
+        self.vip.pubsub.publish(peer='pubsub',
+                                topic='mixmarket/make_tcc_predictions',
+                                message={
+                                    "converged": converged,
+                                    "prices": price,
+                                    "reserved_prices": price_reserved,
+                                    "start_of_cycle": start_of_cycle,
+                                    "hour": now.hour,
+                                    "prediction_date": format_timestamp(prediction_day),
+                                    "temp": temps
+                                })
         self.vip.pubsub.publish(peer='pubsub',
                                 topic='mixmarket/start_new_cycle',
                                 message={
@@ -205,6 +217,7 @@ class CampusAgent(MarketAgent):
                                     "reserved_prices": price_reserved,
                                     "start_of_cycle": start_of_cycle,
                                     "hour": now.hour,
+                                    "prediction_date": format_timestamp(prediction_day),
                                     "temp": temps
                                 })
 
