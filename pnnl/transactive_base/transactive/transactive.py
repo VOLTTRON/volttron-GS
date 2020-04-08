@@ -68,7 +68,7 @@ class TransactiveBase(MarketAgent, Model):
         self.prices = []
         self.default_min_price = 0.01
         self.default_max_price = 0.1
-        self.market_name = []
+        self.market_list = []
 
         # Variables declared in configure_main
         self.record_topic = None
@@ -95,7 +95,7 @@ class TransactiveBase(MarketAgent, Model):
     def configure_main(self, config_name, action, contents, **kwargs):
         config = self.default_config.copy()
         config.update(contents)
-
+        _log.debug("Update agent %s configuration.", self.core.identity)
         if action == "NEW" or "UPDATE":
             campus = config.get("campus", "")
             building = config.get("building", "")
@@ -128,7 +128,7 @@ class TransactiveBase(MarketAgent, Model):
             self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
             self.init_input_subscriptions()
             market_name = config.get("market_name", "electric")
-            tns = config.get("tns")
+            tns = config.get("tns", True)
             #  VOLTTRON MarketService does not allow "leaving"
             #  markets.  Market participants can choose not to participate
             #  in the market process by sending False during the reservation
@@ -136,16 +136,15 @@ class TransactiveBase(MarketAgent, Model):
             #  joined the deployment can only be changed from an TNS market
             #  to single time step market by rebuilding both the agent
             #  and the VOLTTRON MarketService.
-            if not self.market_name and tns is not None:
+            if not self.market_list and tns is not None:
                 if tns:
                     self.market_number = 24
                     self.single_market_contol_interval = None
                 else:
                     self.market_number = 1
-                    self.single_market_contol_interval = config.get("single_market_contol_interval", 15)
-                self.market_name = []
+                    self.single_market_contol_interval = config.get("single_market_control_interval", 15)
                 for i in range(self.market_number):
-                    self.market_name.append('_'.join([market_name, str(i)]))
+                    self.market_list.append('_'.join([market_name, str(i)]))
                 self.init_markets()
                 model_config = config.get("model_parameters")
 
@@ -173,7 +172,7 @@ class TransactiveBase(MarketAgent, Model):
         for real-time price scenario.
         :return: None
         """
-        for market in self.market_name:
+        for market in self.market_list:
             _log.debug("Join market: %s  --  %s", self.core.identity, market)
             self.join_market(market, BUYER, None, self.offer_callback,
                              None, self.price_callback, self.error_callback)
@@ -205,7 +204,7 @@ class TransactiveBase(MarketAgent, Model):
             # Options for release are None or default
             # None assumes BACnet release via priority array
             # default will safe original value, at start of agent run for control restoration
-            # TODO: Update release value anytime agent has state tranistion for actuation_enable
+            # TODO: Update release value anytime agent has state transition for actuation_enable
             release = output_info.get("release", None)
             # Constant offset to apply to apply to determined actuation value
             offset = output_info.get("offset", 0.0)
@@ -294,6 +293,13 @@ class TransactiveBase(MarketAgent, Model):
             self.occupied = True
 
     def init_actuation_state(self, actuate_topic, actuate_onstart):
+        """
+        On-start initialize the actuation state of agent.  Create subscription to
+        allow for dynamically disabling/enabling actuation for agent.
+        :param actuate_topic:
+        :param actuate_onstart:
+        :return:
+        """
         if self.outputs:
             self.vip.pubsub.subscribe(peer='pubsub',
                                       prefix=actuate_topic,
@@ -431,12 +437,12 @@ class TransactiveBase(MarketAgent, Model):
         self.flexibility = output_info["flex"]
         self.ct_flexibility = output_info["ct_flex"]
         self.off_setpoint = output_info["off_setpoint"]
-        market_index = self.market_name.index(market_name)
+        market_index = self.market_list.index(market_name)
         if market_index > 0:
             while not self.update_flag[market_index - 1]:
                 gevent.sleep(1)
-        if market_index == len(self.market_name) - 1:
-            self.update_flag = [False]*len(self.market_name)
+        if market_index == len(self.market_list) - 1:
+            self.update_flag = [False]*len(self.market_list)
         if market_index == 0 and self.current_datetime is not None:
             self.init_predictions(output_info)
 
@@ -487,7 +493,7 @@ class TransactiveBase(MarketAgent, Model):
         return demand_curve
 
     def price_callback(self, timestamp, market_name, buyer_seller, price, quantity):
-        market_index = self.market_name.index(market_name)
+        market_index = self.market_list.index(market_name)
         if price is None:
             if self.market_prices:
                 try:
