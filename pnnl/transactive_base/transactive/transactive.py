@@ -6,6 +6,7 @@ import numpy as np
 from dateutil.parser import parse
 import dateutil.tz
 import gevent
+
 from volttron.platform.agent.math_utils import mean, stdev
 from volttron.platform.agent.base_market_agent import MarketAgent
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
@@ -24,7 +25,7 @@ __version__ = '0.3'
 
 
 class TransactiveBase(MarketAgent, Model):
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, aggregator=None, **kwargs):
         MarketAgent.__init__(self, **kwargs)
         default_config = {
             "campus": "campus",
@@ -44,6 +45,8 @@ class TransactiveBase(MarketAgent, Model):
             "model_parameters": {},
         }
         # Initaialize run parameters
+        self.aggregator = aggregator
+
         self.actuation_enabled = False
         self.actuation_disabled = False
         self.current_datetime = None
@@ -114,7 +117,7 @@ class TransactiveBase(MarketAgent, Model):
                 self.actuate_topic = '/'.join(base_record_list)
             else:
                 self.actuate_topic = actuate_topic
-            self.price_multiplier = config.get("price_multiplier")
+            self.price_multiplier = config.get("price_multiplier", 1.0)
             input_data_tz = config.get("input_data_timezone")
             self.input_data_tz = dateutil.tz.gettz(input_data_tz)
             inputs = config.get("inputs", [])
@@ -145,11 +148,13 @@ class TransactiveBase(MarketAgent, Model):
                     self.single_market_contol_interval = config.get("single_market_control_interval", 15)
                 for i in range(self.market_number):
                     self.market_list.append('_'.join([market_name, str(i)]))
-                self.init_markets()
+                if self.aggregator is None:
+                    _log.debug("%s is a aggregator.", self.core.identity)
+                    self.init_markets()
+                _log.debug("CREATE MODEL")
                 model_config = config.get("model_parameters")
-
                 Model.__init__(self, model_config, **kwargs)
-                self.setup()
+            self.setup()
 
     def setup(self, **kwargs):
         """
