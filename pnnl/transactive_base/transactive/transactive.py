@@ -64,7 +64,7 @@ class TransactiveBase(MarketAgent, Model):
         self.last_24_hour_prices = []
         self.input_topics = set()
 
-        self.commodity = "Electricity"
+        self.commodity = "electricity"
         self.update_flag = []
         self.demand_curve = []
         self.actuation_price_range = None
