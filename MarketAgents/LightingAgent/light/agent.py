@@ -57,9 +57,9 @@
 # }}}
 
 import sys
+import numpy as np
 import logging
 from volttron.platform.agent import utils
-from volttron.pnnl.models import Model
 from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
 
 
@@ -71,7 +71,7 @@ LTL = "light"
 OCC = "occ"
 
 
-class LightAgent(TransactiveBase, Model):
+class LightAgent(TransactiveBase):
     """
     Transactive control lighting agent.
     """
@@ -83,9 +83,48 @@ class LightAgent(TransactiveBase, Model):
             config = {}
         self.agent_name = config.get("agent_name", "light_control")
         TransactiveBase.__init__(self, config, **kwargs)
-        model_config = config.get("model_parameters", {})
-        Model.__init__(self, model_config, **kwargs)
-        self.init_markets()
+        # TODO: Will update this to have on parameter control both mag and rate of control change
+        self.ramp_rate = config.get("control_ramp_rate", 0.02)
+        self.current_control = None
+        self.default_lighting_schedule = config["model_parameters"].get("default_lighting_schedule", [0.9] * 24)
+        self.decrease_load_only = config.get("decrease_load_only", True)
+
+    def determine_control(self, sets, prices, price):
+        """
+        prices is an list of 11 elements, evenly spaced from the smallest price
+        to the largest price and corresponds to the y-values of a line.  sets
+        is an np.array of 11 elements, evenly spaced from the control value at
+        the lowest price to the control value at the highest price and
+        corresponds to the x-values of a line.  Price is the cleared price.
+        :param sets: np.array;
+        :param prices: list;
+        :param price: float
+        :return:
+        """
+        default_control = None
+        if self.current_datetime is not None:
+            _hour = self.current_datetime.hour
+            default_control = self.default_lighting_schedule[_hour]
+
+        if self.current_control is None:
+            if default_control is None:
+                self.current_control = np.mean(self.ct_flexibility)
+            else:
+                self.current_control = default_control
+
+        control_final = np.interp(price, prices, sets)
+        if self.current_control is not None:
+            if self.current_control < control_final:
+                self.current_control = min(self.ramp_rate + self.current_control, control_final)
+            elif self.current_control > control_final:
+                self.current_control = max(self.current_control - self.ramp_rate, control_final)
+            else:
+                self.current_control = control_final
+        if self.decrease_load_only and default_control is not None:
+            if self.current_control > default_control:
+                self.current_control = default_control
+
+        return self.current_control
 
     def init_predictions(self, output_info):
         pass
