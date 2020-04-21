@@ -87,7 +87,7 @@ class LightAgent(TransactiveBase):
         self.ramp_rate = config.get("control_ramp_rate", 0.02)
         self.current_control = None
         self.default_lighting_schedule = config["model_parameters"].get("default_lighting_schedule", [0.9] * 24)
-        self.decrease_load_only = config.get("decrease_load_only", True)
+        self.decrease_load_only = config.get("decrease_load_only", False)
 
     def determine_control(self, sets, prices, price):
         """
@@ -101,6 +101,7 @@ class LightAgent(TransactiveBase):
         :param price: float
         :return:
         """
+        _log.debug("Updated determine_control! -- %s", self.current_datetime)
         default_control = None
         if self.current_datetime is not None:
             _hour = self.current_datetime.hour
@@ -111,8 +112,9 @@ class LightAgent(TransactiveBase):
                 self.current_control = np.mean(self.ct_flexibility)
             else:
                 self.current_control = default_control
-
+        
         control_final = np.interp(price, prices, sets)
+        _log.debug("determine_control -- current - %s -- final - %s -- default - %s", self.current_control, control_final, default_control)
         if self.current_control is not None:
             if self.current_control < control_final:
                 self.current_control = min(self.ramp_rate + self.current_control, control_final)

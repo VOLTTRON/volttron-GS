@@ -87,7 +87,8 @@ class TransactiveBase(MarketAgent, Model):
         self.actuate_topic = None
         self.price_multiplier = None
         if config:
-            self.default_config = config
+            default_config.update(config)
+            self.default_config = default_config
         else:
             self.default_config = default_config
         self.vip.config.set_default("config", self.default_config)
@@ -98,7 +99,7 @@ class TransactiveBase(MarketAgent, Model):
     def configure_main(self, config_name, action, contents, **kwargs):
         config = self.default_config.copy()
         config.update(contents)
-        _log.debug("Update agent %s configuration.", self.core.identity)
+        _log.debug("Update agent %s configuration -- config --  %s", self.core.identity, config)
         if action == "NEW" or "UPDATE":
             campus = config.get("campus", "")
             building = config.get("building", "")
@@ -149,7 +150,7 @@ class TransactiveBase(MarketAgent, Model):
                 for i in range(self.market_number):
                     self.market_list.append('_'.join([market_name, str(i)]))
                 if self.aggregator is None:
-                    _log.debug("%s is a aggregator.", self.core.identity)
+                    _log.debug("%s is a transactive agent.", self.core.identity)
                     self.init_markets()
                 _log.debug("CREATE MODEL")
                 model_config = config.get("model_parameters")
@@ -360,7 +361,7 @@ class TransactiveBase(MarketAgent, Model):
                 return
             self.actuation_disabled = not bool(state)
 
-        _log.debug("update actuation {}".format(state))
+        _log.debug("update actuation state : %s with method - %s", state, self.actuation_method)
         if self.actuation_enabled and not bool(state):
             for output_info in list(self.outputs.values()):
                 topic = output_info["topic"]
@@ -388,10 +389,12 @@ class TransactiveBase(MarketAgent, Model):
                     release_value = None
                 self.outputs[name]["release"] = release_value
             if self.actuation_method == "periodic":
+                _log.debug("Setup periodic actuation: %s -- %s", self.core.identity, self.actuation_rate)
                 self.actuation_obj = self.core.periodic(self.actuation_rate, self.do_actuation, wait=self.actuation_rate)
         self.actuation_enabled = state
 
     def update_outputs(self, name, price):
+        _log.debug("update_outputs: %s - current_price: %s", self.core.identity, self.current_price)
         if price is None:
             if self.current_price is None:
                 return
@@ -401,6 +404,7 @@ class TransactiveBase(MarketAgent, Model):
             prices = self.actuation_price_range
         else:
             prices = self.determine_prices()
+        _log.debug("Call determine_control: %s", self.core.identity)
         value = self.determine_control(sets, prices, price)
         self.outputs[name]["value"] = value
         point = self.outputs.get("point", name)
@@ -409,10 +413,11 @@ class TransactiveBase(MarketAgent, Model):
         self.publish_record(topic_suffix, message)
 
     def do_actuation(self, price=None):
-        _log.debug("actuation {}".format(self.outputs))
+        _log.debug("do_actuation {}".format(self.outputs))
         for name, output_info in self.outputs.items():
             if not output_info["condition"]:
                 continue
+            _log.debug("call update_outputs - %s", self.core.identity)
             self.update_outputs(name, price)
             topic = output_info["topic"]
             point = output_info["point"]
@@ -431,7 +436,7 @@ class TransactiveBase(MarketAgent, Model):
                               point_topic,
                               value).get(timeout=15)
         except (RemoteError, gevent.Timeout, errors.VIPError) as ex:
-            _log.warning("Failed to set %s - ex: %S", point_topic, str(ex))
+            _log.warning("Failed to set %s - ex: %s", point_topic, str(ex))
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         for name, output in self.outputs.items():
@@ -593,6 +598,7 @@ class TransactiveBase(MarketAgent, Model):
         :param price: float
         :return:
         """
+        _log.debug("determine_control - transactive.py: %s", self.core.identity)
         control = np.interp(price, prices, sets)
         control = self.clamp(control, min(self.ct_flexibility), max(self.ct_flexibility))
         return control
