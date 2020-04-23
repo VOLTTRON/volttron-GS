@@ -113,6 +113,7 @@ class CampusAgent(Agent, myTransactiveNode):
         self.solar_topic = "/".join([self.db_topic, "campus/pv"])
         self.system_loss_topic = "{}/{}/system_loss".format(self.db_topic, self.name)
         self.dc_threshold_topic = "{}/{}/dc_threshold_topic".format(self.db_topic, self.name)
+        self.price_topic = "{}/{}/marginal_prices".format(self.db_topic, self.name)
 
         self.reschedule_interval = timedelta(minutes=10, seconds=1)
 
@@ -231,6 +232,18 @@ class CampusAgent(Agent, myTransactiveNode):
                         if dt.hour == next_run_dt.hour and run_cnt >= 1:
                             _log.debug("{} reschedule to run at {}".format(self.name, next_run_dt))
                             self.core.schedule(next_run_dt, self.balance_market, run_cnt + 1)
+            prices = market.marginalPrices
+
+            # There is a case where the balancing happens at the end of the hour and continues to the next hour, which
+            # creates 26 values. Get the last 25 values.
+            prices = prices[-25:]
+            prices = [x.value for x in prices]
+            self.vip.pubsub.publish(peer='pubsub',
+                                        topic=self.price_topic,
+                                        message={'prices': prices,
+                                                 'current_time': format_timestamp(Timer.get_cur_time())
+                                                 }
+                                        )
         else:
             _log.debug("Market balancing sub-problem failed.")
             self.city.model.prep_transactive_signal(market, self)
