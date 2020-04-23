@@ -187,7 +187,7 @@ class MarketServiceAgent(Agent):
         import time
         start = time.time()
 
-        identity = bytes(self.vip.rpc.context.vip_message.peer, "utf8)
+        identity = bytes(self.vip.rpc.context.vip_message.peer, "utf8")
         log_message = "Received {} reservation for market {} from agent {}".format(buyer_seller, market_name, identity)
         _log.debug(log_message)
         if self.state == COLLECT_RESERVATIONS:
@@ -209,7 +209,7 @@ class MarketServiceAgent(Agent):
 
     @RPC.export
     def make_offer(self, market_name, buyer_seller, offer):
-        identity = bytes(self.vip.rpc.context.vip_message.peer, "utf8)
+        identity = bytes(self.vip.rpc.context.vip_message.peer, "utf8")
         log_message = "Received {} offer for market {} from agent {}".format(buyer_seller, market_name, identity)
         _log.debug(log_message)
         if self.state == COLLECT_OFFERS:
