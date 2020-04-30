@@ -28,9 +28,9 @@ class TransactiveBase(MarketAgent, Model):
     def __init__(self, config, aggregator=None, **kwargs):
         MarketAgent.__init__(self, **kwargs)
         default_config = {
-            "campus": "campus",
-            "building": "building",
-            "device": "device",
+            "campus": "",
+            "building": "",
+            "device": "",
             "agent_name": "",
             "actuation_method": "periodic",
             "control_interval": 900,
@@ -171,6 +171,9 @@ class TransactiveBase(MarketAgent, Model):
                                   prefix="/".join([self.record_topic,
                                                    "update_model"]),
                                   callback=self.update_model)
+        self.vip.pubsub.subscribe(peer='pubsub',
+                                  prefix="tnc/price",
+                                  callback=self.update_current_price)
 
     def init_markets(self):
         """
@@ -424,7 +427,7 @@ class TransactiveBase(MarketAgent, Model):
             actuator = output_info["actuator"]
             value = output_info.get("value")
             offset = output_info["offset"]
-            if value is not None:
+            if value is not None and self.occupied:
                 value = value + offset
                 self.actuate(topic, value, actuator)
 

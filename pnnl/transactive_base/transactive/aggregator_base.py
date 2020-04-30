@@ -44,7 +44,7 @@ class Aggregator(TransactiveBase):
         self.configure_main(config_name, action, contents)
         _log.debug("Update agent %s configuration.", self.core.identity)
         if action == "NEW" or "UPDATE":
-            supplier_market_base_name= config.get("supplier_market_name", "")
+            supplier_market_base_name = config.get("supplier_market_name", "")
             self.supply_commodity = supplier_market_base_name
             consumer_market_base_name = config.get("consumer_market_name", [])
 
@@ -61,7 +61,7 @@ class Aggregator(TransactiveBase):
                     for market_name in self.consumer_market:
                         self.consumer_market[market_name] = ['_'.join([market_name, str(i)]) for i in range(self.market_number)]
                         self.consumer_demand_curve[market_name] = [None] * self.market_number
-                    self.init_markets()
+                self.init_markets()
 
     def init_markets(self):
 
