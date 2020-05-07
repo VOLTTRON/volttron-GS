@@ -98,8 +98,6 @@ class CityAgent(Agent):
         # Initialization
         self.error_energy_threshold = float(self.config.get('error_energy_threshold'))
         self.error_reserve_threshold = float(self.config.get('error_reserve_threshold'))
-        self.error_upper_energy_threshold = float(self.config.get('error_upper_energy_threshold'))
-        self.error_upper_reserve_threshold = float(self.config.get('error_upper_reserve_threshold'))
         self.alpha_energy = float(self.config.get('alpha_energy'))
         self.alpha_reserve = float(self.config.get('alpha_reserve'))
         self.iteration_threshold = int(self.config.get('iteration_threshold'))
@@ -187,15 +185,14 @@ class CityAgent(Agent):
                            format_timestamp(next_exp_time),
                            format_timestamp(next_analysis_time))
 
-    def send_to_campus(self, converged=False, start_of_cycle=False, fast_market=False):
+    def send_to_campus(self, converged=False, start_of_cycle=False):
         # Campus demand
         msg = {
             'ts': format_timestamp(Timer.get_cur_time()),
             'price': self.price_energy[:,-1].tolist(),
             'price_reserved': self.price_reserved[:,-1].tolist(),
             'converged': converged,
-            'start_of_cycle': start_of_cycle,
-            'fast_market': fast_market
+            'start_of_cycle': start_of_cycle
         }
 
         _log.info("City {} send to campus: {}".format(self.name, msg))
@@ -205,7 +202,7 @@ class CityAgent(Agent):
 
         self.price_energy[:, -1]
 
-    def schedule_power(self, start_of_cycle=False, fast_market=False):
+    def schedule_power(self, start_of_cycle=False):
         # Grid supplier
         price_i = np.array([self.price_energy[:,-1]]).T
         reserve_i = np.array([self.price_reserved[:,-1]]).T
@@ -214,7 +211,7 @@ class CityAgent(Agent):
             self.grid_supplier.generate_bid(self.T, price_i, reserve_i)
 
         _log.debug("CITY: power supply: {}".format(self.power_supply))
-        self.send_to_campus(converged=False, start_of_cycle=start_of_cycle, fast_market=fast_market)
+        self.send_to_campus(converged=False, start_of_cycle=start_of_cycle)
 
     def new_demand_signal(self, peer, sender, bus, topic, headers, message):
         _log.debug("At {}, {} receives new demand records: {}".format(Timer.get_cur_time(),
@@ -227,13 +224,11 @@ class CityAgent(Agent):
             _log.debug("CITY::Market iteration cycle: {}".format(self.iteration))
             result = self.balance_market()
             # Start next iteration if balancing fails
-            if result == 'unbalanced':
+            if not result:
                 self.schedule_power(start_of_cycle=False)
-            elif result == 'fast_market':
-                self.schedule_power(start_of_cycle=False, fast_market=True)
             else:
                 _log.debug("CITY::MARKET converged !!")
-                self.send_to_campus(converged=True, start_of_cycle=False)
+                #self.send_to_campus(converged=True, start_of_cycle=False)
 
     def balance_market(self):
         power_demand = np.array([self.power_demand]).T
@@ -253,15 +248,11 @@ class CityAgent(Agent):
 
         _log.debug("CITY::Price Difference: {}, energy threshold: {}".format(np.linalg.norm(price_energy_new-price_energy), self.error_energy_threshold))
         _log.debug("CITY::Reserve Price Difference: {}, reserve energy threshold:{}".format(np.linalg.norm(price_reserved_new-price_reserved), self.error_reserve_threshold))
-        status = 'unbalanced'
         if np.linalg.norm(price_energy_new-price_energy) <= self.error_energy_threshold \
                 and np.linalg.norm(price_reserved_new-price_reserved) <= self.error_reserve_threshold:
-            status = 'balanced'
-        elif np.linalg.norm(price_energy_new-price_energy) <= self.error_upper_energy_threshold \
-                and np.linalg.norm(price_reserved_new-price_reserved) <= self.error_upper_reserve_threshold:
-            status = 'fast_market'
+            return True
 
-        return status
+        return False
 
 
 def main(argv=sys.argv):

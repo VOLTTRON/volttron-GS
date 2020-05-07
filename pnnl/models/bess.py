@@ -13,7 +13,7 @@ BESS_AVAILABLE = True
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 
-class bess(object):
+class Bess(object):
     def __init__(self, config, parent, **kwargs):
         # BESS CONSTANTS --- should be config parameters
         self.MESA1_C0 = config.get("MESA1_C0", -1.44E-02)  # unit: 1/h
@@ -22,18 +22,25 @@ class bess(object):
         self.p_max = config.get("p_max", 1.0)
         self.init_soc = config.get("init_soc", 0.8)
         self.final_soc = config.get("final_soc", -1.0)
+        self.power_inject = None
+        self.power_reserve = None
+        self.ESS = None
+        self.get_input_value = parent.get_input_value
+
+    def update_data(self):
+        self.ESS = self.get_input_value('ess')
+        _log.debug("Bess model update_data: {}".format(self.ESS))
 
     def build_bess_constraints(self, energy_price, reserve_price):
         """
         Build constraints and objective function for BESS
         :param energy_price: Energy price from city market
         :param reserve_price: Reserve price from city market
-        :param p_max: maximum charging/discharging power of BESS
-        :param init_soc:
-        :param final_soc:
         :return:
         """
         numHours = len(energy_price)
+        energy_price = np.array(energy_price)
+        reserve_price = np.array(reserve_price)
         if numHours != len(reserve_price):
             raise (TypeError("The lengths of energy_price, reserve_price should match."))
 
@@ -63,6 +70,8 @@ class bess(object):
                                base_name="Power withdrawal (MW)")  # 1 == Discharging, 0 == Charging
         bess_p = VariableGroup("bess_p", indexes=numHours_range,
                                base_name="Net power transfer (MW)")  # power transfer from battery to grid
+        #+ve => discharging
+        #-ve => charging
         bess_l = VariableGroup("bess_l", indexes=n2_range, lower_bound_func=constant_zero,
                                upper_bound_func=constant_pos_one,
                                base_name="State of charge")  # State of charge (SoC) in [0, 1]
@@ -86,19 +95,15 @@ class bess(object):
         name = 'bess_engy_intial_condition'
 
         def checkInitSoC(index):
-            return bess_l[index] == init_soc
+            return bess_l[index] == self.init_soc
 
         c = checkInitSoC(0)
         constraints.append((c, name))
 
-        if final_soc >= 0:
+        if self.final_soc >= 0:
             name = 'bess_engy_final_condition'
-
-            def checkFinalSoC(index):
-                return bess_l[index] == final_soc
-
-            c = checkFinalSoC(numHours)
-            constraints.append((c, name))
+            checkFinalSoC = bess_l[numHours] == self.final_soc
+            constraints.append((checkFinalSoC, name))
 
         numHours_index = (range(numHours),)
 
@@ -111,13 +116,13 @@ class bess(object):
 
         def discharge_cap_func(index):
             k = index[0]
-            return bess_p_p[k] <= p_max * bess_b[k]
+            return bess_p_p[k] <= self.p_max * bess_b[k]
 
         add_constraint("bess_discharge_cap", numHours_index, discharge_cap_func)
 
         def charge_cap_func(index):
             k = index[0]
-            return -p_max * (1 - bess_b[k]) <= bess_p_n[k]
+            return -self.p_max * (1 - bess_b[k]) <= bess_p_n[k]
 
         add_constraint("bess_charge_cap", numHours_index, charge_cap_func)
 
@@ -135,7 +140,7 @@ class bess(object):
 
         def reg_up_cap_func(index):
             k = index[0]
-            return bess_p[k] + bess_r_p[k] <= p_max
+            return bess_p[k] + bess_r_p[k] <= self.p_max
 
         add_constraint("bess_reg_up_cap", numHours_index, reg_up_cap_func)
 
@@ -151,19 +156,22 @@ class bess(object):
 
         return constraints, objective_components
 
-    def run_bess_optimization(self, energy_price, reserve_price, p_max, init_soc, final_soc):
+    def calculate_control(self, current_date_time, name=None):
+        hour = current_date_time.time().hour
+        value = 0
+        if self.power_inject is not None:
+            value = self.power_inject[hour]
+        return value
+
+    def run_bess_optimization(self, energy_price, reserve_price):
         """
         Optimization method for BESS
         :param energy_price:
         :param reserve_price:
-        :param p_max:
-        :param init_soc:
-        :param final_soc:
         :return:
         """
         # build constraints and objective function for TESS
-        tess_constraints, tess_objective_components = self.build_bess_constraints(energy_price, reserve_price, p_max,
-                                                                             init_soc, final_soc)
+        tess_constraints, tess_objective_components = self.build_bess_constraints(energy_price, reserve_price)
         prob = pulp.LpProblem("BESS Optimization", pulp.LpMaximize)
         prob += pulp.lpSum(tess_objective_components), "Objective Function"
         #prob.writeLP("pyversion.lp")
@@ -171,7 +179,7 @@ class bess(object):
             prob += c
         time_limit = 5
         # TBD: time_limit
-        _log.debug("{}".format(prob))
+        #_log.debug("{}".format(prob))
         try:
             prob.solve(pulp.solvers.PULP_CBC_CMD(maxSeconds=time_limit))
         except Exception as e:

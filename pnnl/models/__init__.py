@@ -16,7 +16,8 @@ class Model(object):
         except KeyError as e:
             _log.exception("Missing Model Type key: {}".format(e))
             raise e
-        module = importlib.import_module(base_module+model_type)
+        _file, model_type = model_type.split(".")
+        module = importlib.import_module(base_module + _file)
         model_class = getattr(module, model_type)
         self.model = model_class(config, self)
 

@@ -58,6 +58,7 @@
 import json
 import datetime
 from .tcc_models import Model
+from volttron.platform.agent import utils
 import numpy as np
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.poly_line_factory import PolyLineFactory
@@ -69,7 +70,8 @@ class MarketContainer(object):
         self.container = {}
 
     def add_member(self, tag, config_path):
-        config = json.load(open(config_path))
+        print config_path
+        config = utils.load_config(config_path)
         self.container[tag] = Model(config, self)
 
 
@@ -91,6 +93,7 @@ class PredictionManager(object):
 
         for ahu, vav_list in self.ahus.items():
             for vav in vav_list:
+                print("VAV: {}".format(vav))
                 config_path = "/".join([config_directory, vav + ".config"])
                 self.market_container.add_member(vav, config_path)
             config_path = "/".join([config_directory, ahu + ".config"])
@@ -118,11 +121,13 @@ class PredictionManager(object):
         if self.prices.size and not first_day and new_cycle:
             self.previous_days_prices = self.prices
         price_range = self.previous_days_prices if self.previous_days_prices is not None else self.prices
-
+        self.electric_demand = {}
+        self.chilled_water_demand = {}
         for _hour in range(24):
             price = prices[_hour]
             oat = oat_predictions[_hour]
             self.hourly_electric_demand = []
+            self.hourly_chilled_water_demand = []
             for ahu, vav_list in self.ahus.items():
                 self.market_container.container[ahu].model.air_demand = []
                 for vav in vav_list:
