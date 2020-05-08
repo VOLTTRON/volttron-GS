@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*- {{{
 # vim: set fenc=utf-8 ft=python sw=4 ts=4 sts=4 et:
 #
-# Copyright (c) 2017, Battelle Memorial Institute
+# Copyright (c) 2020, Battelle Memorial Institute
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -57,20 +57,21 @@ import numpy as np
 import logging
 #from poly_line import PolyLine
 #from point import Point
-from point import Point
-from poly_line import PolyLine
-#from volttron.platform.agent import utils
+from .point import Point
+from .poly_line import PolyLine
+# from volttron.platform.agent import utils
 
 _log = logging.getLogger(__name__)
-#utils.setup_logging()
+# utils.setup_logging()
 
-def Remove(duplicate):
-#         print len(duplicate)
-            final_list = [] 
-            for num in duplicate: 
-                if num not in final_list: 
-                   final_list.append(num) 
-            return final_list
+
+def remove(duplicate):
+    final_list = []
+    for num in duplicate:
+        if num not in final_list:
+            final_list.append(num)
+    return final_list
+
 
 class PolyLineFactory(object):
     @staticmethod
@@ -123,7 +124,6 @@ class PolyLineFactory(object):
 
         return composite
 
-
     @staticmethod
     def combine_withoutincrement(lines):
 
@@ -136,15 +136,13 @@ class PolyLineFactory(object):
         for l in lines:
             ys=ys+l.vectorize()[1]
 
-        ys=Remove(ys)
+        ys = remove(ys)
         
         ys.sort(reverse=True)
-#        print ys      
         for y in ys:
             xt = None
             for line in lines:
                 x = line.x(y)
-#                print x, y
                 if x is not None:
                     xt = x if xt is None else xt + x
             composite.add(Point(xt, y))
@@ -152,9 +150,9 @@ class PolyLineFactory(object):
 
     @staticmethod
     def fromTupples(points):
-        polyLine = PolyLine()
+        poly_line = PolyLine()
         for p in points:
             if p is not None and len(p) == 2:
-                polyLine.add(Point(p[0], p[1]))
-        return polyLine
+                poly_line.add(Point(p[0], p[1]))
+        return poly_line
 

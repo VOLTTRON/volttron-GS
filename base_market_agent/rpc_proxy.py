@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*- {{{
 # vim: set fenc=utf-8 ft=python sw=4 ts=4 sts=4 et:
 
-# Copyright (c) 2017, Battelle Memorial Institute
+# Copyright (c) 2020, Battelle Memorial Institute
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,7 @@ from volttron.platform.jsonrpc import RemoteError
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
+
 
 class RpcProxy(object):
     """

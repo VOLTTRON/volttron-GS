@@ -94,8 +94,8 @@ from volttron.platform.agent.base_market_agent.buy_sell import BUYER
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from market_list import MarketList
-from market_participant import MarketParticipant
+from .market_list import MarketList
+from .market_participant import MarketParticipant
 
 _tlog = logging.getLogger('transitions.core')
 _tlog.setLevel(logging.WARNING)

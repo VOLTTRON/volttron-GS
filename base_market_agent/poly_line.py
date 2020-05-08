@@ -293,6 +293,7 @@ class PolyLine:
         p1_pmin = min([point[1] for point in pl_1])
         p2_pmin = min([point[1] for point in pl_2])
         # The lines don't intersect, add the auxillary information
+        # TODO - clean this method up.
         if p1_pmax <= p2_pmax and p1_pmax <=p2_pmin:
             quantity = p1_qmin
             price = p2_pmax
@@ -353,7 +354,6 @@ class PolyLine:
                 p2_second_point = poly2[j + 1]
 
                 if PolyLine.line_intersection((p1_first_point, p1_second_point), (p2_first_point, p2_second_point)):
-                    print p1_first_point, p1_second_point, p2_first_point, p2_second_point
                     x, y = PolyLine.line_intersection((p1_first_point, p1_second_point), (p2_first_point, p2_second_point))
                     return x, y
 
