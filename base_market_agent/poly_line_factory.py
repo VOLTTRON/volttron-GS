@@ -129,7 +129,11 @@ class PolyLineFactory(object):
 
         # we return a new PolyLine which is a composite (summed horizontally) of inputs
         composite = PolyLine()
-        if len(lines)<2:
+        if len(lines) < 2:
+            if isinstance(lines[0], list):
+                for point in lines[0]:
+                    composite.add(Point(point[0], point[1]))
+                return composite
             return lines[0]
         # find the range defined by the curves
         ys=[]

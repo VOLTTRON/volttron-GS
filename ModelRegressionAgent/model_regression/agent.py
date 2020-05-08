@@ -709,10 +709,10 @@ class RegressionAgent(Agent):
                                            count=1000,
                                            external_platform=self.external_platform).get(timeout=300)
                 _log.debug(result)
-                if not bool(result['values']):
+                if not bool(result) or "values" not in result:
                     _log.debug('ERROR: empty RPC return for '
                                'coefficient *%s* at %s', token, rpc_start)
-                    continue
+                    break
                 # TODO:  check if enough data is present and compensate for significant missing data
                 data = pd.DataFrame(result['values'], columns=['Date', token])
                 data['Date'] = pd.to_datetime(data['Date'])

@@ -371,13 +371,13 @@ class PolyLine:
         supply_max_price = supply_curve.max_y()
         supply_min_price = supply_curve.min_y()
 
-        aux['SQn,DQn'] = cmp(supply_min_quantity, demand_min_quantity)
-        aux['SQn,DQx'] = cmp(supply_min_quantity, demand_max_quantity)
-        aux['SQx,DQn'] = cmp(supply_max_quantity, demand_min_quantity)
-        aux['SQx,DQx'] = cmp(supply_max_quantity, demand_max_quantity)
+        aux['SQn,DQn'] = (supply_min_quantity > demand_min_quantity) - (supply_min_quantity < demand_min_quantity)
+        aux['SQn,DQx'] = (supply_min_quantity > demand_max_quantity) - (supply_min_quantity < demand_max_quantity)
+        aux['SQx,DQn'] = (supply_max_quantity > demand_min_quantity) - (supply_max_quantity < demand_min_quantity)
+        aux['SQx,DQx'] = (supply_max_quantity > demand_max_quantity) - (supply_max_quantity < demand_max_quantity)
 
-        aux['SPn,DPn'] = cmp(supply_min_price, demand_min_price)
-        aux['SPn,DPx'] = cmp(supply_min_price, demand_max_price)
-        aux['SPx,DPn'] = cmp(supply_max_price, demand_min_price)
-        aux['SPx,DPx'] = cmp(supply_max_price, demand_max_price)
+        aux['SPn,DPn'] = (supply_min_price > demand_min_price) - (supply_min_price < demand_min_price)
+        aux['SPn,DPx'] = (supply_min_price > demand_max_price) - (supply_min_price < demand_max_price)
+        aux['SPx,DPn'] = (supply_max_price > demand_min_price) - (supply_max_price < demand_min_price)
+        aux['SPx,DPx'] = (supply_max_price > demand_max_price) - (supply_max_price < demand_max_price)
         return aux

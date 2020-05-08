@@ -56,7 +56,10 @@
 
 # }}}
 
-from builtins import property as _property, tuple as _tuple
+try:
+    from builtins import property as _property, tuple as _tuple
+except ImportError:
+    from __builtin__ import property as _property, tuple as _tuple
 from operator import itemgetter as _itemgetter
 from collections import OrderedDict
 

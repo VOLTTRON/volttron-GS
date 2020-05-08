@@ -63,16 +63,13 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from volttron.pnnl.models.ahuchiller import AHUChiller
-
-# from pnnl.models.firstorderzone import FirstOrderZone
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = "0.2"
 
 
-class AHUAgent(Aggregator, AHUChiller):
+class AHUAgent(Aggregator):
     """
     The SampleElectricMeterAgent serves as a sample of an electric meter that
     sells electricity for a single building at a fixed price.
@@ -86,8 +83,7 @@ class AHUAgent(Aggregator, AHUChiller):
         model_config = config.get("model_parameters")
         self.agent_name = config.get("agent_name", "ahu")
         Aggregator.__init__(self, config, **kwargs)
-        AHUChiller.__init__(self, model_config, **kwargs)
-        self.init_markets()
+        #self.init_markets()
 
     def translate_aggregate_demand(self, air_demand, index):
         electric_demand_curve = PolyLine()

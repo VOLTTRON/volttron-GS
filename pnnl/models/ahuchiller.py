@@ -2,28 +2,10 @@ import logging
 import importlib
 
 from volttron.platform.agent import utils
+import volttron.pnnl.models.input_names as data_names
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
-
-
-class AHUChiller(object):
-    SFS = "sfs"
-    MAT = "mat"
-    DAT = "dat"
-    SAF = "saf"
-    OAT = "oat"
-    RAT = "rat"
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "ahuchiller")
-        module = importlib.import_module("volttron.pnnl.models.ahuchiller")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-    def get_q(self, _set, sched_index, market_index, occupied):
-        pass
-
 
 class ahuchiller(object):
 
@@ -59,12 +41,12 @@ class ahuchiller(object):
         self.get_input_value = parent.get_input_value
         self.smc_interval = parent.single_market_contol_interval
         self.parent = parent
-        self.sfs_name = parent.SFS
-        self.mat_name = parent.MAT
-        self.dat_name = parent.DAT
-        self.saf_name = parent.SAF
-        self.oat_name = parent.OAT
-        self.rat_name = parent.RAT
+        self.sfs_name = data_names.SFS
+        self.mat_name = data_names.MAT
+        self.dat_name = data_names.DAT
+        self.saf_name = data_names.SAF
+        self.oat_name = data_names.OAT
+        self.rat_name = data_names.RAT
 
         self.sfs = None
         self.mat = None

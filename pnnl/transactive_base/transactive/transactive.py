@@ -6,6 +6,7 @@ import numpy as np
 from dateutil.parser import parse
 import dateutil.tz
 import gevent
+
 from volttron.platform.agent.math_utils import mean, stdev
 from volttron.platform.agent.base_market_agent import MarketAgent
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
@@ -24,12 +25,12 @@ __version__ = '0.3'
 
 
 class TransactiveBase(MarketAgent, Model):
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, aggregator=None, **kwargs):
         MarketAgent.__init__(self, **kwargs)
         default_config = {
-            "campus": "campus",
-            "building": "building",
-            "device": "device",
+            "campus": "",
+            "building": "",
+            "device": "",
             "agent_name": "",
             "actuation_method": "periodic",
             "control_interval": 900,
@@ -44,6 +45,8 @@ class TransactiveBase(MarketAgent, Model):
             "model_parameters": {},
         }
         # Initaialize run parameters
+        self.aggregator = aggregator
+
         self.actuation_enabled = False
         self.actuation_disabled = False
         self.current_datetime = None
@@ -61,7 +64,7 @@ class TransactiveBase(MarketAgent, Model):
         self.last_24_hour_prices = []
         self.input_topics = set()
 
-        self.commodity = "Electricity"
+        self.commodity = "electricity"
         self.update_flag = []
         self.demand_curve = []
         self.actuation_price_range = None
@@ -84,7 +87,8 @@ class TransactiveBase(MarketAgent, Model):
         self.actuate_topic = None
         self.price_multiplier = None
         if config:
-            self.default_config = config
+            default_config.update(config)
+            self.default_config = default_config
         else:
             self.default_config = default_config
         self.vip.config.set_default("config", self.default_config)
@@ -95,7 +99,7 @@ class TransactiveBase(MarketAgent, Model):
     def configure_main(self, config_name, action, contents, **kwargs):
         config = self.default_config.copy()
         config.update(contents)
-        _log.debug("Update agent %s configuration.", self.core.identity)
+        _log.debug("Update agent %s configuration -- config --  %s", self.core.identity, config)
         if action == "NEW" or "UPDATE":
             campus = config.get("campus", "")
             building = config.get("building", "")
@@ -114,7 +118,7 @@ class TransactiveBase(MarketAgent, Model):
                 self.actuate_topic = '/'.join(base_record_list)
             else:
                 self.actuate_topic = actuate_topic
-            self.price_multiplier = config.get("price_multiplier")
+            self.price_multiplier = config.get("price_multiplier", 1.0)
             input_data_tz = config.get("input_data_timezone")
             self.input_data_tz = dateutil.tz.gettz(input_data_tz)
             inputs = config.get("inputs", [])
@@ -145,11 +149,13 @@ class TransactiveBase(MarketAgent, Model):
                     self.single_market_contol_interval = config.get("single_market_control_interval", 15)
                 for i in range(self.market_number):
                     self.market_list.append('_'.join([market_name, str(i)]))
-                self.init_markets()
+                if self.aggregator is None:
+                    _log.debug("%s is a transactive agent.", self.core.identity)
+                    self.init_markets()
+                _log.debug("CREATE MODEL")
                 model_config = config.get("model_parameters")
-
                 Model.__init__(self, model_config, **kwargs)
-                self.setup()
+            self.setup()
 
     def setup(self, **kwargs):
         """
@@ -165,6 +171,9 @@ class TransactiveBase(MarketAgent, Model):
                                   prefix="/".join([self.record_topic,
                                                    "update_model"]),
                                   callback=self.update_model)
+        self.vip.pubsub.subscribe(peer='pubsub',
+                                  prefix="tnc/price",
+                                  callback=self.update_current_price)
 
     def init_markets(self):
         """
@@ -355,7 +364,7 @@ class TransactiveBase(MarketAgent, Model):
                 return
             self.actuation_disabled = not bool(state)
 
-        _log.debug("update actuation {}".format(state))
+        _log.debug("update actuation state : %s with method - %s", state, self.actuation_method)
         if self.actuation_enabled and not bool(state):
             for output_info in list(self.outputs.values()):
                 topic = output_info["topic"]
@@ -383,10 +392,12 @@ class TransactiveBase(MarketAgent, Model):
                     release_value = None
                 self.outputs[name]["release"] = release_value
             if self.actuation_method == "periodic":
+                _log.debug("Setup periodic actuation: %s -- %s", self.core.identity, self.actuation_rate)
                 self.actuation_obj = self.core.periodic(self.actuation_rate, self.do_actuation, wait=self.actuation_rate)
         self.actuation_enabled = state
 
     def update_outputs(self, name, price):
+        _log.debug("update_outputs: %s - current_price: %s", self.core.identity, self.current_price)
         if price is None:
             if self.current_price is None:
                 return
@@ -396,6 +407,7 @@ class TransactiveBase(MarketAgent, Model):
             prices = self.actuation_price_range
         else:
             prices = self.determine_prices()
+        _log.debug("Call determine_control: %s", self.core.identity)
         value = self.determine_control(sets, prices, price)
         self.outputs[name]["value"] = value
         point = self.outputs.get("point", name)
@@ -404,17 +416,18 @@ class TransactiveBase(MarketAgent, Model):
         self.publish_record(topic_suffix, message)
 
     def do_actuation(self, price=None):
-        _log.debug("actuation {}".format(self.outputs))
+        _log.debug("do_actuation {}".format(self.outputs))
         for name, output_info in self.outputs.items():
             if not output_info["condition"]:
                 continue
+            _log.debug("call update_outputs - %s", self.core.identity)
             self.update_outputs(name, price)
             topic = output_info["topic"]
             point = output_info["point"]
             actuator = output_info["actuator"]
             value = output_info.get("value")
             offset = output_info["offset"]
-            if value is not None:
+            if value is not None and self.occupied:
                 value = value + offset
                 self.actuate(topic, value, actuator)
 
@@ -426,7 +439,7 @@ class TransactiveBase(MarketAgent, Model):
                               point_topic,
                               value).get(timeout=15)
         except (RemoteError, gevent.Timeout, errors.VIPError) as ex:
-            _log.warning("Failed to set %s - ex: %S", point_topic, str(ex))
+            _log.warning("Failed to set %s - ex: %s", point_topic, str(ex))
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         for name, output in self.outputs.items():
@@ -588,6 +601,7 @@ class TransactiveBase(MarketAgent, Model):
         :param price: float
         :return:
         """
+        _log.debug("determine_control - transactive.py: %s", self.core.identity)
         control = np.interp(price, prices, sets)
         control = self.clamp(control, min(self.ct_flexibility), max(self.ct_flexibility))
         return control
