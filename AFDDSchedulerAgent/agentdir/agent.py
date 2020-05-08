@@ -1,30 +1,24 @@
 """
-please install holidays module
-
-
 
 
 """
 
 from __future__ import absolute_import
-from collections import defaultdict
 import logging
 import sys
-import csv
 import dateutil.tz
-from sympy import symbols
-from datetime import datetime as dt, timedelta as td
+from sympy import *
 from dateutil.parser import parse
-from random import random
 from sympy.parsing.sympy_parser import parse_expr
+from sympy.logic.boolalg import BooleanFalse, BooleanTrue
 from gevent import sleep
+from volttron.platform.scheduling import cron
 from volttron.platform.vip.agent import Agent, Core
 from volttron.platform.jsonrpc import RemoteError
 from volttron.platform.agent import utils
-from volttron.platform.messaging import (headers as headers_mod, topics)
+from volttron.platform.messaging import topics
 from datetime import datetime, timedelta, date, time
 import holidays
-import pytz
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -41,6 +35,7 @@ class AFDDSchedulerAgent(Agent):
         super(AFDDSchedulerAgent, self).__init__(**kwargs)
         # Set up default configuration and config store
         self.analysis_name = "Scheduler"
+        self.schedule_time = "* 18 * * *"
         self.device = {
             "campus": "campus",
             "building": "building",
@@ -53,34 +48,38 @@ class AFDDSchedulerAgent(Agent):
                 }
             }
         }
-        self.actuation_mode = "PASSIVE"
-        self.actuator_lock_required = False
-        self.arguments = {
-            "points": {
-                       'ReturnAirTemperature',
-                       'SupplyFanStatus'
-                       },
-            "device_type": "rtu",
-            "mht": 5.0
-        }
+        self.mht: 5.0
+        self.excess_operation: false
+        self.interval: 60
         self.timezone = "US/Pacific"
-        self.default_write_attempts = 1
         self.condition_list = None
 
         # Set up default configuration and config store
         self.default_config = {
             "analysis_name": self.analysis_name,
+            "schedule_time": self.schedule_time,
             "device": self.device,
-            "actuation_mode": self.actuation_mode,
-            "require_actuator_check": self.actuator_lock_required,
-            "arguments": self.arguments,
+            "mht": 3600,
+            "excess_operation": false,
+            "interval": 60,
             "timezone": self.timezone,
-            "default_write_attempts": self.default_write_attempts,
-            "conditions_list":None
+            "conditions_list": None
         }
+
+        self.device_topic_list = {}
+        self.device_data = []
+        #self.device_topic_list = []
+        self.subdevices_list = []
+        self.device_status = False
+        self.day = None
+        self.condition_data = []
+        self.rthr = 0
+        self.device_name = []
+
         self.default_config = utils.load_config(config_path)
         self.vip.config.set_default("config", self.default_config)
-        self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], pattern="config")
+        self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"],\
+                                  pattern="config")
 
     def configure(self, config_name, action, contents):
         """
@@ -92,37 +91,21 @@ class AFDDSchedulerAgent(Agent):
         self.current_config.update(contents)
 
         self.analysis_name = self.current_config.get("analysis_name")
+        self.schedule_time = self.current_config.get("schedule_time")
         self.device = self.current_config.get("device")
-        self.actuation_mode = self.current_config.get("actuation_mode")
-        self.actuator_lock_required = self.current_config.get("require_actuator_check")
-        self.arguments = self.current_config.get("arguments")
-        self.actuation_mode = True if self.current_config.get("actuation_mode", "PASSIVE") == "ACTIVE" else False
-        self.actuator_lock_required = self.current_config.get("require_actuator_lock", False)
-        self.default_write_attempts = self.current_config.get("default_write_attempts")
+        self.mht = self.current_config.get("mht")
+        self.excess_operation = self.current_config.get("excess_operation")
+        self.interval = self.current_config.get("interval")
         self.timezone = self.current_config.get("timezone")
         self.condition_list = self.current_config.get("condition_list", {})
-
-        self.excess_operation = False
-        self.rtu_true = timedelta(minutes=0)
-        self.rtu_false = timedelta(minutes=0)
+        self.device_true_time = 0
 
         campus = self.device["campus"]
         building = self.device["building"]
-        points = self.arguments["points"]
-        self.publish_topics = "/".join([self.analysis_name, campus, building])
         device_config = self.device["unit"]
+        self.publish_topics = "/".join([self.analysis_name, campus, building])
         multiple_devices = isinstance(device_config, dict)
         self.command_devices = device_config.keys()
-        self.device_topic_dict = {}
-        self.device_topic_list = []
-        self.subdevices_list = []
-        self.interval = timedelta(minutes=1)
-        self.rthr = timedelta(hours=0)
-
-        if self.condition_list:
-            self.initialize_condition(self.condition_list)
-        else:
-            _log.debug("No diagnostic prerequisites configured!")
 
         try:
             for device_name in device_config:
@@ -130,195 +113,108 @@ class AFDDSchedulerAgent(Agent):
                                                     unit=device_name, path="", \
                                                     point="all")
 
-                self.device_topic_dict.update({device_topic: device_name})
-                self.device_topic_list.append(device_name)
-                if multiple_devices:
-                    for subdevice in device_config[device_name]["subdevices"]:
-                        self.subdevices_list.append(subdevice)
-                        subdevice_topic = topics.DEVICES_VALUE(campus=campus, \
-                                                               building=building, \
-                                                               unit=device_name, \
-                                                               path=subdevice, \
-                                                               point="all")
-
-                        subdevice_name = device_name + "/" + subdevice
-                        self.device_topic_dict.update({subdevice_topic: subdevice_name})
-                        self.device_topic_list.append(subdevice_name)
+                self.device_topic_list.update({device_topic: device_name})
+                self.device_name.append(device_name)
 
         except Exception as e:
             _log.error('Error configuring signal: {}'.format(e))
 
-        self.base_actuator_path = topics.RPC_DEVICE_PATH(campus=campus, building=building, \
-                                                         unit=None, path="", point=None)
-
-        for device in self.device_topic_dict:
-            _log.info("Subscribing to " + device)
-            try:
-                self.vip.pubsub.subscribe(peer="pubsub", prefix=device, \
-                                          callback=self.on_schedule)
-            except Exception as e:
-                _log.error('Error configuring signal: {}'.format(e))
-
-    def initialize_condition(self, condition_list):
-        """Initialize and store information associated with evaluation
-        of the diagnostic prerequisites.
-        :param prerequisites: dictionary with information associated
-        with diagnostic prerequisites.
-        :return: None
-        """
-        # list of point name associated with diagnostic prerequisites
-        # data is recieved in new_data method and subscriptions to device
-        # data are made in starting_base
-        condition_args = condition_list.get("condition_args")
-        # List of rules to evaluate to determine if conditions permit
-        # running the proactive diagnostics.
-        condition_list = condition_list.get("conditions")
-        for point in condition_args:
-            self.condition_data_required[point] = []
-        self.condition_variables = symbols(condition_args)
-        for prerequisite in condition_list:
-            self.condition_expr_list.append(parse_expr(prerequisite))
-
-    @Core.receiver("onstart")
-    def on_start(self, sender, **kwarge):
-        _log.info('Starting AgentTemplateAgent.')
-
-#   @Core.receiver("onstop")
-#    def on_stop(self, sender):
-#       _log.info('Stopping AgentTemplateAgent.')
-
-    def is_weekday(self, current_time):
-        print(current_time.weekday())
-        if current_time.weekday()== 6 and 7:
-            return False
+        date_today = datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone))
+        print(date_today)
+        if date_today in holidays.US(years=2020) or date_today.weekday() == 5 and 6:
+            schedule_time = "* * * * *"
+            self.core.schedule(cron(schedule_time), self.run_schedule)
         else:
-            return True
-    def is_holiday(self, current_time):
-        if current_time in holidays.US(years=2020):
-           return current_time.da
+            self.core.schedule(cron(self.schedule_time), self.run_schedule)
 
+    def run_schedule(self):
+        _log.info("current date time {}".format(datetime.utcnow()))
+        try:
+            for device in self.device_topic_list:
+                _log.info("Subscribing to " + device)
+                self.vip.pubsub.subscribe(peer="pubsub", prefix=device,
+                                          callback=self.on_data)
+        except Exception as e:
+            _log.error('Error configuring signal: {}'.format(e))
+            _log.error("Missing {} data to execute the AIRx process".format(device))
+        #self.core.periodic(self.interval, self.on_schedule)
+        if self.condition_data:
+            self.on_schedule()
+
+    def on_data(self, peer, sender, bus, topic, headers, message):
+        """
+        Subscribe device data.
+
+        """
+        self.condition_data = []
+        self.input_datetime = parse(headers.get("Date"))\
+            .astimezone(dateutil.tz.gettz(self.timezone))
+        condition_args = self.condition_list.get("condition_args")
+        symbols(condition_args)
+
+        for args in condition_args:
+            self.condition_data.append((args, message[0][args]))
+
+        _log.info("condition data {}".format(self.condition_data))
+
+    def on_schedule(self):
+        """
+        execute the condition of the device, If all condition are true then add time into true_time.
+        If true time is excedd the threshold time (mht) flag the excess operation
+
+        """
+        conditions = self.condition_list.get("conditions")
+        if all([parse_expr(condition).subs(self.condition_data)\
+                   for condition in conditions]):
+            self.device_true_time += self.interval
+            self.device_status = True
+            _log.debug('All condition true time {}'.format(self.device_true_time))
+        else:
+            self.device_status = False
+            _log.debug("one of the condition is false")
+
+        rthr = self.device_true_time/ 3600
+        if rthr > self.mht:
+            self.excess_operation = True
+
+        if self.is_midnight(self.input_datetime):
+            self.device_true_time = 0
+            for device_topic in self.device_topic_list:
+                print(device_topic)
+                self.publish(device_topic)
+
+    def publish(self,device_topic):
+        headers = {'Date': utils.format_timestamp(datetime.utcnow()\
+                                                  .astimezone(dateutil.tz.gettz(self.timezone)))}
+        message = [
+            {'excess_operation': bool(self.excess_operation),
+             'device_status': bool(self.device_status),
+             'device_true_time': int(self.device_true_time)
+             },
+            {'excess_operation': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
+             'device_status': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
+             'device_true_time': {'units': 'seconds', 'tz': 'UTC', 'data_type': 'integer'}
+             }
+        ]
+        device_topic = device_topic.replace("all", "report/all")
+        try:
+            self.vip.pubsub.publish(peer='pubsub',
+                                    topic=device_topic,
+                                    message=message,
+                                    headers=headers)
+        except Exception as e:
+            _log.error("In Publish: {}".format(str(e)))
 
     def is_midnight(self, current_time):
         midnight = datetime.combine(current_time, time.max).\
             astimezone(dateutil.tz.gettz(self.timezone))
         _log.debug("Midnight time {}".format(midnight))
-        next_time = current_time + self.interval
+        next_time = current_time+ timedelta(seconds=self.interval)
         _log.debug("next interval time {}".format(next_time))
         if midnight > next_time:
             return False
         else:
             return True
-
-    def all_condition_true(self, current_time):
-        pass
-
-    def on_schedule(self, peer, sender, bus, topic, headers, message):
-        """
-        Subscribe to device data and assemble data set to pass
-            to applications.
-        """
-        self.input_datetime = parse(headers.get("Date"))\
-            .astimezone(dateutil.tz.gettz(self.timezone))
-
-        _log.debug("Current time of publish: {}".format(self.input_datetime))
-        _log.debug("Current device topic: {}".format(topic))
-
-        device_data = {}
-
-        for key, value in message[0].items():
-            device_data_tag = topic.replace("all",key)
-            device_data[device_data_tag] = value
-            #_log.debug('device data for {} is {}'.format(device_data_tag, value)
-
-        _log.debug('device data {}'.format(device_data))
-        try:
-            status = message[0]['SupplyFanStatus']
-            _log.debug('status supplyfan {}'.format(status))
-        except:
-            _log.error("Missing 'SupplyFanStatus' data to execute the AIRx process")
-            #remeber previous value of status
-
-        try:
-            return_temp = message[0]['ReturnAirTemperature']
-            _log.debug('return temp {}'.format(return_temp))
-        except:
-            _log.error("Missing 'ReturnAirTemperture' data to execute the AIRx process")
-
-        if status and return_temp > self.arguments["rat_low_threshold"]\
-                    and return_temp < self.arguments["rat_high_threshold"]:
-            self.rtu_true += self.interval
-            _log.debug('rtu all condition true time {}'.format(self.rtu_true ))
-        else:
-            #self.set_point(topic.replace("all",'SupplyFanStatus'),0)
-            # set rtu_status to False
-            _log.info('status of supply fan set to False')
-
-        rthr = self.rtu_true.total_seconds()/3600
-
-        if rthr > self.arguments["mht"]:
-            self.excess_operation = True
-
-        if self.is_midnight(self.input_datetime):
-            print("main mid night function mai hun")
-            self.rtu_true = timedelta(minutes=0)
-            self.publish(rthr)
-
-    def process(self, results):
-        pass
-
-    def publish(self, results):
-        # Build message.
-        """
-        What topics are you going to publish?
-        excess_operation?
-        rtmr for a day?
-        rthr for a day?
-
-        """
-        headers = {'Date': utils.format_timestamp(datetime.utcnow())}
-
-        try:
-            self.vip.pubsub.publish("pubsub", self.publish_topics, headers, results)
-        except Exception as e:
-            _log.error("In Publish: {}".format(str(e)))
-
-
-
-    def set_point(self, point, value, check_response=True, tries=None):
-        failed = False
-        set_result = False
-        tries_remaining = tries if tries else self.default_write_attempts
-        while tries_remaining > 0:
-            try:
-                set_result = self.vip.rpc.call(
-                    'platform.actuator',
-                    'set_point',
-                    self.core.identity,
-                    point,
-                    value
-                ).get()
-                break
-            except Exception as e:
-                set_result = e
-                tries_remaining -= 1
-                if tries_remaining > 0:
-                    _log.warning('{} tries remaining of {} - got exception {} while setting {}'.format(
-                        tries_remaining, tries, set_result, point))
-                    sleep(random())
-                else:
-                    failed = True
-                continue
-        if check_response and set_result != value:
-            failed = True
-        if failed:
-            _log.error('Failed to set {} to {}. Received {} from set operation.'.format(
-                point, value, set_result))
-            return False
-        elif check_response:
-            return True
-        else:
-            # If not checking response here, return it for the caller.
-            return set_result
 
 
 def main(argv=sys.argv):
