@@ -414,6 +414,7 @@ class RegressionAgent(Agent):
         super(RegressionAgent, self).__init__(**kwargs)
         config = utils.load_config(config_path)
         self.debug = config.get("debug", True)
+        self.regression_inprogress = False
         # Read equipment configuration parameters
         site = config.get('campus', '')
         building = config.get('building', '')
@@ -616,7 +617,9 @@ class RegressionAgent(Agent):
         and regression methods.  Stores each devices result.
         :return:
         """
-
+        if self.regression_inprogress:
+            return
+        self.regression_inprogress = True
         self.exec_start = utils.get_aware_utc_now()
         _log.debug('Start regression - UTC converted: {}'.format(self.start))
         _log.debug('End regression UTC converted: {}'.format(self.end))
@@ -637,6 +640,7 @@ class RegressionAgent(Agent):
             self.publish_coefficients()
             exec_end = utils.get_aware_utc_now()
             exec_dif = exec_end - self.exec_start
+            self.regression_inprogress = False
             _log.debug("Regression for %s duration: %s", device, exec_dif)
 
     def publish_coefficients(self):
