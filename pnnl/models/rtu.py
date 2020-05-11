@@ -3,34 +3,14 @@ import operator
 import importlib
 from volttron.platform.agent import utils
 from volttron.pnnl.models.utils import clamp
+import volttron.pnnl.models.input_names as data_names
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
-
-
-class RTU(object):
-    OAT = "oat"
-    SFS = "sfs"
-    ZT = "zt"
-    ZDAT = "zdat"
-    ZAF = "zaf"
-    CSP = "csp"
-    HSP = "hsp"
-    OPS = {
+OPS = {
     "csp": [(operator.gt, operator.add), (operator.lt, operator.sub)],
     "hsp": [(operator.lt, operator.sub), (operator.gt, operator.add)]
 }
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "firstorderzone")
-        module = importlib.import_module("volttron.pnnl.models.rtu")
-        model_class = getattr(module, model_type)
-        self.prediction_array = []
-        self.model = model_class(config, self)
-
-    def get_q(self,  _set, sched_index, market_index, occupied):
-        q = self.model.predict(_set, sched_index, market_index, occupied)
-        return q
 
 
 class firstorderzone(object):
@@ -40,6 +20,7 @@ class firstorderzone(object):
         self.c2 = config["c2"]
         self.c3 = config["c3"]
         self.c4 = config["c4"]
+        self.coefficients = {"c1", "c2", "c3", "c4"}
         self.rated_power = config["rated_power"]
 
         self.on = [0]*parent.market_number
@@ -49,15 +30,14 @@ class firstorderzone(object):
         self.smc_interval = parent.single_market_contol_interval
         self.get_input_value = parent.get_input_value
 
-
         # Initialize input data names from parent
-        self.mclg_name = parent.MC
-        self.mhtg_name = parent.MH
-        self.oat_name = parent.OAT
-        self.sfs_name = parent.SFS
-        self.zt_name = parent.ZT
-        self.hsp_name = parent.HSP
-        self.csp_name = parent.CSP
+        self.mclg_name = data_names.MC
+        self.mhtg_name = data_names.MH
+        self.oat_name = data_names.OAT
+        self.sfs_name = data_names.SFS
+        self.zt_name = data_names.ZT
+        self.hsp_name = data_names.HSP
+        self.csp_name = data_names.CSP
 
         # Initialize input data from parent
         self.oat = self.get_input_value(self.oat_name)
@@ -121,6 +101,7 @@ class rtuzone(object):
         self.c2 = config["c2"]
         self.c3 = config["c3"]
         self.c = config["c"]
+        self.coefficients = {"c1", "c2", "c3", "c"}
         self.parent = parent
         self.rated_power = config["rated_power"]
         self.on_min = config.get("on_min", 0)
@@ -129,17 +110,17 @@ class rtuzone(object):
         self.on = [0]*parent.market_number
         self.off = [0]*parent.market_number
 
-        self.predict = self.get_t
+        self.predict = self.getQ
         self.parent.init_predictions = self.init_predictions
         self.smc_interval = parent.single_market_contol_interval
         self.get_input_value = parent.get_input_value
 
         # data inputs
-        self.mclg_name = parent.MC
-        self.mhtg_name = parent.MH
-        self.oat_name = parent.OAT
-        self.zt_name = parent.ZT
-        self.csp_name = parent.CSP
+        self.mclg_name = data_names.MC
+        self.mhtg_name = data_names.MH
+        self.oat_name = data_names.OAT
+        self.zt_name = data_names.ZT
+        self.csp_name = data_names.CSP
         self.predicting = "ZoneTemperature"
 
         self.oat = self.get_input_value(self.oat_name)
@@ -171,7 +152,7 @@ class rtuzone(object):
         _log.debug("Update model data: oat: {} - zt: {} - mclg: {} - mhtg: {}".format(self.oat, self.zt, self.mclg, self.mhtg))
 
     def update(self, _set, sched_index, market_index, occupied):
-        q = self.get_t(_set, sched_index, market_index, occupied, dc=False)
+        q = self.getQ(_set, sched_index, market_index, occupied, dc=False)
 
     def init_predictions(self, output_info):
         if self.parent.market_number == 1:
@@ -183,7 +164,7 @@ class rtuzone(object):
             _set = self.off_setpoint
         q = self.model.predict(_set, -1, -1, occupied, False)
 
-    def get_t(self, temp_stpt, sched_index, market_index, occupied, dc=True):
+    def getQ(self, temp_stpt, sched_index, market_index, occupied, dc=True):
         if self.parent.market_number == 1:
             oat = self.oat
             zt = self.zt
@@ -206,9 +187,9 @@ class rtuzone(object):
             runtime = 60
 
         if self.parent.mapped is not None:
-            ops = RTU.OPS[self.parent.mapped]
+            ops = OPS[self.parent.mapped]
         else:
-            ops = RTU.OPS["csp"]
+            ops = OPS["csp"]
 
         # assumption here is device is transitioning from cooling to off
         # or from heating to off in an hour.  No hour will contain both

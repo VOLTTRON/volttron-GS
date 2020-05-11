@@ -171,9 +171,6 @@ class TransactiveBase(MarketAgent, Model):
                                   prefix="/".join([self.record_topic,
                                                    "update_model"]),
                                   callback=self.update_model)
-        self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix="tnc/price",
-                                  callback=self.update_current_price)
 
     def init_markets(self):
         """
