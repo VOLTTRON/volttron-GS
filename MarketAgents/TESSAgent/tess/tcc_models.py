@@ -125,7 +125,8 @@ class Model(object):
             self.model = FirstOrderZone(model_parms)
         if model_type == "ahuchiller.ahuchiller":
             self.model = Ahu(model_parms)
-        if model_type == "light.simple":
+
+        if model_type == "light.simple_profile":
             ct_topic = outputs[0].get("topic")
             model_parms.update({"ct_topic": ct_topic})
             flexibility = outputs[0].get("flexibility_range")
@@ -272,8 +273,11 @@ class FirstOrderZone(object):
         self.zt_name = data_names.ZT
         self.zdat_name = data_names.ZDAT
         self.zaf_name = data_names.ZAF
+
+        self.off_setpoint = model_parms.get("off_setpoint", 26.0)
         self.ct_topic = model_parms['ct_topic']
         self.actuator = model_parms.get("actuator", "platform.actuator")
+
         self.vav_flag = model_parms.get("vav_flag", True)
         if self.vav_flag:
             self.get_q = self.getM
@@ -297,7 +301,7 @@ class FirstOrderZone(object):
 
     def create_demand_curve(self, prices, price, oat, _hour, occupied, new_cycle):
         curve = PolyLine()
-        tset = self.determine_set(prices, price)
+    
         if new_cycle:
             self.tpre = self.tIn[-1]
         if _hour == 0:
@@ -306,10 +310,14 @@ class FirstOrderZone(object):
             temp = self.tIn[_hour-1]
         for _price in prices:
             if occupied:
+                tset = self.determine_set(prices, _price)
                 q = self.get_q(oat, temp, tset, _hour)
             else:
+                tset = self.off_setpoint
                 q = 0
+            print("VAV MODEL : {} - {} - {} - {}".format(temp, tset, _hour, q))
             curve.add(Point(q, _price))
+        print("VAV MODEL2 : {} - {}".format(_hour, curve.points))
         self.tIn[_hour] = tset
         return curve
 
@@ -421,15 +429,17 @@ class Ahu(object):
         electric_demand_curve = PolyLine()
         for point in self.aggregate_air_demand.points:
             self.input_zone_load(point.x)
-            electric_demand_curve.add(Point(price=point.y, quantity=self.calculate_electric_load()))
+            electric_demand_curve.add(Point(price=point.y, quantity=self.calculate_electric_load()/1000.0))
         return electric_demand_curve
 
     def create_chilled_water_demand(self, oat):
-        electric_demand_curve = PolyLine()
+        chilled_water_demand = PolyLine()
+        print("AGG AIR: {}".format(self.aggregate_air_demand.points))
         for point in self.aggregate_air_demand.points:
             self.input_zone_load(point.x)
-            electric_demand_curve.add(Point(price=point.y, quantity=self.calculate_coil_load(oat)))
-        return electric_demand_curve
+            
+            chilled_water_demand.add(Point(price=point.y, quantity=self.calculate_coil_load(oat)))
+        return chilled_water_demand
 
 
 class LightSimple(object):
@@ -460,7 +470,7 @@ class LightSimple(object):
         return curve
 
     def predict(self, _set):
-        return _set*self.rated_power
+        return _set*self.rated_power/1000.0
 
     def determine_set(self, prices, price):
         """

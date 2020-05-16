@@ -1,5 +1,5 @@
 {
-  "config_directory": "/home/volttron/transactivecontrol1/MarketAgents/config/building1",
+  "config_directory": "/home/volttron/transactivecontrol/MarketAgents/config/building1",
   "AHU": {
     "AHU1": [
       "100_CLGSETP",

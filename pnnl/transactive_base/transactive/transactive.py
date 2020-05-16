@@ -1,5 +1,4 @@
 import logging
-import sys
 from datetime import timedelta as td
 import numpy as np
 
@@ -17,33 +16,15 @@ from volttron.platform.messaging import topics, headers as headers_mod
 from volttron.platform.jsonrpc import RemoteError
 from volttron.platform.vip.agent import errors
 
-from volttron.pnnl.models import Model
 _log = logging.getLogger(__name__)
 setup_logging()
 __version__ = '0.3'
 
 
-class TransactiveBase(MarketAgent, Model):
+class TransactiveBase(MarketAgent):
     def __init__(self, config, **kwargs):
-        MarketAgent.__init__(self, **kwargs)
-        default_config = {
-            "campus": "campus",
-            "building": "building",
-            "device": "device",
-            "agent_name": "",
-            "actuation_method": "periodic",
-            "control_interval": 900,
-            "market_name": "electric",
-            "input_data_timezone": "UTC",
-            "actuation_enable_topic": "tnc/actuate",
-            "actuation_enabled_onstart": False,
-            "price_multiplier": 1.0,
-            "inputs": [],
-            "outputs": [],
-            "schedule": {},
-            "model_parameters": {},
-        }
-        # Initaialize run parameters
+        super(TransactiveBase, self).__init__(**kwargs)
+
         self.actuation_enabled = False
         self.actuation_disabled = False
         self.current_datetime = None
@@ -56,125 +37,79 @@ class TransactiveBase(MarketAgent, Model):
         self.off_setpoint = None
         self.occupied = False
         self.mapped = None
-        self.market_prices = {}
-        self.day_ahead_prices = []
-        self.last_24_hour_prices = []
-        self.input_topics = set()
-
-        self.commodity = "Electricity"
-        self.update_flag = []
-        self.demand_curve = []
-        self.actuation_price_range = None
-        self.prices = []
-        self.default_min_price = 0.01
-        self.default_max_price = 0.1
-        self.market_name = []
-
-        # Variables declared in configure_main
-        self.record_topic = None
-        self.market_number = None
-        self.single_market_contol_interval = None
+        self.oat_predictions = []
+        self.market_prices = []
+        self.reserve_market_prices = []
+        self.input_topics = []
         self.inputs = {}
         self.outputs = {}
         self.schedule = {}
-        self.actuation_method = None
-        self.actuate_onstart = None
-        self.input_data_tz = None
-        self.actuation_rate = None
-        self.actuate_topic = None
-        self.price_multiplier = None
-        if config:
-            self.default_config = config
+        self.commodity = "Electricity"
+
+        campus = config.get("campus", "")
+        building = config.get("building", "")
+        self.record_topic = '/'.join(["tnc", campus, building])
+        # set actuation parameters for device control
+        actuate_topic = config.get("actuation_enable_topic", "default")
+        if actuate_topic == "default":
+            self.actuate_topic = '/'.join([campus, building, 'actuate'])
         else:
-            self.default_config = default_config
-        self.vip.config.set_default("config", self.default_config)
-        self.vip.config.subscribe(self.configure_main,
-                                  actions=["NEW", "UPDATE"],
-                                  pattern="config")
+            self.actuate_topic = actuate_topic
+        self.actuate_onstart = config.get("actuation_enabled_onstart", False)
+        self.actuation_method = config.get("actuation_method", "periodic")
+        self.actuation_rate = config.get("control_interval", 300)
 
-    def configure_main(self, config_name, action, contents, **kwargs):
-        config = self.default_config.copy()
-        config.update(contents)
+        self.price_multiplier = config.get("price_multiplier", 1.0)
+        self.default_min_price = 0.01
+        self.default_max_price = 0.1
+        self.default_price = config.get("fallback_price", 0.05)
+        input_data_tz = config.get("input_data_timezone", "UTC")
+        self.input_data_tz = dateutil.tz.gettz(input_data_tz)
+        inputs = config.get("inputs", [])
+        self._outputs = config.get("outputs", [])
+        schedule = config.get("schedule", {})
 
-        if action == "NEW" or "UPDATE":
-            campus = config.get("campus", "")
-            building = config.get("building", "")
-            device = config.get("device", "")
-            subdevice = config.get("subdevice", "")
+        self.init_inputs(inputs)
+        self.init_schedule(schedule)
+        market_name = config.get("market_name", "electric")
 
-            base_record_list = ["tnc", campus, building, device, subdevice]
-            base_record_list = list(filter(lambda a: a != "", base_record_list))
-            self.record_topic = '/'.join(base_record_list)
-            self.actuate_onstart = config.get("actuation_enabled_onstart", False)
-            self.actuation_method = config.get("actuation_method")
-            self.actuation_rate = config.get("control_interval")
-            actuate_topic = config.get("actuation_enable_topic", "default")
-            if actuate_topic == "default":
-                base_record_list.append('actuate')
-                self.actuate_topic = '/'.join(base_record_list)
-            else:
-                self.actuate_topic = actuate_topic
-            self.price_multiplier = config.get("price_multiplier")
-            input_data_tz = config.get("input_data_timezone")
-            self.input_data_tz = dateutil.tz.gettz(input_data_tz)
-            inputs = config.get("inputs", [])
-            schedule = config.get("schedule")
-            self.clear_input_subscriptions()
-            self.input_topics = set()
-            self.init_inputs(inputs)
-            self.init_schedule(schedule)
-            outputs = config.get("outputs")
-            self.init_outputs(outputs)
-            self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
-            self.init_input_subscriptions()
-            market_name = config.get("market_name", "electric")
-            tns = config.get("tns", True)
-            #  VOLTTRON MarketService does not allow "leaving"
-            #  markets.  Market participants can choose not to participate
-            #  in the market process by sending False during the reservation
-            #  phase.  This means that once the markets in market_name are
-            #  joined the deployment can only be changed from an TNS market
-            #  to single time step market by rebuilding both the agent
-            #  and the VOLTTRON MarketService.
-            if not self.market_name and tns is not None:
-                if tns:
-                    self.market_number = 24
-                    self.single_market_contol_interval = None
-                else:
-                    self.market_number = 1
-                    self.single_market_contol_interval = config.get("single_market_contol_interval", 15)
-                self.market_name = []
-                for i in range(self.market_number):
-                    self.market_name.append('_'.join([market_name, str(i)]))
-                self.init_markets()
-                model_config = config.get("model_parameters")
+        tns_integration = config.get("tns", True)
+        if tns_integration:
+            self.market_number = 24
+            self.single_market_contol_interval = None
+        else:
+            self.market_number = 1
+            self.single_market_contol_interval = config.get("single_market_contol_interval", 15)
 
-                Model.__init__(self, model_config, **kwargs)
-                self.setup()
+        self.market_name = []
+        for i in range(self.market_number):
+            self.market_name.append('_'.join([market_name, str(i)]))
 
-    def setup(self, **kwargs):
+        self.update_flag = []
+        self.demand_curve = []
+        self.prices = []
+        self.max_iterations = 5
+        self.iteration_counter = 0
+        self.market_type = config.get("market_type", "tns")
+        self.market_converged = False
+
+    @Core.receiver('onstart')
+    def setup(self, sender, **kwargs):
         """
         On start.
         :param sender:
         :param kwargs:
         :return:
         """
+        self.init_outputs(self._outputs)
+        self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
+        self.init_input_subscriptions()
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='mixmarket/start_new_cycle',
                                   callback=self.update_prices)
-        self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix="/".join([self.record_topic,
-                                                   "update_model"]),
-                                  callback=self.update_model)
 
     def init_markets(self):
-        """
-        Join markets.  For TNS will join 24 market or 1 market
-        for real-time price scenario.
-        :return: None
-        """
         for market in self.market_name:
-            _log.debug("Join market: %s  --  %s", self.core.identity, market)
             self.join_market(market, BUYER, None, self.offer_callback,
                              None, self.price_callback, self.error_callback)
             self.update_flag.append(False)
@@ -182,17 +117,13 @@ class TransactiveBase(MarketAgent, Model):
 
     def init_inputs(self, inputs):
         for input_info in inputs:
-            try:
-                point = input_info["point"]
-                mapped = input_info["mapped"]
-                topic = input_info["topic"]
-            except KeyError as ex:
-                _log.error("Exception on init_inputs %s", ex)
-                sys.exit()
-
-            value = input_info.get("initial_value")
+            point = input_info.pop("point")
+            mapped = input_info.pop("mapped")
+            topic = input_info.pop("topic")
+            value = input_info.pop("inital_value")
             self.inputs[mapped] = {point: value}
-            self.input_topics.add(topic)
+            if topic not in self.input_topics:
+                self.input_topics.append(topic)
 
     def init_outputs(self, outputs):
         for output_info in outputs:
@@ -213,14 +144,16 @@ class TransactiveBase(MarketAgent, Model):
             actuator = output_info.get("actuator", "platform.actuator")
             # This is the flexibility range for the market commodity the
             # transactive agent will utilize
-
-            flex = output_info["flexibility_range"]
-            # This is the flexibility of the control point, by default the same as the
-            # market commodity but not necessarily
-            ct_flex = output_info.get("control_flexibility", flex)
-            ct_flex, flex = self.set_control(ct_flex, flex)
-
-            fallback = output_info.get("fallback", mean(ct_flex))
+            ct_flex = None
+            flex = output_info.get("flexibility_range", None)
+            fallback = 0
+            if flex is not None:
+                # This is the flexibility of the control point, by default the same as the
+                # market commodity but not necessarily
+                ct_flex = output_info.get("control_flexibility", flex)
+                ct_flex = np.linspace(ct_flex[0], ct_flex[1], 11)
+                flex = np.linspace(flex[0], flex[1], 11)
+                fallback = output_info.get("fallback", mean(ct_flex))
             # TODO:  Use condition to determine multiple output scenario
             condition = output_info.get("condition", True)
 
@@ -249,39 +182,14 @@ class TransactiveBase(MarketAgent, Model):
                 "condition": condition
             }
 
-    def set_control(self, ct_flex, flex):
-        ct_flex = np.linspace(ct_flex[0], ct_flex[1], 11)
-        flex = np.linspace(flex[0], flex[1], 11)
-        return ct_flex, flex
-
     def init_input_subscriptions(self):
-        """
-        Create topic subscriptions for devices.
-        :return:
-        """
         for topic in self.input_topics:
             _log.debug('Subscribing to: ' + topic)
             self.vip.pubsub.subscribe(peer='pubsub',
                                       prefix=topic,
                                       callback=self.update_input_data)
 
-    def clear_input_subscriptions(self):
-        """
-        Create topic subscriptions for devices.
-        :return:
-        """
-        for topic in self.input_topics:
-            _log.debug('Unubscribing to: ' + topic)
-            self.vip.pubsub.unsubscribe(peer='pubsub',
-                                        prefix=topic,
-                                        callback=self.update_input_data)
-
     def init_schedule(self, schedule):
-        """
-        Parse schedule for use in determining occupancy.
-        :param schedule:
-        :return:
-        """
         if schedule:
             for day_str, schedule_info in schedule.items():
                 _day = parse(day_str).weekday()
@@ -291,19 +199,17 @@ class TransactiveBase(MarketAgent, Model):
                     self.schedule[_day] = {"start": start, "end": end}
                 else:
                     self.schedule[_day] = schedule_info
-        else:
-            self.occupied = True
 
     def init_actuation_state(self, actuate_topic, actuate_onstart):
-        if self.outputs:
+        if self._outputs:
             self.vip.pubsub.subscribe(peer='pubsub',
                                       prefix=actuate_topic,
                                       callback=self.update_actuation_state)
             if actuate_onstart:
                 self.update_actuation_state(None, None, None, None, None, True)
+                self.actuation_disabled = False
         else:
-            _log.info("%s - cannot initialize actuation state, "
-                      "no configured outputs.", self.core.identity)
+            _log.info("{} - cannot initialize actuation state, no configured outputs.".format(self.agent_name))
 
     def check_schedule(self, dt):
         current_schedule = self.schedule[dt.weekday()]
@@ -319,7 +225,7 @@ class TransactiveBase(MarketAgent, Model):
             return
         _start = current_schedule["start"]
         _end = current_schedule["end"]
-        if _start <= self.current_datetime.time() < _end:
+        if _start < self.current_datetime.time() < _end:
             self.occupied = True
             if not self.actuation_enabled:
                 self.update_actuation_state(None, None, None, None, None, True)
@@ -343,16 +249,21 @@ class TransactiveBase(MarketAgent, Model):
 
     def update_actuation_state(self, peer, sender, bus, topic, headers, message):
         state = message
-        if sender is not None:
-            _log.debug("%s actuation disabled %s",
-                       self.core.identity, not bool(state))
-            if self.actuation_disabled and not (bool(state)):
+        if self.actuation_disabled:
+            if sender is None:
+                _log.debug("{} is disabled not change in actuation state".format(self.agent_name))
                 return
-            self.actuation_disabled = not bool(state)
+            elif bool(state):
+                _log.debug("{} is re-enabled for actuation.".format(self.agent_name))
+                self.actuation_disabled = False
+        if not self.actuation_disabled:
+            if sender is not None and not bool(state):
+                _log.debug("{} is disabled for actuation.".format(self.agent_name))
+                self.actuation_disabled = True
 
         _log.debug("update actuation {}".format(state))
         if self.actuation_enabled and not bool(state):
-            for output_info in list(self.outputs.values()):
+            for output_info in self.outputs.values():
                 topic = output_info["topic"]
                 release = output_info["release"]
                 actuator = output_info["actuator"]
@@ -373,7 +284,6 @@ class TransactiveBase(MarketAgent, Model):
                                                           topic).get(timeout=10)
                     except (RemoteError, gevent.Timeout, errors.VIPError) as ex:
                         _log.warning("Failed to get {} - ex: {}".format(topic, str(ex)))
-                        release_value = None
                 else:
                     release_value = None
                 self.outputs[name]["release"] = release_value
@@ -394,14 +304,11 @@ class TransactiveBase(MarketAgent, Model):
                 return
             price = self.current_price
         sets = self.outputs[name]["ct_flex"]
-        if self.actuation_price_range is not None:
-            prices = self.actuation_price_range
-        else:
-            prices = self.determine_prices()
+        prices = self.determine_prices()
         value = self.determine_control(sets, prices, price)
         self.outputs[name]["value"] = value
         point = self.outputs.get("point", name)
-        topic_suffix = "Actuate"
+        topic_suffix = "/".join([self.agent_name, "Actuate"])
         message = {point: value, "Price": price}
         self.publish_record(topic_suffix, message)
 
@@ -424,11 +331,11 @@ class TransactiveBase(MarketAgent, Model):
         try:
             self.vip.rpc.call(actuator,
                               'set_point',
-                              self.core.identity,
+                              "",
                               point_topic,
-                              value).get(timeout=15)
+                              value).get(timeout=10)
         except (RemoteError, gevent.Timeout, errors.VIPError) as ex:
-            _log.warning("Failed to set %s - ex: %S", point_topic, str(ex))
+            _log.warning("Failed to set {} - ex: {}".format(point_topic, str(ex)))
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         for name, output in self.outputs.items():
@@ -444,20 +351,16 @@ class TransactiveBase(MarketAgent, Model):
             while not self.update_flag[market_index - 1]:
                 gevent.sleep(1)
         if market_index == len(self.market_name) - 1:
-            self.update_flag = [False]*len(self.market_name)
+            for i in range(len(self.market_name)):
+                self.update_flag[i] = False
         if market_index == 0 and self.current_datetime is not None:
             self.init_predictions(output_info)
 
-        schedule_index = self.determine_schedule_index(market_index)
+        sched_index = self.determine_sched_index(market_index)
         market_time = self.current_datetime + td(hours=market_index + 1)
-        if self.schedule:
-            occupied = self.check_future_schedule(market_time)
-        else:
-            occupied = True
+        occupied = self.check_future_schedule(market_time)
 
-        demand_curve = self.create_demand_curve(market_index,
-                                                schedule_index,
-                                                occupied)
+        demand_curve = self.create_demand_curve(market_index, sched_index, occupied)
         self.demand_curve[market_index] = demand_curve
         result, message = self.make_offer(market_name, buyer_seller, demand_curve)
         _log.debug("MARKET prices: {}".format(self.market_prices))
@@ -466,36 +369,25 @@ class TransactiveBase(MarketAgent, Model):
             self.update_state(market_index, sched_index, price)
 
     def create_demand_curve(self, market_index, sched_index, occupied):
-        """
-        Create demand curve.  market_index (0-23) where next hour is 0
-        (or for single market 0 for next market).  sched_index (0-23) is hour
-        of day corresponding to market that demand_curve is being created.
-        :param market_index: int; current market index where 0 is the next hour.
-        :param sched_index: int; 0-23 corresponding to hour of day
-        :param occupied: bool; true if occupied
-        :return:
-        """
-        _log.debug("%s create_demand_curve - index: %s - sched: %s",
-                   self.core.identity,  market_index, sched_index)
+        _log.debug("{} debug demand_curve - index: {} - sched: {}".format(self.agent_name,
+                                                                          market_index,
+                                                                          sched_index))
         demand_curve = PolyLine()
         prices = self.determine_prices()
-        for control, price in zip(self.ct_flexibility, prices):
+        ct_flx = []
+        for i in range(len(prices)):
             if occupied:
-                _set = control
+                _set = self.ct_flexibility[i]
             else:
                 _set = self.off_setpoint
             q = self.get_q(_set, sched_index, market_index, occupied)
+            _log.debug("Prices: {}, Quantity: {}".format(prices, q))
+            demand_curve.add(Point(price=prices[i], quantity=q))
 
-            demand_curve.add(Point(price=price, quantity=q))
-
-        topic_suffix = "DemandCurve"
-        message = {
-            "MarketIndex": market_index,
-            "Curve": demand_curve.tuppleize(),
-            "Commodity": self.commodity
-        }
-        _log.debug("%s debug demand_curve - curve: %s",
-                   self.core.identity, demand_curve.points)
+        ct_flx = [min(ct_flx), max(ct_flx)] if ct_flx else []
+        topic_suffix = "/".join([self.agent_name, "DemandCurve"])
+        message = {"MarketIndex": market_index, "Curve": demand_curve.tuppleize(), "Commodity": self.commodity}
+        _log.debug("{} debug demand_curve - curve: {}".format(self.agent_name, demand_curve.points))
         self.publish_record(topic_suffix, message)
         return demand_curve
 
@@ -505,61 +397,39 @@ class TransactiveBase(MarketAgent, Model):
             if self.market_prices:
                 try:
                     price = self.market_prices[market_index]
-                    _log.warning("%s - market %s did not clear, "
-                                 "using market_prices!",
-                                 self.core.identity, market_name)
+                    _log.warn("{} - market {} did not clear, using market_prices!".format(self.agent_name, market_name))
                 except IndexError:
-                    _log.warning("%s - market %s did not clear, and exception "
-                                 "was raised when accessing market_prices!",
-                                 self.core.identity, market_name)
+                    _log.warn("{} - market {} did not clear, and exception was raised when accessing market_prices!".format(self.agent_name, market_name))
+                    price = self.default_price
             else:
-                _log.warning("%s - market %s did not clear, "
-                             "and no market_prices!",
-                             self.core.identity, market_name)
-        if self.demand_curve and self.demand_curve[market_index].points:
+                _log.warn("{} - market {} did not clear, and no market_prices, using default fallback price!".format(self.agent_name, market_name))
+                price = self.default_price
+        cleared_quantity = None
+        if self.demand_curve[market_index] is not None and self.demand_curve[market_index].points:
             cleared_quantity = self.demand_curve[market_index].x(price)
-        else:
-            cleared_quantity = "None"
 
-        schedule_index = self.determine_schedule_index(market_index)
-        _log.debug("%s price callback market: %s, price: %s, quantity: %s",
-                   self.core.identity, market_name, price, quantity)
-        topic_suffix = "MarketClear"
-        message = {
-            "MarketIndex": market_index,
-            "Price": price,
-            "Quantity": [quantity, cleared_quantity],
-            "Commodity": self.commodity
-        }
-        self.publish_record(topic_suffix, message)
-
-        # If a price is known update the state of agent (in concrete
-        # implementation of transactive agent).
-        if price is not None:
-            self.update_state(market_index, schedule_index, price)
-            # For single timestep market do actuation when price clears.
-            if self.actuation_method == "market_clear" and market_index == 0:
-                self.do_actuation(price)
+        sched_index = self.determine_sched_index(market_index)
+        _log.debug("{} price callback market: {}, price: {}, quantity: {}".format(self.agent_name, market_name, price, quantity))
+        topic_suffix = "/".join([self.agent_name, "MarketClear"])
+        message = {"MarketIndex": market_index, "Price": price, "Quantity": [quantity, cleared_quantity], "Commodity": self.commodity}
+        #self.publish_record(topic_suffix, message)
+        # this line of logic was different in VAV agent
+        # if price is not None:
+        #if price is not None and market_index < self.market_number-1:
+        if price is not None and self.market_type != "city":
+            self.update_state(market_index, sched_index, price)
+        if price is not None and self.actuation_method == "market_clear" and market_index == 0:
+            self.do_actuation(price)
 
     def error_callback(self, timestamp, market_name, buyer_seller, error_code, error_message, aux):
-        """
-        Callback if there is a error for a market.
-        :param timestamp:
-        :param market_name: str; market error occured for.
-        :param buyer_seller: str; is participant a buyer or seller
-        :param error_code: str; error code
-        :param error_message: str; error message
-        :param aux: dict; auxillary infor for non-intersection of curves
-        :return:
-        """
-
-        _log.error("%s - error for Market: %s", self.core.identity, market_name)
-        _log.error("buyer_seller : %s - error: %s - aux: %s",
-                   buyer_seller, error_message, aux)
+        _log.debug('{} - error for Market: {} {}, Message: {}'.format(self.agent_name,
+                                                                      market_name,
+                                                                      buyer_seller,
+                                                                      aux))
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
         _log.debug("Get prices prior to market start. {}".format(message))
-        current_hour = parse(message['Date']).hour
+        current_hour = message['hour']
         #new_day_flag = message.get('new_day', True)
         # if new_day_flag:
         #     self.iteration_counter = 0 #reset iteration counter
@@ -576,24 +446,14 @@ class TransactiveBase(MarketAgent, Model):
             # MARKET CONVERGED!!
             _log.debug("MARKET CONVERGED: {}".format(self.agent_name))
 
-
         # Store received prices so we can use it later when doing clearing process
-        if self.day_ahead_prices:
-            self.actuation_price_range = self.determine_prices()
-            if current_hour != self.current_hour:
-                self.current_price = self.day_ahead_prices[0]
-                self.last_24_hour_prices.append(self.current_price)
-                if len(self.last_24_hour_prices) > 24:
-                    self.last_24_hour_prices.pop(0)
-                    self.market_prices = self.last_24_hour_prices
-                elif len(self.last_24_hour_prices) == 24:
-                    self.market_prices = self.last_24_hour_prices
-                else:
-                    self.market_prices = message['prices']
-        else:
-            self.market_prices = message["prices"]
+        # if self.market_prices:
+        #     _log.debug("current prices not none {}, {}".format(current_hour, self.current_hour))
+        #     if current_hour != self.current_hour:
+        #         _log.debug("current hour != current hour")
+        #         self.current_price = self.market_prices[0]
 
-        self.current_hour = current_hour
+        #self.current_hour = current_hour
         self.oat_predictions = []
         oat_predictions = message.get("temp", [])
 
@@ -602,20 +462,8 @@ class TransactiveBase(MarketAgent, Model):
         _log.debug("Received new market prices: {}".format(self.market_prices))
         self.reserve_market_prices = message.get('reserved_prices', [])  # Array of reserve prices
 
-
     def determine_control(self, sets, prices, price):
-        """
-        prices is an list of 11 elements, evenly spaced from the smallest price
-        to the largest price and corresponds to the y-values of a line.  sets
-        is an np.array of 11 elements, evenly spaced from the control value at
-        the lowest price to the control value at the highest price and
-        corresponds to the x-values of a line.  Price is the cleared price.
-        :param sets: np.array;
-        :param prices: list;
-        :param price: float
-        :return:
-        """
-        self.day_ahead_prices = message['prices']  # Array of prices
+        _log.debug("transactive: determine_control")
         control = np.interp(price, prices, sets)
         control = self.clamp(control, min(self.ct_flexibility), max(self.ct_flexibility))
         return control
@@ -635,7 +483,6 @@ class TransactiveBase(MarketAgent, Model):
             else:
                 price_min = avg_price*0.8
                 price_max = avg_price*1.2
-
         else:
             avg_price = None
             std_price = None
@@ -647,79 +494,38 @@ class TransactiveBase(MarketAgent, Model):
         return price_array
 
     def update_input_data(self, peer, sender, bus, topic, headers, message):
-        """
-        Call back method for data subscription for
-        device data from MasterDriverAgent.
-        :param peer:
-        :param sender:
-        :param bus:
-        :param topic: str; topic for device - devices/campus/building/device/all
-        :param headers: dict; contains Date/Timestamp
-        :param message: list of dicts of key value pairs; [{data}, {metadata}]
-        :return:
-        """
-        # data is assumed to be in format from VOLTTRON master driver.
         data = message[0]
-        try:
-            current_datetime = parse(headers.get("Date"))
-        except TypeError:
-            _log.debug("%s could not parse Datetime in input data payload!",
-                       self.core.identity)
-            current_datetime = None
-        if current_datetime is not None:
-            self.current_datetime = current_datetime.astimezone(self.input_data_tz)
+        current_datetime = parse(headers.get("Date"))
+        self.current_datetime = current_datetime.astimezone(self.input_data_tz)
         self.update_data(data)
         if current_datetime is not None and self.schedule:
             self.check_schedule(current_datetime)
 
     def update_data(self, data):
-        """
-        Each time data comes in on message bus from MasterDriverAgent
-        update the data for access by model.
-        :param data: dict; key value pairs from master driver.
-        :return:
-        """
         to_publish = {}
         for name, input_data in self.inputs.items():
             for point, value in input_data.items():
                 if point in data:
                     self.inputs[name][point] = data[point]
                     to_publish[point] = data[point]
-        topic_suffix = "InputData"
+        topic_suffix = "/".join([self.agent_name, "InputData"])
         message = to_publish
         self.publish_record(topic_suffix, message)
-        # Call models update_data method
         self.model.update_data()
 
-    def determine_schedule_index(self, index):
-        """
-        Determine the actual hour for schedule that
-        corresponds to a market index
-        :param index: int; market_index
-        :return:
-        """
+    def determine_sched_index(self, index):
         if self.current_datetime is None:
             return index
-        schedule_index = index + self.current_datetime.hour + 1
-        if schedule_index >= 24:
-            schedule_index = schedule_index - 24
-        return schedule_index
+        elif index + self.current_datetime.hour + 1 < 24:
+            return self.current_datetime.hour + index + 1
+        else:
+            return self.current_datetime.hour + index + 1 - 24
 
     def get_input_value(self, mapped):
-        """
-        Called by model of concrete implementation of transactive to
-        obtain the current value for a mapped data point.
-        :param mapped:
-        :return:
-        """
         try:
-            return list(self.inputs[mapped].values())[0]
+            return self.inputs[mapped].values()[0]
         except KeyError:
             return None
-
-    def update_model(self, peer, sender, bus, topic, headers, message):
-        coefficients = message
-        self.model.update_coefficients(coefficients)
 
     def clamp(self, value, x1, x2):
         min_value = min(abs(x1), abs(x2))

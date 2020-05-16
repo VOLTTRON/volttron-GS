@@ -105,8 +105,8 @@ def uncontrol_agent(config_path, **kwargs):
     default_min_price = config.get('default_min_price', 0.01)
     default_max_price = config.get('default_min_price', 100.0)
     for i in range(24):
-        market_name.append('_'.join([base_name, str(i)]))
         q_uc.append(float(config.get("power_" + str(i), 0)))
+        market_name.append('_'.join([base_name, str(i)]))
 
     verbose_logging = config.get('verbose_logging', True)
     building_topic = topics.DEVICES_VALUE(campus=config.get("campus", ""),
@@ -195,12 +195,7 @@ class UncontrolAgent(MarketAgent):
         return float(expr.subs(point_list))
 
     def determine_load_index(self, index):
-        if self.current_hour is None:
-            return index
-        elif index + self.current_hour + 1 < 24:
-            return self.current_hour + index + 1
-        else:
-            return self.current_hour + index + 1 - 24
+        return index
 
     def aggregate_power(self, peer, sender, bus, topic, headers, message):
         """

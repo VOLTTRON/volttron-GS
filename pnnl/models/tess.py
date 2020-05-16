@@ -1,13 +1,15 @@
 import itertools
 import numpy as np
-import pandas
 import pulp
 import logging
 import importlib
 from variable_group import VariableGroup, RANGE
-from volttron.pnnl.model import Model
+from volttron.platform.agent import utils
 
-class Tess(Model):
+_log = logging.getLogger(__name__)
+utils.setup_logging()
+
+class Tess(object):
     def __init__(self, config, parent, **kwargs):
         self.a_coef = config.get("a_coef", [0.257986, 0.0389016, -0.00021708, 0.0468684, -0.00094284, -0.00034344])
         self.b_coef = config.get("b_coef", [0.933884, -0.058212, 0.00450036, 0.00243, 0.000486, -0.001215])
@@ -22,6 +24,22 @@ class Tess(Model):
         self.T_cw_ch = config.get("T_cw_ch", -5)  # degrees C
         self.T_cw_norm = config.get("T_cw_norm", 4.4)  # degrees C
         self.T_fr = config.get("T_fr", 0)  # degrees C
+        self.init_soc = config.get("init_soc", 0.8)
+        self.final_soc = config.get("final_soc", -1.0)
+        self.charging_rate = None
+        self.chiller_only = 0
+        self.ice_discharge_chiller_both = 1
+        self.discharge_only = 2
+        self.ice_discharge = 3
+        self.charge_ice = 4
+        self.charge_ice_plus_chiller = 5
+        self.TSS = None
+        self.get_input_value = parent.get_input_value
+        self.soc = None
+
+    def update_data(self):
+        self.TSS = self.get_input_value('tss')
+        _log.debug("Tess model update_data: {}".format(self.TSS))
 
     @staticmethod
     def poly(c, x):
@@ -77,19 +95,19 @@ class Tess(Model):
 
         return _constant
 
-    def build_tess_constraints(self, energy_price, reserve_price, t_out, q_cool, init_soc, final_soc):
+    def build_tess_constraints(self, energy_price, reserve_price, t_out, q_cool):
         """
         Build constraints and objective function for TESS
         :param energy_price: Energy price from city market
         :param reserve_price: Reserve price from city market
         :param t_out: Outdoor temperature -- degree celcius
         :param q_cool: Cooling load --- kW
-        :param init_soc: initial SOC
-        :param final_soc: final SOC
         :return:
         """
         numHours = len(energy_price)
-        #print("{}, {}, {}, {}".format(numHours, len(reserve_price), len(t_out), len(q_cool)))
+        energy_price = np.array(energy_price)
+        reserve_price = np.array(reserve_price)
+        _log.debug("{}, ep: {}, rp: {}, oat: {}, qcool: {}".format(numHours, len(energy_price), len(reserve_price), len(t_out), len(q_cool)))
         if numHours != len(reserve_price) or numHours != len(t_out) or numHours != len(q_cool):
             raise (TypeError("The lengths of energy_price, reserve_price, and q_cool should match."))
 
@@ -202,14 +220,14 @@ class Tess(Model):
         name = 'tess_conInitSoc'
 
         def checkInitSoC(index):
-            return tess_l[index] == init_soc
+            return tess_l[index] == self.init_soc
 
         c = checkInitSoC(0)
         constraints.append((c, name))
 
-        if final_soc >= 0:
+        if self.final_soc >= 0:
             name = 'tess_conFinalSoc_0'
-            checkFinalSoC = tess_l[numHours] == final_soc
+            checkFinalSoC = tess_l[numHours] == self.final_soc
             constraints.append((checkFinalSoC, name))
 
         numHours_index = (range(numHours),)
@@ -284,7 +302,6 @@ class Tess(Model):
 
         def tess_conThermalChargingLB_func(index):
             k = index[0]
-            print("unr: {}".format(-pulp.lpSum(a_LB * tess_l_LB[RANGE, k] + b_LB * tess_S_LB[RANGE, k])))
             return tess_u_n[k] >= -pulp.lpSum(a_LB * tess_l_LB[RANGE, k] + b_LB * tess_S_LB[RANGE, k])
 
         add_constraint("tess_conThermalChargingLB", numHours_index, tess_conThermalChargingLB_func) # -u_LB(l[k])
@@ -465,7 +482,6 @@ class Tess(Model):
 
         def tess_conReserveEnergyLimit_func(index):
             k = index[0]
-            print("Qstor: {}".format(tess_l[k] + tess_u_r[k] / self.Q_stor))
             return tess_l[k] + tess_u_r[k] / self.Q_stor >= 0
 
         add_constraint("tess_conReserveEnergyLimit", numHours_index, tess_conReserveEnergyLimit_func)
@@ -474,26 +490,28 @@ class Tess(Model):
         objective_components.append((-energy_price * tess_p[RANGE])/1000 + (reserve_price * tess_r[RANGE])/ 1000)
         return constraints, objective_components
 
-    def run_tess_optimization(self, energy_price, reserve_price, t_out, q_cool, init_soc, final_soc):
+    def run_tess_optimization(self, energy_price, reserve_price, t_out, q_cool):
         """
         Run optimization for TESS
         :param energy_price:
         :param reserve_price:
         :param t_out:
         :param q_cool:
-        :param init_soc:
-        :param final_soc:
         :return:
         """
+        _log.debug("TESS model: energy_price:{price}, reserve_price:{reserve}, oat: {oat}, q_cool: {q_cool}".format(
+            price=energy_price,
+            reserve=reserve_price,
+            oat=t_out,
+            q_cool=q_cool
+        ))
         # build constraints and objective function for TESS
         tess_constraints, tess_objective_components = self.build_tess_constraints(energy_price,
                                                                                   reserve_price,
                                                                                   t_out,
-                                                                                  q_cool,
-                                                                                  init_soc,
-                                                                                  final_soc)
+                                                                                  q_cool)
 
-        prob = pulp.LpProblem("TESS_BESS Optimization", pulp.LpMaximize)
+        prob = pulp.LpProblem("TESS Optimization", pulp.LpMaximize)
         prob += pulp.lpSum(tess_objective_components), "Objective Function"
         prob.writeLP("pyversion.lp")
         for c in tess_constraints:
@@ -501,10 +519,10 @@ class Tess(Model):
         prob.writeLP("tess_output.txt")
         time_limit = 30
         # TBD: time_limit
-        try:
-            prob.solve(pulp.solvers.PULP_CBC_CMD(maxSeconds=time_limit))
-        except Exception as e:
-            print("PULP failed!")
+        #try:
+        prob.solve(pulp.solvers.PULP_CBC_CMD(maxSeconds=time_limit))
+        #except Exception as e:
+            #print("PULP failed!")
 
         print(pulp.LpStatus[prob.status])
         print(pulp.value(prob.objective))
@@ -516,10 +534,79 @@ class Tess(Model):
         N=len(energy_price)
         p_result = [result['tess_p_{}'.format(x)] for x in range(N) ]
         r_result = [result['tess_r_{}'.format(x)] for x in range(N)]
-
+        self.charging_rate = [result['tess_u_{}'.format(x)] for x in range(N) ]
+        self.soc = [result['tess_l_{}'.format(x)] for x in range(N+1)]
+        print("TESS: charging_rate(u): {}".format(self.charging_rate))
         tess_powerInject = - np.array(p_result) / 1000  # MW
         tess_powerReserve = np.array(r_result) / 1000  # MW
 
-        tess_soc = result['tess_l']
-        return tess_powerInject, tess_powerReserve, tess_soc
+        return tess_powerInject, tess_powerReserve
 
+
+    def calculate_control(self, current_date_time, q_cool):
+        hour = current_date_time.time().hour
+        minute = current_date_time.time().minute
+        mode = self.chiller_only
+        elapsed_time_in_1hour = float(minute)/60
+        _log.debug("TESS: calculate_control: datetime: {}, self.soc: {}, q_cool: {}".format(current_date_time, self.soc, q_cool))
+        _log.debug("TESS: hour: {}, minute: {}, elapsed_time_in_1hour: {}".format(hour, minute, elapsed_time_in_1hour))
+        try:
+            if self.charging_rate is None:
+                _log.debug("TESS: self.charging_rate is None ")
+                return self.chiller_only
+            else:
+                if self.charging_rate[hour] == 0:
+                    _log.debug("TESS: self.charging_rate[hour] == 0")
+                    mode = self.chiller_only
+                    _log.debug("TESS: charging_rate: {}".format(self.charging_rate[hour]))
+                elif self.charging_rate[hour] < 0 and self.charging_rate[hour] + q_cool[hour] == 0:
+                    _log.debug("TESS: self.charging_rate[hour] < 0 and self.charging_rate[hour] + q_cool[hour] == 0")
+                    _log.debug("TESS: u[hour]: {}, self.u_LB(self.soc[hour]: {}, self.u_UB(self.soc[hour]): {}, self.soc[hour]: {}".format(self.charging_rate[hour],
+                                                                                                                   self.u_LB(self.soc[hour]),
+                                                                                                                   self.u_UB(self.soc[hour]),
+                                                                                                                   self.soc[hour]))
+                    first_max = -self.charging_rate[hour]/self.u_LB(self.soc[hour])
+                    second_max = 1 + self.charging_rate[hour]/self.u_LB(self.soc[hour])
+                    _log.debug("TESS: first_max: {}, second_max: {}".format(first_max, second_max))
+                    if elapsed_time_in_1hour <= first_max:
+                        mode = self.ice_discharge
+                    elif elapsed_time_in_1hour <= second_max:
+                        mode = self.chiller_only
+                elif self.charging_rate[hour] < 0 and (self.charging_rate[hour] + q_cool[hour] > 0):
+                    _log.debug("TESS: self.charging_rate[hour] < 0 and (self.charging_rate[hour] + q_cool[hour] > 0)")
+                    _log.debug("TESS: u[hour]: {}, self.u_LB(self.soc[hour]: {}, self.u_UB(self.soc[hour]): {}, self.soc[hour]: {}".format(self.charging_rate[hour],
+                                                                                                                   self.u_LB(self.soc[hour]),
+                                                                                                                   self.u_UB(self.soc[hour]),
+                                                                                                                   self.soc[hour]))
+                    first_max = -self.charging_rate[hour]/self.u_UB(self.soc[hour])
+                    second_max = 1 + self.charging_rate[hour]/self.u_UB(self.soc[hour])
+                    _log.debug("TESS: first_max: {}, second_max: {}".format(first_max, second_max))
+                    if elapsed_time_in_1hour <= first_max:
+                        mode = self.ice_discharge_chiller_both
+                    elif elapsed_time_in_1hour <= second_max:
+                        mode = self.chiller_only
+                elif self.charging_rate[hour] > 0 and q_cool[hour] == 0:
+                    _log.debug("TESS: self.charging_rate[hour] > 0 and q_cool[hour] == 0")
+                    _log.debug("TESS: u[hour]: {}, self.u_LB(self.soc[hour]: {}, self.u_UB(self.soc[hour]): {}, self.soc[hour]: {}".format(self.charging_rate[hour],
+                                                                                                                   self.u_LB(self.soc[hour]),
+                                                                                                                   self.u_UB(self.soc[hour]),
+                                                                                                                   self.soc[hour]))
+                    first_max = self.charging_rate[hour] / self.u_UB(self.soc[hour])
+                    second_max = 1 - self.charging_rate[hour] / self.u_UB(self.soc[hour])
+                    _log.debug("TESS: first_max: {}, second_max: {}".format(first_max, second_max))
+                    if elapsed_time_in_1hour <= first_max:
+                        mode = self.ice_discharge_chiller_both
+                    elif elapsed_time_in_1hour <= second_max:
+                        mode = self.chiller_only
+                elif self.charging_rate[hour] > 0:
+                    _log.debug("TESS: self.charging_rate[hour] > 0 ")
+                    first_max = self.charging_rate[hour] / self.u_UB(self.soc[hour])
+                    second_max = 1 - self.charging_rate[hour] / self.u_UB(self.soc[hour])
+                    if elapsed_time_in_1hour <= first_max:
+                        mode = self.charge_ice_plus_chiller
+                    elif elapsed_time_in_1hour <= second_max:
+                        mode = self.chiller_only
+        except ValueError as e:
+            _log.exception("TESS: ValueError : {}".format(e))
+        _log.debug("TESS: calculate_control Mode: {}".format(mode))
+        return mode

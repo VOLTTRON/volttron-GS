@@ -116,14 +116,15 @@ class TESSAgent(TransactiveBase, Model):
                                   callback=self._calculate_demand)
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='mixmarket/make_tcc_predictions',
-                                  callback=self.make_tcc_predictions())
+                                  callback=self.make_tcc_predictions)
         self.tcc = PredictionManager(self.tcc_config)
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         # Verify that all tcc predictions for day have finished
         while self.tcc.calculating_predictions:
-            gevent.sleep(1)
-
+            _log.debug("SLEEP")
+            gevent.sleep(0.1)
+        _log.debug("PRICES: {}".format(self.market_prices))
         for idx in range(24):
             price = self.market_prices[idx]
             self.cooling_load[idx] = self.tcc.chilled_water_demand[idx].x(price)
@@ -158,7 +159,7 @@ class TESSAgent(TransactiveBase, Model):
                 electric_demand_tess_tcc = [self.tcc.electric_demand[i], electric_demand_curve]
                 aggregate_electric = PolyLineFactory.combine(electric_demand_tess_tcc, 11)
                 self.make_offer(self.market_name[i], buyer_seller, aggregate_electric)
-                _log.debug("TESS: electric demand : Pt: {}".format(electric_demand_curve.points))
+                _log.debug("TESS: electric demand : Pt: {}".format(aggregate_electric.points))
 
             self.vip.pubsub.publish(peer='pubsub',
                                     topic='mixmarket/reserve_demand',
@@ -166,7 +167,7 @@ class TESSAgent(TransactiveBase, Model):
                                         "reserve_power": list(tess_power_reserve),
                                         "sender": self.agent_name
                                     })
-
+            
     def _calculate_demand(self, peer, sender, bus, topic, headers, message):
         """
 
@@ -201,6 +202,7 @@ class TESSAgent(TransactiveBase, Model):
             "temp": array - next days 24 hour hourly outdoor temperature predictions
         }
         """
+        self.tcc.calculating_predictions = True
         new_cycle = message["start_of_cycle"]
         if new_cycle and self.first_day and self.iteration_count > 0:
             self.first_day = False
@@ -212,7 +214,7 @@ class TESSAgent(TransactiveBase, Model):
         _log.debug("new_cycle %s - first_day %s - iteration_count %s",
                    new_cycle, self.first_day, self.iteration_count)
         oat_predictions = message["temp"]
-        prices = message["price"]
+        prices = message["prices"]
         _date = parse(message["prediction_date"])
         self.tcc.do_predictions(prices, oat_predictions, _date, new_cycle=new_cycle, first_day=self.first_day)
 
@@ -253,6 +255,9 @@ class TESSAgent(TransactiveBase, Model):
         price_min = prices[0]
         price_max = prices[len(prices)-1]
         return price_min, price_max
+
+    def update_state(self, market_index, sched_index, price):
+        pass
 
 
 def main():

@@ -3,7 +3,7 @@
   "name": "PNNL_Campus",
   "agent_name": "PNNL_Campus",
   "T": 24,
-  "weather_file": "/home/volttron/volttron/transactivecontrol/MarketAgents/CampusAgent/weather_data/energyplus.csv",
+  "weather_file": "/home/volttron/volttron-GS/MarketAgents/CampusAgent/weather_data/energyplus.csv",
   "input_topic": "devices/PNNL/BUILDING1/AHU1/all",
   "simulation": true,
   "simulation_start_time": "2017-08-01 00:00:00",
