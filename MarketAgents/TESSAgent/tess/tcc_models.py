@@ -105,6 +105,8 @@ class Model(object):
             flexibility = outputs[0].get("flexibility_range")
             control_flexibility = outputs[0].get("control_flexibility")
             off_setpoint = outputs[0].get("off_setpoint")
+            ct_topic = outputs[0].get("topic")
+            actuator = outputs[0].get("actuator")
 
             min_flow = float(flexibility[1])
             max_flow = float(flexibility[0])
@@ -113,15 +115,19 @@ class Model(object):
 
             model_parms.update({"min_flow": min_flow})
             model_parms.update({"max_flow": max_flow})
+            model_parms.update({"actuator": actuator})
 
             model_parms.update({"tmin": tmin})
             model_parms.update({"tmax": tmax})
+            model_parms.update({"ct_topic": ct_topic})
 
             model_parms.update({"off_setpoint": off_setpoint})
             self.model = FirstOrderZone(model_parms)
         if model_type == "ahuchiller.ahuchiller":
             self.model = Ahu(model_parms)
         if model_type == "light.simple":
+            ct_topic = outputs[0].get("topic")
+            model_parms.update({"ct_topic": ct_topic})
             flexibility = outputs[0].get("flexibility_range")
             min_lighting = float(flexibility[1])
             max_lighting = float(flexibility[0])
@@ -129,6 +135,8 @@ class Model(object):
             model_parms.update({"dol_min": min_lighting})
             model_parms.update({"dol_max": max_lighting})
             model_parms.update({"off_setpoint": off_setpoint})
+            actuator = outputs[0].get("actuator")
+            model_parms.update({"actuator": actuator})
             self.model = LightSimple(model_parms)
 
     def determine_prices(self, _prices):
@@ -216,6 +224,32 @@ class Model(object):
             occupied = False
         return occupied
 
+    def check_current_schedule(self, _dt):
+        """
+        Check if the hour/day for current prediction is scheduled
+        as occupied.  If no schedule is provided all times are
+        considered as occupied.
+        :param dt:
+        :param _hour:
+        :return:
+        """
+        if not self.schedule:
+            occupied = True
+            return occupied
+        current_schedule = self.schedule[_dt.weekday()]
+        if "always_on" in current_schedule:
+            occupied = True
+            return occupied
+        if "always_off" in current_schedule:
+            occupied = False
+            return occupied
+        _start = current_schedule["start"]
+        _end = current_schedule["end"]
+        if _start <= _dt < _end:
+            occupied = True
+        else:
+            occupied = False
+        return occupied
 
 class FirstOrderZone(object):
     """VAV firstorder zone tcc model."""
@@ -238,7 +272,8 @@ class FirstOrderZone(object):
         self.zt_name = data_names.ZT
         self.zdat_name = data_names.ZDAT
         self.zaf_name = data_names.ZAF
-
+        self.ct_topic = model_parms['ct_topic']
+        self.actuator = model_parms.get("actuator", "platform.actuator")
         self.vav_flag = model_parms.get("vav_flag", True)
         if self.vav_flag:
             self.get_q = self.getM
@@ -401,20 +436,22 @@ class LightSimple(object):
     """
     Lighting model for tcc standalone.
     """
-    def __init__(self, config, **kwargs):
-        self.rated_power = config["rated_power"]
-        min_lighting = config.get("dol_min", 0.7)
-        max_lighting = config.get("dol_min", 0.9)
-        self.off_setpoint = config.get("off_setpoint")
+    def __init__(self, model_parms, **kwargs):
+        self.rated_power = model_parms["rated_power"]
+        min_lighting = model_parms.get("dol_min", 0.7)
+        max_lighting = model_parms.get("dol_min", 0.9)
+        self.off_setpoint = model_parms.get("off_setpoint")
         self.sets = np.linspace(max_lighting, min_lighting, 11)
         self.get_q = self.predict
+        self.ct_topic = model_parms['ct_topic']
+        self.actuator = model_parms.get("actuator", "platform.actuator")
 
     def update_inputs(self, inputs):
         pass
 
     def create_demand_curve(self, prices, _price, occupied):
         if occupied:
-            _set = np.interp(_price, prices, self.sets)
+            _set = self.determine_set(prices, _price)
         else:
             _set = self.off_setpoint
         curve = PolyLine()
@@ -424,4 +461,19 @@ class LightSimple(object):
 
     def predict(self, _set):
         return _set*self.rated_power
+
+    def determine_set(self, prices, price):
+        """
+        prices is an list of 11 elements, evenly spaced from the smallest price
+        to the largest price and corresponds to the y-values of a line.  sets
+        is an np.array of 11 elements, evenly spaced from the control value at
+        the lowest price to the control value at the highest price and
+        corresponds to the x-values of a line.  Price is the cleared price.
+        :param sets: np.array;
+        :param prices: list;
+        :param price: float
+        :return:
+        """
+        tset = np.interp(price, prices, self.sets)
+        return tset
 
