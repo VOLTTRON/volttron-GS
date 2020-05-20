@@ -60,11 +60,11 @@
 
 from datetime import datetime, timedelta
 
-from helpers import *
-from vertex import Vertex
-from time_interval import TimeInterval
-from interval_value import IntervalValue
-from measurement_type import MeasurementType
+from .helpers import *
+from .vertex import Vertex
+from .time_interval import TimeInterval
+from .interval_value import IntervalValue
+from .measurement_type import MeasurementType
 
 
 def test_is_hlh():

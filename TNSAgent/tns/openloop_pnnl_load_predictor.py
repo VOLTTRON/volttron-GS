@@ -63,13 +63,13 @@ import logging
 #utils.setup_logging()
 _log = logging.getLogger(__name__)
 
-from helpers import *
-from measurement_type import MeasurementType
-from interval_value import IntervalValue
-from market import Market
-from time_interval import TimeInterval
-from local_asset_model import LocalAssetModel
-from temperature_forecast_model import TemperatureForecastModel
+from .helpers import *
+from .measurement_type import MeasurementType
+from .interval_value import IntervalValue
+from .market import Market
+from .time_interval import TimeInterval
+from .local_asset_model import LocalAssetModel
+from .temperature_forecast_model import TemperatureForecastModel
 
 
 class OpenLoopPnnlLoadPredictor(LocalAssetModel, object):

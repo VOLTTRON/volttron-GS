@@ -57,10 +57,10 @@
 # }}}
 
 
-from vertex import Vertex
-from time_interval import TimeInterval
-from local_asset import LocalAsset
-from interval_value import IntervalValue
+from .vertex import Vertex
+from .time_interval import TimeInterval
+from .local_asset import LocalAsset
+from .interval_value import IntervalValue
 
 
 class Model:

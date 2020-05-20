@@ -58,9 +58,9 @@
 
 from datetime import datetime, timedelta
 
-from market_state import MarketState
-import helpers
-from timer import Timer
+from .market_state import MarketState
+from .helpers import *
+from .timer import Timer
 
 import logging
 #utils.setup_logging()

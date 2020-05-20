@@ -64,9 +64,9 @@
 
 from datetime import datetime, date, timedelta
 
-from measurement_type import MeasurementType
-from measurement_unit import MeasurementUnit
-from helpers import format_ts, format_date
+from .measurement_type import MeasurementType
+from .measurement_unit import MeasurementUnit
+from .helpers import format_ts, format_date
 
 
 class MeterPoint:

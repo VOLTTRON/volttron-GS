@@ -61,14 +61,14 @@ import logging
 
 from volttron.platform.agent import utils
 
-from model import Model
-from vertex import Vertex
-from interval_value import IntervalValue
-from measurement_type import MeasurementType
-from helpers import *
-from market import Market
-from time_interval import TimeInterval
-from local_asset import LocalAsset
+from .model import Model
+from .vertex import Vertex
+from .interval_value import IntervalValue
+from .measurement_type import MeasurementType
+from .helpers import *
+from .market import Market
+from .time_interval import TimeInterval
+from .local_asset import LocalAsset
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)

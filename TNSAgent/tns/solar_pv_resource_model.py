@@ -57,11 +57,11 @@
 # }}}
 
 
-from helpers import *
-from measurement_type import MeasurementType
-from local_asset import LocalAsset
-from local_asset_model import LocalAssetModel
-from interval_value import IntervalValue
+from .helpers import *
+from .measurement_type import MeasurementType
+from .local_asset import LocalAsset
+from .local_asset_model import LocalAssetModel
+from .interval_value import IntervalValue
 
 
 class SolarPvResourceModel(LocalAssetModel, object):

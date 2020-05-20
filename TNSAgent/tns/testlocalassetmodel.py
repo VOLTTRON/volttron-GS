@@ -61,15 +61,15 @@
 from datetime import datetime, timedelta, date, time
 from dateutil import relativedelta
 
-from model import Model
-from vertex import Vertex
-from interval_value import IntervalValue
-from measurement_type import MeasurementType
-from helpers import *
-from market import Market
-from time_interval import TimeInterval
-from local_asset import LocalAsset
-from local_asset_model import LocalAssetModel
+from .model import Model
+from .vertex import Vertex
+from .interval_value import IntervalValue
+from .measurement_type import MeasurementType
+from .helpers import *
+from .market import Market
+from .time_interval import TimeInterval
+from .local_asset import LocalAsset
+from .local_asset_model import LocalAssetModel
 
 
 def test_all():

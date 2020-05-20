@@ -60,8 +60,8 @@
 
 from datetime import timedelta
 
-from measurement_type import MeasurementType
-from measurement_unit import MeasurementUnit
+from .measurement_type import MeasurementType
+from .measurement_unit import MeasurementUnit
 
 
 class InformationService:
