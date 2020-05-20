@@ -70,8 +70,8 @@ from .measurement_type import MeasurementType
 from .measurement_unit import MeasurementUnit
 from .interval_value import IntervalValue
 
-from .volttron.platform.agent import utils
-from .volttron.platform.jsonrpc import RemoteError
+from volttron.platform.agent import utils
+from volttron.platform.jsonrpc import RemoteError
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
