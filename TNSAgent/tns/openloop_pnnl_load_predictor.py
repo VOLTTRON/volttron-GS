@@ -384,8 +384,8 @@ class OpenLoopPnnlLoadPredictor(LocalAssetModel, object):
     
     @classmethod
     def predict_2017(cls):
-        from market import Market
-        import helpers
+        from .market import Market
+
         from dateutil import parser
 
         forecaster = TemperatureForecastModel('/home/hngo/PycharmProjects/volttron-applications/pnnl/TNSAgent/campus_config')
