@@ -470,7 +470,7 @@ class NeighborModel(Model, object):
             cur_demand = find_obj_by_ti(self.scheduledPowers, time_intervals[0])
 
             # Update the inferred demand
-            d = 0 if cur_demand is None else cur_demand.value
+            d = 0.0 if cur_demand is None else cur_demand.value
             self.demandThreshold = max([0, self.demandThreshold, d])  # [avg.kW]
             _log.debug("measurement: {} threshold: {}".format(d, self.demandThreshold))
         else:
@@ -478,7 +478,8 @@ class NeighborModel(Model, object):
             # may be updated from the MeterPoint object.
 
             # Update the demand threshold.
-            self.demandThreshold = max([0, self.demandThreshold, mtr.current_measurement])  # [avg.kW]
+            measurement = mtr.current_measurement if mtr.current_measurement is not None else 0.0
+            self.demandThreshold = max([0, self.demandThreshold, measurement])  # [avg.kW]
             _log.debug("Meter: {} measurement: {} threshold: {}".format(mtr.name,
                                                                         mtr.current_measurement,
                                                                         self.demandThreshold))
