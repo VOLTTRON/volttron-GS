@@ -58,9 +58,9 @@
 
 from datetime import datetime, timedelta
 
-from market_state import MarketState
-import helpers
-from timer import Timer
+from .market_state import MarketState
+from .helpers import format_ts
+from .timer import Timer
 
 import logging
 #utils.setup_logging()
@@ -101,7 +101,7 @@ class TimeInterval:
         self.startTime = start_time  # datetime(st)
 
         # NAME
-        self.name = helpers.format_ts(self.startTime)
+        self.name = format_ts(self.startTime)
 
         # RECONCILED - reconciliation flag for possible future use
         self.reconciled = False

@@ -57,7 +57,7 @@
 # }}}
 
 
-from local_asset import LocalAsset
+from .local_asset import LocalAsset
 
 
 class SolarPvResource(LocalAsset, object):

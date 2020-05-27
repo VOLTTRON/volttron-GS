@@ -92,7 +92,7 @@ class RTUAgent(TransactiveBase):
         else:
             _set = self.off_setpoint
 
-        self.model.update(_set, sched_index, market_index)
+        self.model.update(_set, sched_index, market_index, occupied)
         self.update_flag[market_index] = True
 
 

@@ -26,7 +26,7 @@ class firstorderzone(object):
         self.on = [0]*parent.market_number
         self.off = [0]*parent.market_number
 
-        self.predict_quantity = self.getQ
+        self.predict = self.getQ
         self.smc_interval = parent.single_market_contol_interval
         self.get_input_value = parent.get_input_value
 
@@ -114,6 +114,7 @@ class rtuzone(object):
         self.parent.init_predictions = self.init_predictions
         self.smc_interval = parent.single_market_contol_interval
         self.get_input_value = parent.get_input_value
+        self.check_future_schedule = parent.check_future_schedule
 
         # data inputs
         self.mclg_name = data_names.MC
@@ -151,14 +152,14 @@ class rtuzone(object):
             self.on[0] = 0
         _log.debug("Update model data: oat: {} - zt: {} - mclg: {} - mhtg: {}".format(self.oat, self.zt, self.mclg, self.mhtg))
 
-    def update(self, _set, sched_index, market_index):
-        occupied = self.parent.occupied if self.parent.occupied is not None else True
-        q = self.getQ(_set, sched_index, market_index, occupied, dc=False)
+    def update(self, _set, sched_index, market_index, occupied):
+        q = self.predict(_set, sched_index, market_index, occupied, dc=False)
 
     def init_predictions(self, output_info):
         if self.parent.market_number == 1:
             return
-        occupied = self.parent.check_future_schedule(self.parent.current_datetime)
+        occupied = self.check_future_schedule(self.parent.current_datetime)
+
         if occupied:
             _set = output_info["value"]
         else:
