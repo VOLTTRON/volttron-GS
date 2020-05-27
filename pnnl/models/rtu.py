@@ -151,18 +151,19 @@ class rtuzone(object):
             self.on[0] = 0
         _log.debug("Update model data: oat: {} - zt: {} - mclg: {} - mhtg: {}".format(self.oat, self.zt, self.mclg, self.mhtg))
 
-    def update(self, _set, sched_index, market_index, occupied):
+    def update(self, _set, sched_index, market_index):
+        occupied = self.parent.occupied if self.parent.occupied is not None else True
         q = self.getQ(_set, sched_index, market_index, occupied, dc=False)
 
     def init_predictions(self, output_info):
         if self.parent.market_number == 1:
             return
-        occupied = self.check_future_schedule(self.current_datetime)
+        occupied = self.parent.check_future_schedule(self.parent.current_datetime)
         if occupied:
             _set = output_info["value"]
         else:
-            _set = self.off_setpoint
-        q = self.model.predict(_set, -1, -1, occupied, False)
+            _set = self.parent.off_setpoint
+        q = self.predict(_set, -1, -1, occupied, False)
 
     def getQ(self, temp_stpt, sched_index, market_index, occupied, dc=True):
         if self.parent.market_number == 1:
