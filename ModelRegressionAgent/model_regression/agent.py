@@ -707,7 +707,8 @@ class RegressionAgent(Agent):
                                            count=1000,
                                            external_platform=self.external_platform).get(timeout=300)
                 _log.debug(result)
-                if not bool(result) or "values" not in result:
+                if not bool(result) or "values" not in result or \
+                        ("values" in result and not bool(result["values"])):
                     _log.debug('ERROR: empty RPC return for '
                                'coefficient *%s* at %s', token, rpc_start)
                     break
