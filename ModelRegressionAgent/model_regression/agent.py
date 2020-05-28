@@ -252,7 +252,7 @@ class Regression:
             self.intercept = regression_map.pop('Intercept')
         elif 'intercept' in regression_map:
             self.intercept = regression_map.pop('intercept')
-        tokens = regression_map.keys()
+        tokens = list(regression_map)
         tokens = sort_list(tokens)
         for token in tokens:
             self.regression_map[token] = regression_map[token]
@@ -355,7 +355,7 @@ class Regression:
         # applying formula and data df
         coefficient_dict = defaultdict(list)
         dependent, independent = patsy.dmatrices(formula, df, return_type='dataframe')
-        y = dependent[self.model_dependent.keys()[0]]
+        y = dependent[list(self.model_dependent)[0]]
         if not any(x in self.model_independent.keys() for x in ['Intercept', 'intercept']):
             x = independent.drop(columns=['Intercept', 'intercept'])
         else:
