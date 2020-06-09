@@ -70,7 +70,6 @@ class MarketContainer(object):
         self.container = {}
 
     def add_member(self, tag, config_path):
-        print config_path
         config = utils.load_config(config_path)
         self.container[tag] = Model(config, self)
 

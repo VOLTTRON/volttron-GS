@@ -77,7 +77,7 @@ utils.setup_logging()
 __version__ = "0.1"
 
 
-class TESSAgent(TransactiveBase, Model):
+class TESSAgent(TransactiveBase):
     """
     The TESS Agent participates in Electricity Market as consumer of electricity at fixed price.
     It participates in internal Chilled Water market as supplier of chilled water at fixed price.
@@ -100,7 +100,6 @@ class TESSAgent(TransactiveBase, Model):
         self.agent_name = config.get("agent_name", "tess_agent")
         model_config = config.get("model_parameters", {})
         TransactiveBase.__init__(self, config, **kwargs)
-        Model.__init__(self, model_config, **kwargs)
         self.numHours = 24
         self.cooling_load = [None] * self.numHours
         self.init_markets()
@@ -115,22 +114,29 @@ class TESSAgent(TransactiveBase, Model):
                                   prefix='mixmarket/calculate_demand',
                                   callback=self._calculate_demand)
         self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix='tcc/cooling_demand',
-                                  callback=self.make_offer)
+                                  prefix='mixmarket/make_tcc_predictions',
+                                  callback=self.make_tcc_predictions)
+        self.tcc = PredictionManager(self.tcc_config)
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
-        pass
-
-    def make_offer(self, peer, sender, bus, topic, headers, message):
         # Verify that all tcc predictions for day have finished
+        while self.tcc.calculating_predictions:
+            _log.debug("SLEEP")
+            gevent.sleep(0.1)
+
         _log.debug("PRICES: {}".format(self.market_prices))
         for idx in range(24):
             price = self.market_prices[idx]
-            self.cooling_load[idx] = message[idx]
-
-        _log.debug("TESS: market_prices = {}".format(self.market_prices))
-        _log.debug("TESS: reserve_market_prices = {}".format(self.reserve_market_prices))
-        _log.debug("TESS: oat_predictions = {}".format(self.oat_predictions))
+            self.cooling_load[idx] = self.tcc.chilled_water_demand[idx].x(price)
+        self.vip.pubsub.publish(topic='tcc/cooling_demand',
+                                message=self.cooling_load)
+        # Only need to do this once so return on all
+        # other call backs
+        if market_name != self.market_name[0]:
+            return
+        # Check just for good measure
+        _log.debug("market_prices = {}".format(self.market_prices))
+        _log.debug("oat_predictions = {}".format(self.oat_predictions))
         _log.debug("TESS: cooling_load = {}".format(self.cooling_load))
         T_out = [-0.05 * (t - 14.0) ** 2 + 30.0 for t in range(1, 25)]
         # do optimization to obtain power and reserve power
@@ -143,54 +149,65 @@ class TESSAgent(TransactiveBase, Model):
         self.cooling_load = [None] * self.numHours
         _log.debug("TESS: offer_callback tess_power_inject: {}, tess_power_reserve: {}".format(tess_power_inject,
                                                                                                tess_power_reserve))
-        price_min, price_max = self.determine_price_min_max()
-        _log.debug("TESS: price_min: {}, price_max: {}".format(price_min, price_max))
         for i in range(0, len(self.market_prices)):
-            electric_demand_curve = PolyLine()
-            electric_demand_curve.add(Point(tess_power_inject[i], price_min))
-            electric_demand_curve.add(Point(tess_power_inject[i], price_max))
-            self.make_offer(self.market_name[i], BUYER, electric_demand_curve)
+            self.make_offer(self.market_name[i], buyer_seller, self.tcc.electric_demand[i])
+            _log.debug("TCC hour {}-- electric demand  {}".format(i, self.tcc.electric_demand[i].points))
 
-        self.vip.pubsub.publish(peer='pubsub',
-                                topic='mixmarket/reserve_demand',
-                                message={
-                                    "reserve_power": list(tess_power_reserve),
-                                    "sender": self.agent_name
-                                })
-            
-    def _calculate_demand(self, peer, sender, bus, topic, headers, message):
+    def make_tcc_predictions(self, peer, sender, bus, topic, headers, message):
         """
+        Run tcc predictions for building electric and chilled water market.
+        Message sent by campus agent on topic 'mixmarket/make_tcc_predictions'.
 
+        message = dict; {
+            "converged": bool - market converged
+            "prices": array - next days 24 hour hourly demand prices,
+            "reserved_prices": array - next days 24 hour hourly reserve prices
+            "start_of_cycle": bool - start of cycle
+            "hour": int for current hour,
+            "prediction_date": string - prediction date,
+            "temp": array - next days 24 hour hourly outdoor temperature predictions
+        }
         """
-        prices = message['prices']
-        reserve_prices = message['reserve_prices']
-        tess_power_inject, tess_power_reserve = self.model.run_tess_optimization(prices,
-                                                                                reserve_prices,
-                                                                                self.oat_predictions,
-                                                                                self.cooling_load_copy)
-        tess_power_inject = [i * -1 for i in tess_power_inject]
-        self.vip.pubsub.publish(peer='pubsub',
-                                topic='mixmarket/tess_bess_demand',
-                                message={
-                                    "power": tess_power_inject,
-                                    "reserve_power": tess_power_reserve,
-                                    "sender": self.agent_name
-                                })
+        self.tcc.calculating_predictions = True
+        new_cycle = message["start_of_cycle"]
+        if new_cycle and self.first_day and self.iteration_count > 0:
+            self.first_day = False
+            self.iteration_count = 1
+        elif new_cycle:
+            self.iteration_count = 1
+        else:
+            self.iteration_count += 1
+        _log.debug("new_cycle %s - first_day %s - iteration_count %s",
+                   new_cycle, self.first_day, self.iteration_count)
+        oat_predictions = message["temp"]
+        prices = message["prices"]
+        _date = parse(message["prediction_date"])
+        self.tcc.do_predictions(prices, oat_predictions, _date, new_cycle=new_cycle, first_day=self.first_day)
 
     def determine_control(self, sets, prices, price):
-        # I cannot find this method anywhere
-        return self.model.calculate_control(self.current_datetime, self.cooling_load_copy)
-
-    def determine_price_min_max(self):
-        """
-        Determine minimum and maximum price from 24-hour look ahead prices.  If the TNS
-        market architecture is not utilized, this function must be overwritten in the child class.
-        :return:
-        """
-        prices = self.determine_prices()
-        price_min = prices[0]
-        price_max = prices[len(prices)-1]
-        return price_min, price_max
+        for ahu, vav_list in self.tcc.ahus.items():
+            # Assumes all devices are on same occupancy schedule.  Potential problem
+            occupied = self.tcc.check_current_schedule(self.current_time)
+            for vav in vav_list:
+                actuator = self.market_container.container[vav].actuator
+                point_topic = self.market_container.container[vav].ct_topic
+                value = self.market_container.container[vav].determine_set(prices, price)
+                if occupied:
+                    self.vip.rpc.call(actuator,
+                                      'set_point',
+                                      self.core.identity,
+                                      point_topic,
+                                      value).get(timeout=15)
+            for light in self.tcc.lights:
+                actuator = self.market_container.container[light].actuator
+                point_topic = self.market_container.container[light].ct_topic
+                value = self.market_container.container[light].determine_set(prices, price)
+                if occupied:
+                    self.vip.rpc.call(actuator,
+                                      'set_point',
+                                      self.core.identity,
+                                      point_topic,
+                                      value).get(timeout=15)
 
     def update_state(self, market_index, sched_index, price):
         pass
