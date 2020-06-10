@@ -246,7 +246,7 @@ class Model(object):
             return occupied
         _start = current_schedule["start"]
         _end = current_schedule["end"]
-        if _start <= _dt < _end:
+        if _start <= _dt.time < _end:
             occupied = True
         else:
             occupied = False
