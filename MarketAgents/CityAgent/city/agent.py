@@ -228,7 +228,7 @@ class CityAgent(Agent):
                 self.schedule_power(start_of_cycle=False)
             else:
                 _log.debug("CITY::MARKET converged !!")
-                #self.send_to_campus(converged=True, start_of_cycle=False)
+                self.send_to_campus(converged=True, start_of_cycle=False)
 
     def balance_market(self):
         power_demand = np.array([self.power_demand]).T

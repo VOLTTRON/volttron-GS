@@ -152,6 +152,10 @@ class MarketServiceAgent(Agent):
 
         _log.debug("Clearing prices are [{prices}]".format(prices=str.join(',', [str(p) for p in self.prices])))
 
+        if message["converged"] == True:
+            _log.debug("Converged do not start mixed market!")
+            return
+
         gevent.sleep(self.reservation_delay)
         self.send_collect_reservations_request(utils.get_aware_utc_now())
 
