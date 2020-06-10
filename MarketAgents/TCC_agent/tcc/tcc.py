@@ -77,7 +77,7 @@ utils.setup_logging()
 __version__ = "0.1"
 
 
-class TESSAgent(TransactiveBase):
+class TCCAgent(TransactiveBase):
     """
     The TESS Agent participates in Electricity Market as consumer of electricity at fixed price.
     It participates in internal Chilled Water market as supplier of chilled water at fixed price.
@@ -108,11 +108,8 @@ class TESSAgent(TransactiveBase):
 
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
-        _log.debug("TESS onstart")
+        _log.debug("TCC onstart")
         # Subscriptions
-        self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix='mixmarket/calculate_demand',
-                                  callback=self._calculate_demand)
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='mixmarket/make_tcc_predictions',
                                   callback=self.make_tcc_predictions)
@@ -215,7 +212,7 @@ class TESSAgent(TransactiveBase):
 
 def main():
     """Main method called to start the agent."""
-    utils.vip_main(TESSAgent, version=__version__)
+    utils.vip_main(TCCAgent, version=__version__)
 
 
 if __name__ == '__main__':
