@@ -178,10 +178,12 @@ class TCCAgent(TransactiveBase):
         self.tcc.do_predictions(prices, oat_predictions, _date, new_cycle=new_cycle, first_day=self.first_day)
 
     def determine_control(self, sets, prices, price):
+        _log.debug("TCC DO Control!")
         for ahu, vav_list in self.tcc.ahus.items():
             # Assumes all devices are on same occupancy schedule.  Potential problem
-            occupied = self.tcc.check_current_schedule(self.current_datetime)
             for vav in vav_list:
+                occupied = self.tcc.container[vav].check_current_schedule(self.current_datetime)
+                _log.debug("TCC DO Control! {} -- occupied: {}".format(vav, occupied))
                 actuator = self.market_container.container[vav].actuator
                 point_topic = self.market_container.container[vav].ct_topic
                 value = self.market_container.container[vav].determine_set(prices, price)
@@ -195,6 +197,8 @@ class TCCAgent(TransactiveBase):
                 actuator = self.market_container.container[light].actuator
                 point_topic = self.market_container.container[light].ct_topic
                 value = self.market_container.container[light].determine_set(prices, price)
+                occupied = self.tcc.container[vav].check_current_schedule(self.current_datetime)
+                _log.debug("TCC DO Control! {} -- occupied: {}".format(light, occupied))
                 if occupied:
                     self.vip.rpc.call(actuator,
                                       'set_point',

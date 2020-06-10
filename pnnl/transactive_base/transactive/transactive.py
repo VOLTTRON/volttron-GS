@@ -292,6 +292,7 @@ class TransactiveBase(MarketAgent):
         self.actuation_enabled = state
 
     def update_outputs(self, name, price):
+        _log.debug("Current time {}".format(self.current_datetime))
         if self.market_converged:
             if self.current_datetime is not None:
                 _hour = self.current_datetime.hour
