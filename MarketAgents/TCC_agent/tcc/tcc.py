@@ -215,8 +215,8 @@ class TCCAgent(TransactiveBase):
             _log.debug("No time information available, check input topics!")
             return
 
-        _hour = self.current_datetime().hour
-        if self.marekt_prices is None:
+        _hour = self.current_datetime.hour
+        if self.market_prices is None:
             _log.debug("No market prices")
             return
 
