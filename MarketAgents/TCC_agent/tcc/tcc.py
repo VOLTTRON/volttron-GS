@@ -137,15 +137,9 @@ class TCCAgent(TransactiveBase):
         # Check just for good measure
         _log.debug("market_prices = {}".format(self.market_prices))
         _log.debug("oat_predictions = {}".format(self.oat_predictions))
-        _log.debug("TESS: cooling_load = {}".format(self.cooling_load))
+        _log.debug("cooling_load = {}".format(self.cooling_load))
         T_out = [-0.05 * (t - 14.0) ** 2 + 30.0 for t in range(1, 25)]
         # do optimization to obtain power and reserve power
-        tess_power_inject, tess_power_reserve = self.model.run_tess_optimization(self.market_prices,
-                                                                                 self.reserve_market_prices,
-                                                                                 self.oat_predictions,
-                                                                                 # T_out,
-                                                                                 self.cooling_load)
-        tess_power_inject = [i * -1 for i in tess_power_inject]
         self.cooling_load = [None] * self.numHours
         _log.debug("TESS: offer_callback tess_power_inject: {}, tess_power_reserve: {}".format(tess_power_inject,
                                                                                                tess_power_reserve))
