@@ -181,7 +181,7 @@ class TCCAgent(TransactiveBase):
     def determine_control(self, sets, prices, price):
         for ahu, vav_list in self.tcc.ahus.items():
             # Assumes all devices are on same occupancy schedule.  Potential problem
-            occupied = self.tcc.check_current_schedule(self.current_time)
+            occupied = self.tcc.check_current_schedule(self.current_datetime)
             for vav in vav_list:
                 actuator = self.market_container.container[vav].actuator
                 point_topic = self.market_container.container[vav].ct_topic
