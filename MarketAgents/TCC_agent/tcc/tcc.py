@@ -177,7 +177,7 @@ class TCCAgent(TransactiveBase):
         _date = parse(message["prediction_date"])
         self.tcc.do_predictions(prices, oat_predictions, _date, new_cycle=new_cycle, first_day=self.first_day)
 
-    def determine_control(self, sets, prices, price):
+    def determine_control(self, prices, price):
         _log.debug("TCC DO Control!")
         for ahu, vav_list in self.tcc.ahus.items():
             # Assumes all devices are on same occupancy schedule.  Potential problem
@@ -205,6 +205,24 @@ class TCCAgent(TransactiveBase):
                                       self.core.identity,
                                       point_topic,
                                       value).get(timeout=15)
+
+    def do_actuation(self, price=None):
+        if not self.market_converged:
+            _log.debug("Market not converged!")
+            return
+
+        if self.current_datetime is None:
+            _log.debug("No time information available, check input topics!")
+            return
+
+        _hour = self.current_datetime().hour
+        if self.marekt_prices is None:
+            _log.debug("No market prices")
+            return
+
+        price = self.market_prices[_hour]
+        prices = self.market_prices
+        self.determine_control(prices, price)
 
     def update_state(self, market_index, sched_index, price):
         pass
