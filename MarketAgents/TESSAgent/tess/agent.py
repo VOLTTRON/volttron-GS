@@ -67,7 +67,6 @@ from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 from volttron.platform.agent.base_market_agent.poly_line_factory import PolyLineFactory
 from volttron.pnnl.models import Model
-from .tcc_market import PredictionManager
 from volttron.platform.vip.agent import Agent, Core
 from volttron.platform.agent.math_utils import mean, stdev
 from volttron.platform.agent.base_market_agent.buy_sell import BUYER, SELLER
