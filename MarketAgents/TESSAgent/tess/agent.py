@@ -118,15 +118,10 @@ class TESSAgent(TransactiveBase, Model):
                                   callback=self.calculate_load)
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
-        pass
-
-    def calculate_load(self, peer, sender, bus, topic, headers, message):
-        # Verify that all tcc predictions for day have finished
-        _log.debug("PRICES: {}".format(self.market_prices))
-        for idx in range(24):
-            price = self.market_prices[idx]
-            self.cooling_load[idx] = message[idx]
-
+        if market_name != self.market_name[-1]:
+            return
+        while None in self.cooling_load:
+            gevent.sleep(0.1)
         _log.debug("TESS: market_prices = {}".format(self.market_prices))
         _log.debug("TESS: reserve_market_prices = {}".format(self.reserve_market_prices))
         _log.debug("TESS: oat_predictions = {}".format(self.oat_predictions))
@@ -139,7 +134,6 @@ class TESSAgent(TransactiveBase, Model):
                                                                                  # T_out,
                                                                                  self.cooling_load)
         tess_power_inject = [i * -1 for i in tess_power_inject]
-        self.cooling_load = [None] * self.numHours
         _log.debug("TESS: offer_callback tess_power_inject: {}, tess_power_reserve: {}".format(tess_power_inject,
                                                                                                tess_power_reserve))
         price_min, price_max = self.determine_price_min_max()
@@ -149,14 +143,22 @@ class TESSAgent(TransactiveBase, Model):
             electric_demand_curve.add(Point(tess_power_inject[i], price_min))
             electric_demand_curve.add(Point(tess_power_inject[i], price_max))
             self.make_offer(self.market_name[i], BUYER, electric_demand_curve)
-
         self.vip.pubsub.publish(peer='pubsub',
                                 topic='mixmarket/reserve_demand',
                                 message={
                                     "reserve_power": list(tess_power_reserve),
                                     "sender": self.agent_name
                                 })
-            
+        self.cooling_load = [None] * self.numHours
+
+
+    def calculate_load(self, peer, sender, bus, topic, headers, message):
+        # Verify that all tcc predictions for day have finished
+        _log.debug("PRICES: {}".format(self.market_prices))
+        for idx in range(24):
+            price = self.market_prices[idx]
+            self.cooling_load[idx] = message[idx]
+
     def _calculate_demand(self, peer, sender, bus, topic, headers, message):
         """
 
