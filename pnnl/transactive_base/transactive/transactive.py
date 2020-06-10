@@ -511,7 +511,8 @@ class TransactiveBase(MarketAgent):
         topic_suffix = "/".join([self.agent_name, "InputData"])
         message = to_publish
         self.publish_record(topic_suffix, message)
-        self.model.update_data()
+        if self.model is not None:
+            self.model.update_data()
 
     def determine_sched_index(self, index):
         if self.current_datetime is None:

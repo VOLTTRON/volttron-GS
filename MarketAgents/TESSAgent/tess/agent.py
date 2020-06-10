@@ -115,12 +115,12 @@ class TESSAgent(TransactiveBase, Model):
                                   callback=self._calculate_demand)
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='tcc/cooling_demand',
-                                  callback=self.make_offer)
+                                  callback=self.calculate_load)
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         pass
 
-    def make_offer(self, peer, sender, bus, topic, headers, message):
+    def calculate_load(self, peer, sender, bus, topic, headers, message):
         # Verify that all tcc predictions for day have finished
         _log.debug("PRICES: {}".format(self.market_prices))
         for idx in range(24):

@@ -104,6 +104,7 @@ class TCCAgent(TransactiveBase):
         self.cooling_load = [None] * self.numHours
         self.init_markets()
         self.indices = [None] * self.numHours
+        self.model = None
         self.cooling_load_copy = self.cooling_load[:]
 
     @Core.receiver('onstart')
@@ -141,8 +142,6 @@ class TCCAgent(TransactiveBase):
         T_out = [-0.05 * (t - 14.0) ** 2 + 30.0 for t in range(1, 25)]
         # do optimization to obtain power and reserve power
         self.cooling_load = [None] * self.numHours
-        _log.debug("TESS: offer_callback tess_power_inject: {}, tess_power_reserve: {}".format(tess_power_inject,
-                                                                                               tess_power_reserve))
         for i in range(0, len(self.market_prices)):
             self.make_offer(self.market_name[i], buyer_seller, self.tcc.electric_demand[i])
             _log.debug("TCC hour {}-- electric demand  {}".format(i, self.tcc.electric_demand[i].points))
