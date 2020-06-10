@@ -125,8 +125,11 @@ class TCCAgent(TransactiveBase):
         for idx in range(24):
             price = self.market_prices[idx]
             self.cooling_load[idx] = self.tcc.chilled_water_demand[idx].x(price)
-        self.vip.pubsub.publish(topic='tcc/cooling_demand',
-                                message=self.cooling_load)
+
+        self.vip.pubsub.publish(peer='pubsub',
+                                topic='tcc/cooling_demand',
+                                message=self.cooling_load,
+                                headers={})
         # Only need to do this once so return on all
         # other call backs
         if market_name != self.market_name[0]:
