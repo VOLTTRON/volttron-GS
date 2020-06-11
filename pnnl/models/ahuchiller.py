@@ -135,3 +135,6 @@ class ahuchiller(object):
             _log.debug("AHUChiller building does not have chiller or no oat!")
             self.coil_load = 0.0
         return abs(self.coil_load)/self.cop/0.9 + max(self.fan_power, 0)
+
+    def predict(self, set, sched_index, market_index, occupied):
+        return None

@@ -61,15 +61,17 @@ import logging
 
 from datetime import timedelta as td
 from volttron.platform.agent import utils
-from volttron.pnnl.models.rtu import RTU
+
+from volttron.pnnl.models import Model
 from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
+
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = "0.3"
 
 
-class RTUAgent(TransactiveBase, RTU):
+class RTUAgent(TransactiveBase, Model):
     """
         TCC RTU agent
     """
@@ -81,7 +83,9 @@ class RTUAgent(TransactiveBase, RTU):
         self.agent_name = config.get("agent_name", "rtu")
         TransactiveBase.__init__(self, config, **kwargs)
         model_config = config.get("model_parameters", {})
-        RTU.__init__(self, model_config, **kwargs)
+
+        Model.__init__(self, model_config, **kwargs)
+        self.agent_name = config.get("agent_name")
         self.init_markets()
 
     def init_predictions(self, output_info):

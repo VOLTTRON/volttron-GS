@@ -37,7 +37,7 @@
 # }}}
 
 
-class MarketReservationError(StandardError):
+class MarketReservationError(Exception):
     """Base class for exceptions in this module."""
     pass
 

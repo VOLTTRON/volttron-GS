@@ -55,7 +55,7 @@
 # under Contract DE-AC05-76RL01830
 # }}}
 
-from __future__ import absolute_import
+
 
 import logging
 import os
@@ -107,9 +107,11 @@ class PubSubAgent(Agent):
     def update_kwargs_from_config(self, **kwargs):
         signature = getcallargs(super(PubSubAgent, self).__init__)
         for arg in signature:
-            if self.config.has_key('properties'):
+            if 'properties' in self.config:
+            #if self.config.has_key('properties'):
                 properties = self.config.get('properties')
-                if isinstance(properties, dict) and properties.has_key(arg):
+                if isinstance(properties, dict) and arg in properties:
+                #if isinstance(properties, dict) and properties.has_key(arg):
                     kwargs[arg] = properties.get(arg)
         return kwargs
 
@@ -138,7 +140,9 @@ class PubSubAgent(Agent):
         last_key = None
         ordered_out = collections.OrderedDict()
         for key, value in output.items():
-            if not value.has_key('publish_last'):
+            if 'publish_last' not in value:
+            #if not value.has_key('publish_last'):
+                log.debug("OUTPUT: {} - {}".format(key, value))
                 ordered_out[key] = value
             else:
                 last_key = key
@@ -160,7 +164,8 @@ class PubSubAgent(Agent):
     def input_output(self, dct, *args):
         if len(args) >= 1:
             key = args[0]
-            if dct.has_key(key):
+            if key in dct:
+            #if dct.has_key(key):
                 if len(args) >= 2:
                     field = args[1]
                     if len(args) >= 3:
@@ -171,12 +176,14 @@ class PubSubAgent(Agent):
         return None
 
     def subscribe(self):
-        for key, obj in self.input().iteritems():
-            if obj.has_key('topic'):
+        for key, obj in self.input().items():
+            if 'topic' in obj:
+            #if obj.has_key('topic'):
                 callback = self.on_match_topic
                 topic = obj.get('topic')
                 key_caps = 'onMatch' + key[0].upper() + key[1:]
-                if obj.has_key('callback'):
+                if 'callback' in obj:
+                #if obj.has_key('callback'):
                     callbackstr = obj.get('callback')
                     if hasattr(self, callbackstr) and callable(getattr(self, callbackstr, None)):
                         callback = getattr(self, callbackstr)
@@ -223,13 +230,15 @@ class PubSubAgent(Agent):
         topics = collections.OrderedDict()
         for arg in args:
             obj = self.output(arg) if type(arg) == str else arg
-            if obj.has_key('topic') and obj.has_key('value'):
+            if 'topic' in obj and 'value' in obj:
+            #if obj.has_key('topic') and obj.has_key('value'):
                 topic = obj.get('topic', None)
                 value = obj.get('value', None)
                 field = obj.get('field', None)
                 metadata = obj.get('meta', {})
                 if topic is not None and value is not None:
-                    if not topics.has_key(topic):
+                    if topic not in topics:
+                    #if not topics.has_key(topic):
                         topics[topic] = {'values': None, 'fields': None}
                     if field is not None:
                         if topics[topic]['fields'] is None:
@@ -240,7 +249,7 @@ class PubSubAgent(Agent):
                         if topics[topic]['values'] is None:
                             topics[topic]['values'] = []
                         topics[topic]['values'].append([value, metadata])
-        for topic, obj in topics.iteritems():
+        for topic, obj in topics.items():
             if obj['values'] is not None:
                 for value in obj['values']:
                     out = value
@@ -270,7 +279,8 @@ class PubSubAgent(Agent):
             return
         for obj in objs:
             value = message[0]
-            if type(value) is dict and obj.has_key('field') and value.has_key(obj.get('field')):
+            if type(value) is dict and 'field' in obj and obj.get('field') in value:
+            #if type(value) is dict and obj.has_key('field') and value.has_key(obj.get('field')):
                 value = value.get(obj.get('field'))
             obj['value'] = value
             obj['message'] = message[0]
@@ -288,13 +298,18 @@ class PubSubAgent(Agent):
         pass
 
     def clear_last_update(self):
-        for obj in self.input().itervalues():
-            if obj.has_key('topic'):
+        for obj in self.input().values():
+            if 'topic' in obj:
+            #if obj.has_key('topic'):
                 obj['last_update'] = None
 
     def get_inputs_from_topic(self, topic):
         objs = []
-        for obj in self.input().itervalues():
+        for obj in self.input().values():
+            if obj.get('topic') == topic:
+                objs.append(obj)
+        topic = "/".join(["devices", topic, "all"])
+        for obj in self.output().values():
             if obj.get('topic') == topic:
                 objs.append(obj)
         if len(objs):
@@ -305,10 +320,12 @@ class PubSubAgent(Agent):
         topic = topic.strip('/')
         device_name, point_name = topic.rsplit('/', 1)
         objs = self.get_inputs_from_topic(device_name)
+
         if objs is not None:
             for obj in objs:
                 # we have matches to the <device topic>, so get the first one has a field matching <point name>
-                if obj.has_key('field') and obj.get('field', None) == point_name:
+                if 'field' in obj and obj.get('field', None) == point_name:
+                #if obj.has_key('field') and obj.get('field', None) == point_name:
                     return obj
         objs = self.get_inputs_from_topic(topic)
         if objs is not None and len(objs):  # we have exact matches to the topic
@@ -331,10 +348,13 @@ class SynchronizingPubSubAgent(PubSubAgent):
             self.on_update_complete()
 
     def all_topics_updated(self):
-        for obj in self.input().itervalues():
-            if obj.has_key('topic'):
-                if (obj.has_key('blocking') and obj.get('blocking')) or not obj.has_key('blocking'):
-                    if obj.has_key('last_update'):
+        for obj in self.input().values():
+            if 'topic' in obj:
+            #if obj.has_key('topic'):
+                if ('blocking' in obj and obj.get('blocking')) or 'blocking' not in obj:
+                #if (obj.has_key('blocking') and obj.get('blocking')) or not obj.has_key('blocking'):
+                    if 'last_update' in obj:
+                    #if obj.has_key('last_update'):
                         if obj.get('last_update') is None:
                             return False
                     else:
@@ -384,7 +404,7 @@ class Event(object):
 
         __wrapper.__name__ = function.__name__
         __wrapper.__self__ = function.__self__
-        return __wrapper				
+        return __wrapper
 
 class SocketServer():
 
@@ -578,11 +598,12 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         if self.socket_server:
             args = self.input()
             msg = '%r %r %r 0 0 %r' % (self.vers, self.flag, self.eplus_inputs, self.time)
-            for obj in args.itervalues():
+            for obj in args.values():
                 if obj.get('name', None) and obj.get('type', None):
                     msg = msg + ' ' + str(obj.get('value'))
             self.sent = msg + '\n'
             log.info('Sending message to EnergyPlus: ' + msg)
+            self.sent = self.sent.encode()
             self.socket_server.send(self.sent)
 
     def recv_eplus_msg(self, msg):
@@ -625,19 +646,24 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         self.send_eplus_msg()
 
     def parse_eplus_msg(self, msg):
+        msg = msg.decode("utf-8") 
         msg = msg.rstrip()
-        log.info('Received message from EnergyPlus: ' + msg)
+        log.info('Received message from EnergyPlus: ' + str(msg))
         arry = msg.split()
+        arry = [float(item) for item in arry]
+        log.info('Received message from EnergyPlus: ' + str(arry))
         slot = 6
         self.sim_flag = arry[1]
         output = self.output()
+        log.info('Outputs: ' + str(output))
         input = self.input()
 
         if self.realtime and self.rt_periodic is None:
             timestep = 60. / (self.timestep*self.time_scale)*60.
             self.rt_periodic = self.core.periodic(timestep, self.run_periodic, wait=timestep)
 
-        if self.sim_flag != '0':
+        if self.sim_flag != 0.0:
+            _log.debug("FLAG: {} - {}".format(self.sim_flag, type(self.sim_flag)))
             if self.sim_flag == '1':
                 self.exit('Simulation reached end: ' + self.sim_flag)
             elif self.sim_flag == '-1':
@@ -662,28 +688,29 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
                         slot += 1
             slot = 6
             for key in output:
+                log.debug("Outputs1: {}".format(key))
                 if self.output(key, 'name') and self.output(key, 'type'):
                     try:
                         self.output(key, 'value', float(arry[slot]))
                     except:
-                        print slot
+                        print(slot)
                         self.exit('Unable to convert received value to double.')
                     if self.output(key, 'type').lower().find('currentmonthv') != -1:
                         self.month = float(arry[slot])
-                        print 'month ' + str(self.month)
+                        print(('month ' + str(self.month)))
                     elif self.output(key, 'type').lower().find('currentdayofmonthv') != -1:
                         self.day = float(arry[slot])
-                        print 'day ' + str(self.day)
+                        print(('day ' + str(self.day)))
                     elif self.output(key, 'type').lower().find('currenthourv') != -1:
                         self.hour = float(arry[slot])
-                        print 'hour ' + str(self.hour)
+                        print(('hour ' + str(self.hour)))
                     elif self.output(key, 'type').lower().find('currentminutev') != -1:
                         self.minute = float(arry[slot])
-                        print 'minute ' + str(self.minute)
+                        print(('minute ' + str(self.minute)))
                     elif self.output(key, 'field'):  
                            if self.output(key, 'field').lower().find('operation') != -1:
                                  self.operation = float(arry[slot])
-                                 print 'operation (1:on, 0: off) ' + str(self.operation)
+                                 print(('operation (1:on, 0: off) ' + str(self.operation)))
                     slot += 1
 
     def exit(self, msg):
@@ -710,14 +737,16 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         fh.write('<?xml version="1.0" encoding="ISO-8859-1"?>\n')
         fh.write('<!DOCTYPE BCVTB-variables SYSTEM "variables.dtd">\n')
         fh.write('<BCVTB-variables>\n')
-        for obj in self.output().itervalues():
-            if obj.has_key('name') and obj.has_key('type'):
+        for obj in self.output().values():
+            if 'name' in obj and 'type' in obj:
+            #if obj.has_key('name') and obj.has_key('type'):
                 self.eplus_outputs = self.eplus_outputs + 1
                 fh.write('  <variable source="EnergyPlus">\n')
                 fh.write('    <EnergyPlus name="%s" type="%s"/>\n' % (obj.get('name'), obj.get('type')))
                 fh.write('  </variable>\n')
-        for obj in self.input().itervalues():
-            if obj.has_key('name') and obj.has_key('type'):
+        for obj in self.input().values():
+            if 'name' in obj and 'type' in obj:
+            #if obj.has_key('name') and obj.has_key('type'):
                 self.eplus_inputs = self.eplus_inputs + 1
                 fh.write('  <variable source="Ptolemy">\n')
                 fh.write('    <EnergyPlus %s="%s"/>\n' % (obj.get('type'), obj.get('name')))
@@ -843,7 +872,8 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
 
         """
         obj = self.find_best_match(topic)
-        if obj and obj.has_key('default'):
+        if obj and 'default' in obj:
+        #if obj and obj.has_key('default'):
             value = obj.get('default')
             log.debug("Reverting topic " + topic + " to " + str(value))
             external = False
@@ -874,7 +904,8 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
                 point_name = obj.get('field', None)
                 topic = device_name + "/" + point_name if point_name else device_name
                 external = False
-                if obj.has_key('default'):
+                if 'default' in obj:
+                #if obj.has_key('default'):
                     value = obj.get('default')
                     log.debug("Reverting " + topic + " to " + str(value))
                     self.update_topic_rpc(requester_id, topic, value, external)
@@ -894,11 +925,13 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
 
     def advance_simulation(self, peer, sender, bus, topic, headers, message):
         log.info('Advancing simulation.')
-        for obj in self.input().itervalues():
+        for obj in self.input().values():
             set_topic = obj['topic'] + '/' + obj['field']
-            if obj.has_key('external') and obj['external']:
+            if 'external' in obj and obj['external']:
+            #if obj.has_key('external') and obj['external']:
                 external = True
-                value = obj['value'] if obj.has_key('value') else obj['default']
+                value = obj['value'] if 'value' in obj else obj['default']
+                #value = obj['value'] if obj.has_key('value') else obj['default']
             else:
                 external = False
                 value = obj['default']

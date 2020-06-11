@@ -8,7 +8,33 @@ _log = logging.getLogger(__name__)
 utils.setup_logging()
 
 
-class RTU(object):
+# class RTU(object):
+#     OAT = "oat"
+#     ZT = "zt"
+#     ZDAT = "zdat"
+#     MC = "mclg"
+#     MH = "mhtg"
+#     CSP = "csp"
+#     HSP = "hsp"
+#     ZTSP = "ztsp"
+#     OPS = {
+#     "csp": [(operator.gt, operator.add), (operator.lt, operator.sub)],
+#     "hsp": [(operator.lt, operator.sub), (operator.gt, operator.add)]
+#     }
+#
+#     def __init__(self, config, **kwargs):
+#         model_type = config.get("model_type", "firstorderzone")
+#         module = importlib.import_module("volttron.pnnl.models.rtu")
+#         model_class = getattr(module, model_type)
+#         self.prediction_array = []
+#         self.model = model_class(config, self)
+#
+#     def get_q(self,  _set, sched_index, market_index, occupied):
+#         q = self.model.predict(_set, sched_index, market_index, occupied)
+#         return q
+
+
+class firstorderzone(object):
     OAT = "oat"
     SFS = "sfs"
     ZT = "zt"
@@ -19,21 +45,8 @@ class RTU(object):
     OPS = {
     "csp": [(operator.gt, operator.add), (operator.lt, operator.sub)],
     "hsp": [(operator.lt, operator.sub), (operator.gt, operator.add)]
-}
+    }
 
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "firstorderzone")
-        module = importlib.import_module("volttron.pnnl.models.rtu")
-        model_class = getattr(module, model_type)
-        self.prediction_array = []
-        self.model = model_class(config, self)
-
-    def get_q(self,  _set, sched_index, market_index, occupied):
-        q = self.model.predict(_set, sched_index, market_index, occupied)
-        return q
-
-
-class firstorderzone(object):
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
         self.c1 = config["c1"]
@@ -92,7 +105,7 @@ class firstorderzone(object):
         self.zt_predictions[market_index] = _set
 
     def predict(self, _set, sched_index, market_index, occupied):
-        if self.smc_interval is not None or market_index == -1:
+        if self.parent.market_number == 1:
             oat = self.oat
             zt = self.zt
             occupied = self.sfs if self.sfs is not None else occupied
@@ -174,7 +187,7 @@ class rtuzone(object):
         q = self.get_t(_set, sched_index, market_index, occupied, dc=False)
 
     def init_predictions(self, output_info):
-        if self.single_market_contol_interval is not None:
+        if self.parent.market_number == 1:
             return
         occupied = self.check_future_schedule(self.current_datetime)
         if occupied:
@@ -184,7 +197,7 @@ class rtuzone(object):
         q = self.model.predict(_set, -1, -1, occupied, False)
 
     def get_t(self, temp_stpt, sched_index, market_index, occupied, dc=True):
-        if self.smc_interval is not None:
+        if self.parent.market_number == 1:
             oat = self.oat
             zt = self.zt
             runtime = self.parent.single_market_contol_interval
@@ -220,7 +233,7 @@ class rtuzone(object):
         off_condition = ops[1][0]
         off_operator = ops[1][1]
         prediction_array = [zt]
-        for i in xrange(runtime):
+        for i in range(runtime):
             _log.debug("{} - temperature: {} - setpoint: {} - on: {} - current_time: {} - index: {} - loop: {}".format(
                 self.parent.agent_name,
                 zt,

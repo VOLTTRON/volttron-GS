@@ -94,8 +94,8 @@ from volttron.platform.agent.base_market_agent.buy_sell import BUYER
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from market_list import MarketList
-from market_participant import MarketParticipant
+from .market_list import MarketList
+from .market_participant import MarketParticipant
 
 _tlog = logging.getLogger('transitions.core')
 _tlog.setLevel(logging.WARNING)
@@ -151,6 +151,10 @@ class MarketServiceAgent(Agent):
         self.market_list.prices = prices
 
         _log.debug("Clearing prices are [{prices}]".format(prices=str.join(',', [str(p) for p in self.prices])))
+
+        if message["converged"] == True:
+            _log.debug("Converged do not start mixed market!")
+            return
 
         gevent.sleep(self.reservation_delay)
         self.send_collect_reservations_request(utils.get_aware_utc_now())

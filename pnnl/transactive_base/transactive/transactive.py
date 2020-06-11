@@ -39,6 +39,7 @@ class TransactiveBase(MarketAgent):
         self.mapped = None
         self.oat_predictions = []
         self.market_prices = []
+        self.reserve_market_prices = []
         self.input_topics = []
         self.inputs = {}
         self.outputs = {}
@@ -87,6 +88,10 @@ class TransactiveBase(MarketAgent):
         self.update_flag = []
         self.demand_curve = []
         self.prices = []
+        self.max_iterations = 5
+        self.iteration_counter = 0
+        self.market_type = config.get("market_type", "tns")
+        self.market_converged = False
 
     @Core.receiver('onstart')
     def setup(self, sender, **kwargs):
@@ -139,13 +144,16 @@ class TransactiveBase(MarketAgent):
             actuator = output_info.get("actuator", "platform.actuator")
             # This is the flexibility range for the market commodity the
             # transactive agent will utilize
-            flex = output_info["flexibility_range"]
-            # This is the flexibility of the control point, by default the same as the
-            # market commodity but not necessarily
-            ct_flex = output_info.get("control_flexibility", flex)
-            ct_flex = np.linspace(ct_flex[0], ct_flex[1], 11)
-            flex = np.linspace(flex[0], flex[1], 11)
-            fallback = output_info.get("fallback", mean(ct_flex))
+            ct_flex = None
+            flex = output_info.get("flexibility_range", None)
+            fallback = 0
+            if flex is not None:
+                # This is the flexibility of the control point, by default the same as the
+                # market commodity but not necessarily
+                ct_flex = output_info.get("control_flexibility", flex)
+                ct_flex = np.linspace(ct_flex[0], ct_flex[1], 11)
+                flex = np.linspace(flex[0], flex[1], 11)
+                fallback = output_info.get("fallback", mean(ct_flex))
             # TODO:  Use condition to determine multiple output scenario
             condition = output_info.get("condition", True)
 
@@ -284,8 +292,16 @@ class TransactiveBase(MarketAgent):
         self.actuation_enabled = state
 
     def update_outputs(self, name, price):
+        _log.debug("Current time {}".format(self.current_datetime))
+        if self.market_converged:
+            if self.current_datetime is not None:
+                _hour = self.current_datetime.hour
+                self.current_price = self.market_prices[_hour]
+            _log.debug("update_outputs: market converged, current price is: {}".format(self.current_price))
+        # If input data stops, current datetime will not change and current price remains same
         if price is None:
             if self.current_price is None:
+                _log.debug("Return coz self.current_price is None")
                 return
             price = self.current_price
         sets = self.outputs[name]["ct_flex"]
@@ -348,6 +364,10 @@ class TransactiveBase(MarketAgent):
         demand_curve = self.create_demand_curve(market_index, sched_index, occupied)
         self.demand_curve[market_index] = demand_curve
         result, message = self.make_offer(market_name, buyer_seller, demand_curve)
+        _log.debug("MARKET prices: {}".format(self.market_prices))
+        if self.market_type == 'city':
+            price = self.market_prices[market_index]
+            self.update_state(market_index, sched_index, price)
 
     def create_demand_curve(self, market_index, sched_index, occupied):
         _log.debug("{} debug demand_curve - index: {} - sched: {}".format(self.agent_name,
@@ -361,8 +381,8 @@ class TransactiveBase(MarketAgent):
                 _set = self.ct_flexibility[i]
             else:
                 _set = self.off_setpoint
-            ct_flx.append(_set)
             q = self.get_q(_set, sched_index, market_index, occupied)
+            _log.debug("Prices: {}, Quantity: {}".format(prices, q))
             demand_curve.add(Point(price=prices[i], quantity=q))
 
         ct_flx = [min(ct_flx), max(ct_flx)] if ct_flx else []
@@ -385,6 +405,7 @@ class TransactiveBase(MarketAgent):
             else:
                 _log.warn("{} - market {} did not clear, and no market_prices, using default fallback price!".format(self.agent_name, market_name))
                 price = self.default_price
+        cleared_quantity = None
         if self.demand_curve[market_index] is not None and self.demand_curve[market_index].points:
             cleared_quantity = self.demand_curve[market_index].x(price)
 
@@ -392,11 +413,11 @@ class TransactiveBase(MarketAgent):
         _log.debug("{} price callback market: {}, price: {}, quantity: {}".format(self.agent_name, market_name, price, quantity))
         topic_suffix = "/".join([self.agent_name, "MarketClear"])
         message = {"MarketIndex": market_index, "Price": price, "Quantity": [quantity, cleared_quantity], "Commodity": self.commodity}
-        self.publish_record(topic_suffix, message)
+        #self.publish_record(topic_suffix, message)
         # this line of logic was different in VAV agent
         # if price is not None:
         #if price is not None and market_index < self.market_number-1:
-        if price is not None:
+        if price is not None and self.market_type != "city":
             self.update_state(market_index, sched_index, price)
         if price is not None and self.actuation_method == "market_clear" and market_index == 0:
             self.do_actuation(price)
@@ -408,21 +429,42 @@ class TransactiveBase(MarketAgent):
                                                                       aux))
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
-        _log.debug("Get prices prior to market start.")
+        _log.debug("Get prices prior to market start. {}".format(message))
         current_hour = message['hour']
+        #new_day_flag = message.get('new_day', True)
+        # if new_day_flag:
+        #     self.iteration_counter = 0 #reset iteration counter
+        # else:
+        #     self.iteration_counter += 1
+        converged = message.get('converged', False)
+        start_of_cycle = message.get('start_of_cycle', False)
+        _log.debug("update_prices: {}, {}".format(converged, start_of_cycle))
+        if start_of_cycle:
+            self.market_converged = False
+
+        if converged:
+            self.market_converged = True
+            # MARKET CONVERGED!!
+            _log.debug("MARKET CONVERGED: {}".format(self.agent_name))
 
         # Store received prices so we can use it later when doing clearing process
-        if self.market_prices:
-            if current_hour != self.current_hour:
-                self.current_price = self.market_prices[0]
-        self.current_hour = current_hour
+        # if self.market_prices:
+        #     _log.debug("current prices not none {}, {}".format(current_hour, self.current_hour))
+        #     if current_hour != self.current_hour:
+        #         _log.debug("current hour != current hour")
+        #         self.current_price = self.market_prices[0]
+
+        #self.current_hour = current_hour
         self.oat_predictions = []
         oat_predictions = message.get("temp", [])
 
         self.oat_predictions = oat_predictions
         self.market_prices = message['prices']  # Array of prices
+        _log.debug("Received new market prices: {}".format(self.market_prices))
+        self.reserve_market_prices = message.get('reserved_prices', [])  # Array of reserve prices
 
     def determine_control(self, sets, prices, price):
+        _log.debug("transactive: determine_control")
         control = np.interp(price, prices, sets)
         control = self.clamp(control, min(self.ct_flexibility), max(self.ct_flexibility))
         return control
@@ -436,14 +478,19 @@ class TransactiveBase(MarketAgent):
         if self.market_prices:
             avg_price = mean(self.market_prices)
             std_price = stdev(self.market_prices)
-            price_min = avg_price - self.price_multiplier * std_price
-            price_max = avg_price + self.price_multiplier * std_price
+            if std_price != 0:
+                price_min = avg_price - self.price_multiplier * std_price
+                price_max = avg_price + self.price_multiplier * std_price
+            else:
+                price_min = avg_price*0.8
+                price_max = avg_price*1.2
         else:
             avg_price = None
             std_price = None
             price_min = self.default_min_price
             price_max = self.default_max_price
         _log.debug("Prices: {} - avg: {} - std: {}".format(self.market_prices, avg_price, std_price))
+
         price_array = np.linspace(price_min, price_max, 11)
         return price_array
 
@@ -465,7 +512,8 @@ class TransactiveBase(MarketAgent):
         topic_suffix = "/".join([self.agent_name, "InputData"])
         message = to_publish
         self.publish_record(topic_suffix, message)
-        self.model.update_data()
+        if self.model is not None:
+            self.model.update_data()
 
     def determine_sched_index(self, index):
         if self.current_datetime is None:
