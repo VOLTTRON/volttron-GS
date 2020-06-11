@@ -79,7 +79,7 @@ class Model(object):
         self.input_topics = set()
         self.inputs = {}
         self.parent = parent
-
+        self.price_multiplier = config.get("price_multiplier", 1.0)
         if model_parms is None:
             print("No model parms")
             return
@@ -246,7 +246,7 @@ class Model(object):
             return occupied
         _start = current_schedule["start"]
         _end = current_schedule["end"]
-        if _start <= _dt.time < _end:
+        if _start <= _dt.time() < _end:
             occupied = True
         else:
             occupied = False

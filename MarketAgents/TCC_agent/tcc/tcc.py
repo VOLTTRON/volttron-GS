@@ -184,9 +184,10 @@ class TCCAgent(TransactiveBase):
             for vav in vav_list:
                 occupied = self.tcc.market_container.container[vav].check_current_schedule(self.current_datetime)
                 _log.debug("TCC DO Control! {} -- occupied: {}".format(vav, occupied))
-                actuator = self.market_container.container[vav].actuator
-                point_topic = self.market_container.container[vav].ct_topic
-                value = self.market_container.container[vav].determine_set(prices, price)
+                actuator = self.tcc.market_container.container[vav].model.actuator
+                point_topic = self.tcc.market_container.container[vav].model.ct_topic
+                price_array = self.tcc.market_container.container[vav].determine_prices(prices)
+                value = self.tcc.market_container.container[vav].model.determine_set(price_array, price)
                 if occupied:
                     self.vip.rpc.call(actuator,
                                       'set_point',
@@ -194,9 +195,10 @@ class TCCAgent(TransactiveBase):
                                       point_topic,
                                       value).get(timeout=15)
             for light in self.tcc.lights:
-                actuator = self.market_container.container[light].actuator
-                point_topic = self.market_container.container[light].ct_topic
-                value = self.market_container.container[light].determine_set(prices, price)
+                actuator = self.tcc.market_container.container[light].model.actuator
+                point_topic = self.tcc.market_container.container[light].model.ct_topic
+                price_array = self.tcc.market_container.container[vav].determine_prices(prices)
+                value = self.tcc.market_container.container[light].model.determine_set(price_array, price)
                 occupied = self.tcc.market_container.container[light].check_current_schedule(self.current_datetime)
                 _log.debug("TCC DO Control! {} -- occupied: {}".format(light, occupied))
                 if occupied:
