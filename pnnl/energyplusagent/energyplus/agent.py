@@ -99,6 +99,8 @@ class PubSubAgent(Agent):
         self.minute = None
         self.second = None
         self.cosimulation_advance = None
+        self.pause_until_message = None
+        self.proceed = None
         self._now = None
         self.num_of_pub = None
         kwargs = self.update_kwargs_from_config(**kwargs)
@@ -125,6 +127,7 @@ class PubSubAgent(Agent):
         if 'properties' in self.config and isinstance(self.config['properties'], dict):
             self.__dict__.update(self.config['properties'])
         self.cosimulation_advance = self.config.get('cosimulation_advance', None)
+        self.pause_until_message = self.config.get("pause_until_message", None)
         self._now = datetime.utcnow()
         self.num_of_pub = 0
         self.month = None
@@ -142,7 +145,7 @@ class PubSubAgent(Agent):
         for key, value in output.items():
             if 'publish_last' not in value:
             #if not value.has_key('publish_last'):
-                log.debug("OUTPUT: {} - {}".format(key, value))
+                log.debug("Create output list: {} - {}".format(key, value))
                 ordered_out[key] = value
             else:
                 last_key = key
@@ -191,8 +194,11 @@ class PubSubAgent(Agent):
                     callback = getattr(self, key_caps)
                 log.info('subscribed to ' + topic)
                 self.vip.pubsub.subscribe(peer='pubsub', prefix=topic, callback=callback)
+        log.debug("Advance topic: {}".format(self.cosimulation_advance))
         if self.cosimulation_advance is not None:
             self.vip.pubsub.subscribe(peer='pubsub', prefix=self.cosimulation_advance, callback=self.advance_simulation)
+        elif self.pause_until_message is not None:
+            self.vip.pubsub.subscribe(peer='pubsub', prefix=self.pause_until_message, callback=self.release_pause)
 
     def publish_all_outputs(self):
         # Publish messages
@@ -611,6 +617,12 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         self.parse_eplus_msg(msg)
         if self.sim_flag != '1':
             self.publish_all_outputs()
+        log.debug("Cosim realtime: {} -- periodic {} -- proceed {}".format(self.realtime, self.rt_periodic, self.proceed))
+        if self.realtime and self.rt_periodic is None:
+            while not self.proceed:
+                gevent.sleep(0.25)
+            timestep = 60. / (self.timestep*self.time_scale)*60.
+            self.rt_periodic = self.core.periodic(timestep, self.run_periodic, wait=timestep)
         if self.cosimulation_sync:
             self.check_advance()
 
@@ -648,7 +660,6 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
     def parse_eplus_msg(self, msg):
         msg = msg.decode("utf-8") 
         msg = msg.rstrip()
-        log.info('Received message from EnergyPlus: ' + str(msg))
         arry = msg.split()
         arry = [float(item) for item in arry]
         log.info('Received message from EnergyPlus: ' + str(arry))
@@ -658,12 +669,8 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         log.info('Outputs: ' + str(output))
         input = self.input()
 
-        if self.realtime and self.rt_periodic is None:
-            timestep = 60. / (self.timestep*self.time_scale)*60.
-            self.rt_periodic = self.core.periodic(timestep, self.run_periodic, wait=timestep)
-
         if self.sim_flag != 0.0:
-            _log.debug("FLAG: {} - {}".format(self.sim_flag, type(self.sim_flag)))
+            log.debug("FLAG: {} - {}".format(self.sim_flag, type(self.sim_flag)))
             if self.sim_flag == '1':
                 self.exit('Simulation reached end: ' + self.sim_flag)
             elif self.sim_flag == '-1':
@@ -688,7 +695,6 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
                         slot += 1
             slot = 6
             for key in output:
-                log.debug("Outputs1: {}".format(key))
                 if self.output(key, 'name') and self.output(key, 'type'):
                     try:
                         self.output(key, 'value', float(arry[slot]))
@@ -936,6 +942,10 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
                 external = False
                 value = obj['default']
             self.update_topic_rpc(sender, set_topic, value, external)
+        return
+
+    def release_pause(self, peer, sender, bus, topic, headers, message):
+        self.proceed = True
         return
 
     def on_update_topic_rpc(self, requester_id, topic, value):
