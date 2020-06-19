@@ -95,7 +95,7 @@ APP_NAME = "ILC"
 
 
 class ILCAgent(Agent):
-    states = ['inactive', 'curtail', 'curtail_holding', 'curtail_releasing','augment', "augment_holding", 'augment_releasing']
+    states = ['inactive', 'curtail', 'curtail_holding', 'curtail_releasing', 'augment', "augment_holding", 'augment_releasing']
     transitions = [
         {
             'trigger': 'curtail_load',
@@ -198,7 +198,7 @@ class ILCAgent(Agent):
         },
         {
             'trigger': 'finished',
-            'source': ['shed_releasing', 'augment_releasing'],
+            'source': ['curtail_releasing', 'augment_releasing'],
             'dest': 'inactive',
             "after": 'reinitialize_release'
         },
@@ -986,7 +986,7 @@ class ILCAgent(Agent):
         return control_pt, control_value, control_load, revert_priority, revert_value
 
     def setup_release(self):
-        if self.stagger_release:
+        if self.stagger_release and self.devices:
             _log.debug("Number or controlled devices: {}".format(len(self.devices)))
 
             confirm_in_minutes = self.confirm_time.total_seconds()/60.0
