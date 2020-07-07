@@ -11,6 +11,9 @@ __all__ = ['Model']
 
 class Model(object):
     def __init__(self, config, **kwargs):
+        if not config:
+            self.model = None
+            return
         base_module = "volttron.pnnl.models."
         try:
             model_type = config["model_type"]

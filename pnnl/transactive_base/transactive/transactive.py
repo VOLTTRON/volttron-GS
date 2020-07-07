@@ -72,6 +72,7 @@ class TransactiveBase(MarketAgent, Model):
         self.default_min_price = 0.01
         self.default_max_price = 0.1
         self.market_list = []
+        self.market_type = None
 
         # Variables declared in configure_main
         self.record_topic = None
@@ -109,7 +110,8 @@ class TransactiveBase(MarketAgent, Model):
             base_record_list = ["tnc", campus, building, device, subdevice]
             base_record_list = list(filter(lambda a: a != "", base_record_list))
             self.record_topic = '/'.join(base_record_list)
-            self.actuate_onstart = config.get("actuation_enabled_onstart", False)
+            self.actuate_onstart = config.get("actuation_enabled_onstart", True)
+            self.actuation_disabled = True if not self.actuate_onstart else False
             self.actuation_method = config.get("actuation_method")
             self.actuation_rate = config.get("control_interval")
             actuate_topic = config.get("actuation_enable_topic", "default")
@@ -132,7 +134,8 @@ class TransactiveBase(MarketAgent, Model):
             self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
             self.init_input_subscriptions()
             market_name = config.get("market_name", "electric")
-            tns = config.get("tns", True)
+            self.market_type = config.get("market_type", "tns")
+            tns = False if self.market_type != "tns" else True
             #  VOLTTRON MarketService does not allow "leaving"
             #  markets.  Market participants can choose not to participate
             #  in the market process by sending False during the reservation
@@ -140,7 +143,10 @@ class TransactiveBase(MarketAgent, Model):
             #  joined the deployment can only be changed from an TNS market
             #  to single time step market by rebuilding both the agent
             #  and the VOLTTRON MarketService.
-            if not self.market_list and tns is not None:
+            _log.debug("CREATE MODEL")
+            model_config = config.get("model_parameters", {})
+            Model.__init__(self, model_config, **kwargs)
+            if not self.market_list and tns is not None and self.model is not None:
                 if tns:
                     self.market_number = 24
                     self.single_market_contol_interval = None
@@ -152,9 +158,6 @@ class TransactiveBase(MarketAgent, Model):
                 if self.aggregator is None:
                     _log.debug("%s is a transactive agent.", self.core.identity)
                     self.init_markets()
-                _log.debug("CREATE MODEL")
-                model_config = config.get("model_parameters")
-                Model.__init__(self, model_config, **kwargs)
             self.setup()
 
     def setup(self, **kwargs):
@@ -164,6 +167,10 @@ class TransactiveBase(MarketAgent, Model):
         :param kwargs:
         :return:
         """
+        if self.market_type == "rtp":
+            self.update_prices = self.update_rtp_prices
+        else:
+            self.update_prices = self.update_tns_prices
         self.vip.pubsub.subscribe(peer='pubsub',
                                   prefix='mixmarket/start_new_cycle',
                                   callback=self.update_prices)
@@ -317,6 +324,9 @@ class TransactiveBase(MarketAgent, Model):
                       "no configured outputs.", self.core.identity)
 
     def check_schedule(self, dt):
+        if self.actuation_disabled:
+            _log.debug("Actuation is disabled!")
+            return
         current_schedule = self.schedule[dt.weekday()]
         if "always_on" in current_schedule:
             self.occupied = True
@@ -541,7 +551,8 @@ class TransactiveBase(MarketAgent, Model):
             self.update_state(market_index, schedule_index, price)
             # For single timestep market do actuation when price clears.
             if self.actuation_method == "market_clear" and market_index == 0:
-                self.do_actuation(price)
+                if self.actuation_enabled and not self.actuation_disabled:
+                    self.do_actuation(price)
 
     def error_callback(self, timestamp, market_name, buyer_seller, error_code, error_message, aux):
         """
@@ -559,7 +570,7 @@ class TransactiveBase(MarketAgent, Model):
         _log.error("buyer_seller : %s - error: %s - aux: %s",
                    buyer_seller, error_message, aux)
 
-    def update_prices(self, peer, sender, bus, topic, headers, message):
+    def update_tns_prices(self, peer, sender, bus, topic, headers, message):
         _log.debug("Get prices prior to market start.")
         current_hour = parse(message['Date']).hour
 
@@ -582,9 +593,13 @@ class TransactiveBase(MarketAgent, Model):
         self.current_hour = current_hour
         self.oat_predictions = []
         oat_predictions = message.get("temp", [])
-
         self.oat_predictions = oat_predictions
         self.day_ahead_prices = message['prices']  # Array of prices
+
+    def update_rtp_prices(self, peer, sender, bus, topic, headers, message):
+        hour = float(message['hour'])
+        self.market_prices = message["prices"]
+        self.current_price = self.market_prices[-1]
 
     def determine_control(self, sets, prices, price):
         """
@@ -666,7 +681,8 @@ class TransactiveBase(MarketAgent, Model):
         message = to_publish
         self.publish_record(topic_suffix, message)
         # Call models update_data method
-        self.model.update_data()
+        if self.model is not None:
+            self.model.update_data()
 
     def determine_schedule_index(self, index):
         """
@@ -696,7 +712,8 @@ class TransactiveBase(MarketAgent, Model):
 
     def update_model(self, peer, sender, bus, topic, headers, message):
         coefficients = message
-        self.model.update_coefficients(coefficients)
+        if self.model is not None:
+            self.model.update_coefficients(coefficients)
 
     def clamp(self, value, x1, x2):
         min_value = min(abs(x1), abs(x2))
