@@ -29,7 +29,7 @@ class firstorderzone(object):
         self.sfs = self.get_input_value(self.sfs_name)
         self.zt = self.get_input_value(self.zt_name)
 
-        self.zt_predictions = [self.zt]*parent.market_number
+        self.zt_predictions = [self.zt]*24
         if type.lower() == "vav":
             self.parent.commodity = "ZoneAirFlow"
             self.predict_quantity = self.getM

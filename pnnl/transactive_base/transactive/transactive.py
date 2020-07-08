@@ -599,6 +599,7 @@ class TransactiveBase(MarketAgent, Model):
     def update_rtp_prices(self, peer, sender, bus, topic, headers, message):
         hour = float(message['hour'])
         self.market_prices = message["prices"]
+        _log.debug("Get RTP Prices: {}".format(self.market_prices))
         self.current_price = self.market_prices[-1]
 
     def determine_control(self, sets, prices, price):
