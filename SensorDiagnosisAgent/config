@@ -1,0 +1,11 @@
+{
+    "campus": "campus",
+    "building": "building",
+    "device": ["rtu4"],
+    "station_code": "KRLD"
+    "run_schedule": "*/3 * * * *",
+    "threshold_OAT": 5,
+    "threshold_OAH": 5,
+    "device_point_name": ["OutdoorAirTemperature", "ReturnAirTemperature"]
+    "weather_point_name": ["temperature", "relativeHumidity"]
+}
