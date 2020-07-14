@@ -69,9 +69,10 @@ class AFDDSchedulerAgent(Agent):
 
         self.device_topic_list = {}
         self.device_data = []
-        # self.device_topic_list = []
+        self.device_true_time = 0
         self.subdevices_list = []
         self.device_status = False
+        self.excess_operation = False
         self.day = None
         self.condition_data = []
         self.rthr = 0
@@ -148,8 +149,7 @@ class AFDDSchedulerAgent(Agent):
 
         """
         self.condition_data = []
-        self.input_datetime = parse(headers.get("Date")) \
-            .astimezone(dateutil.tz.gettz(self.timezone))
+        self.input_datetime = parse(headers.get("Date")).astimezone(dateutil.tz.gettz(self.timezone))
         condition_args = self.condition_list.get("condition_args")
         symbols(condition_args)
 
@@ -165,14 +165,13 @@ class AFDDSchedulerAgent(Agent):
 
         """
         conditions = self.condition_list.get("conditions")
-        if all([parse_expr(condition).subs(self.condition_data) \
-                for condition in conditions]):
+        if all([parse_expr(condition).subs(self.condition_data) for condition in conditions]):
             self.device_true_time += self.interval
             self.device_status = True
-            _log.debug('All condition true time {}'.format(self.device_true_time))
+            _log.Info('All condition true time {}'.format(self.device_true_time))
         else:
             self.device_status = False
-            _log.debug("one of the condition is false")
+            _log.Info("one of the condition is false")
 
         rthr = self.device_true_time / 3600
         if rthr > self.mht:
@@ -182,11 +181,37 @@ class AFDDSchedulerAgent(Agent):
             self.device_true_time = 0
             for device_topic in self.device_topic_list:
                 print(device_topic)
-                self.publish(device_topic)
+                self.publish_daily_record(device_topic)
 
-    def publish(self, device_topic):
+        for device_topic in self.device_topic_list:
+            print(device_topic)
+            self.publish_daily_record(device_topic)
+
+    def publish_daily_record(self, device_topic):
         headers = {'Date': utils.format_timestamp(datetime.utcnow() \
                                                   .astimezone(dateutil.tz.gettz(self.timezone)))}
+        message = [
+            {'excess_operation': bool(self.excess_operation),
+             'device_status': bool(self.device_status),
+             'device_true_time': int(self.device_true_time)
+             },
+            {'excess_operation': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
+             'device_status': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
+             'device_true_time': {'units': 'seconds', 'tz': 'UTC', 'data_type': 'integer'}
+             }
+        ]
+        device_topic = device_topic.replace("all", "report/all")
+        try:
+            self.vip.pubsub.publish(peer='pubsub',
+                                    topic=device_topic,
+                                    message=message,
+                                    headers=headers)
+        except Exception as e:
+            _log.error("In Publish: {}".format(str(e)))
+
+    def publish(self, device_topic):
+        headers = {'Date': utils.format_timestamp(
+            datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone)))}
         message = [
             {'excess_operation': bool(self.excess_operation),
              'device_status': bool(self.device_status),
