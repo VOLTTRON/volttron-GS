@@ -124,6 +124,11 @@ class SensorDiagnosisAgent(Agent):
         """
         Running sensor diagnosis
         Sensor diagnosis:
+        Compare the sensor measurement with weather data; if difference between them is greather than threshold
+        set  fault condition to "True"
+        While performing the check, average the sensor measurment data
+
+        TODO:The output for the agent should be similar to the EconomizerRCx agent
 
         """
         if not self.device_data:
@@ -138,7 +143,6 @@ class SensorDiagnosisAgent(Agent):
             device_data_mean.append((args, mean(device_data_value)))
 
         self.device_data = device_data_mean
-        print("device data after average {}".format(self.device_data))
         self.get_current_weather()
         try:
             for args in self.weather_point_name:

@@ -161,7 +161,8 @@ class AFDDSchedulerAgent(Agent):
     def on_schedule(self):
         """
         execute the condition of the device, If all condition are true then add time into true_time.
-        If true time is excedd the threshold time (mht) flag the excess operation
+        If true time is exceed the threshold time (mht) flag the excess operation
+        TODO:The output for the agent should be similar to the EconomizerRCx agent
 
         """
         conditions = self.condition_list.get("conditions")
