@@ -230,7 +230,7 @@ class TransactiveBase(MarketAgent, Model):
             # market commodity but not necessarily
             ct_flex = output_info.get("control_flexibility", flex)
             ct_flex, flex = self.set_control(ct_flex, flex)
-
+            self.ct_flexibility = ct_flex
             fallback = output_info.get("fallback", mean(ct_flex))
             # TODO:  Use condition to determine multiple output scenario
             condition = output_info.get("condition", True)
