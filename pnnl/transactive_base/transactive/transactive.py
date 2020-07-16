@@ -387,7 +387,7 @@ class TransactiveBase(MarketAgent, Model):
                 actuator = output_info.get("actuator", "platform.actuator")
                 topic = output_info["topic"]
                 release = output_info.get("release", None)
-                if isinstance(release, str) and release.lower() == "default":
+                if release is not None:
                     try:
                         release_value = self.vip.rpc.call(actuator,
                                                           'get_point',
