@@ -121,12 +121,12 @@ class RpcProxy(object):
                                                                                        buyer_seller,
                                                                                        curve.points))
         except RemoteError as e:
-            result = (False, e.message)
+            result = (False, e)
             _log.info(
-                "Market: {} {} has had an offer rejected because {}".format(market_name, buyer_seller, e.message))
+                "Market: {} {} has had an offer rejected because {}".format(market_name, buyer_seller, e))
         except gevent.Timeout as e:
-            result = (False, e.message)
-            _log.info("Market: {} {} has had an offer rejected because {}".format(market_name, buyer_seller, e.message))
+            result = (False, e)
+            _log.info("Market: {} {} has had an offer rejected because {}".format(market_name, buyer_seller, e))
         return result
 
 

@@ -27,7 +27,7 @@ __version__ = '0.3'
 def calculate_hour_of_year(utc_dt):
     _now_hour = utc_dt.replace(minute=0, second=0)
     start_hour = _now_hour.replace(month=1, day=1, hour=0, minute=0, second=0)
-    hour_of_year = int((_now_hour - start_hour).total_seconds() / 60)
+    hour_of_year = int((_now_hour - start_hour).total_seconds() / 3600)
     return hour_of_year
 
 class TransactiveBase(MarketAgent, Model):
@@ -200,8 +200,8 @@ class TransactiveBase(MarketAgent, Model):
         """
         for market in self.market_list:
             _log.debug("Join market: %s  --  %s", self.core.identity, market)
-            self.join_market(market, BUYER, None, self.offer_callback,
-                             self.reservation_callback, self.price_callback, self.error_callback)
+            self.join_market(market, BUYER, self.reservation_callback, self.offer_callback,
+                             None, self.price_callback, self.error_callback)
             self.update_flag.append(False)
             self.demand_curve.append(PolyLine())
 
@@ -519,7 +519,7 @@ class TransactiveBase(MarketAgent, Model):
         _log.debug("%s create_demand_curve - index: %s - sched: %s",
                    self.core.identity,  market_index, sched_index)
         demand_curve = PolyLine()
-        prices = self.price_manager.get_price_array(get_aware_utc_now()+td(hours=market_index))
+        prices = self.price_manager.get_price_array(get_aware_utc_now()+td(hours=market_index+1))
         for control, price in zip(self.ct_flexibility, prices):
             if occupied:
                 _set = control
@@ -542,6 +542,7 @@ class TransactiveBase(MarketAgent, Model):
     def price_callback(self, timestamp, market_name, buyer_seller, price, quantity):
         market_index = self.market_list.index(market_name)
         if price is None:
+            # TODO:  Fix reference to self.market_prices
             if self.market_prices:
                 try:
                     price = self.market_prices[market_index]
@@ -575,7 +576,8 @@ class TransactiveBase(MarketAgent, Model):
         # If a price is known update the state of agent (in concrete
         # implementation of transactive agent).
         if price is not None:
-            self.update_state(market_index, schedule_index, price)
+            prices = self.price_manager.get_price_array(get_aware_utc_now() + td(hours=market_index + 1))
+            self.update_state(market_index, schedule_index, price, prices)
             # For single timestep market do actuation when price clears.
             if self.actuation_method == "market_clear" and market_index == 0:
                 if self.actuation_enabled and not self.actuation_disabled:
@@ -719,7 +721,10 @@ class MessageManager(object):
         _log.debug("Get prices prior to market start.")
         price_info = message["price_info"]
         correction_market = message.get("correction_market", False)
-        market_start_hour = get_aware_utc_now() + td(hours=1)
+        if self.parent.current_datetime is not None:
+            market_start_hour = self.parent.current_datetime + td(hours=1)
+        else:
+            market_start_hour = get_aware_utc_now() + td(hours=1)
         price_info = message["price_info"]
         oat_predictions = message.get("temp", [])
         if not correction_market:
@@ -742,7 +747,10 @@ class MessageManager(object):
         _log.debug("Get cleared prices.")
         correction_market = message.get("correction_market", False)
         cleared_prices = message["price_info"]
-        market_start_hour = get_aware_utc_now() + td(hours=1)
+        if self.parent.current_datetime is not None:
+            market_start_hour = self.parent.current_datetime + td(hours=1)
+        else:
+            market_start_hour = get_aware_utc_now() + td(hours=1)
         if not correction_market:
             for _hour in range(24):
                 market_hour = market_start_hour + td(hours=_hour)

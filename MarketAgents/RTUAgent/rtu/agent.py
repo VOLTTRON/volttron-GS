@@ -83,11 +83,10 @@ class RTUAgent(TransactiveBase):
     def init_predictions(self, output_info):
         pass
 
-    def update_state(self, market_index, sched_index, price):
+    def update_state(self, market_index, sched_index, price, prices):
         market_time = self.current_datetime + td(hours=market_index + 1)
         occupied = self.check_future_schedule(market_time)
         if occupied:
-            prices = self.determine_prices()
             _set = self.determine_control(self.ct_flexibility, prices, price)
         else:
             _set = self.off_setpoint
