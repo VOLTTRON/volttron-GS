@@ -68,7 +68,7 @@ class Aggregator(TransactiveBase):
         for market in self.supplier_market:
             self.markets_initialized = True
             _log.debug("Join market: %s  --  %s as %s", self.core.identity, market, SELLER)
-            self.join_market(market, SELLER, None, None,
+            self.join_market(market, SELLER, self.reservation_callback, None,
                              self.aggregate_callback, self.supplier_price_callback, self.error_callback)
             self.supplier_curve.append(None)
         for market_base, market_list in self.consumer_market.items():

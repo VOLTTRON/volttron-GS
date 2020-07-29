@@ -24,8 +24,8 @@ setup_logging()
 __version__ = '0.3'
 
 
-def calculate_hour_of_year(utc_dt):
-    _now_hour = utc_dt.replace(minute=0, second=0)
+def calculate_hour_of_year(_dt):
+    _now_hour = _dt.replace(minute=0, second=0)
     start_hour = _now_hour.replace(month=1, day=1, hour=0, minute=0, second=0)
     hour_of_year = int((_now_hour - start_hour).total_seconds() / 3600)
     return hour_of_year
@@ -59,7 +59,6 @@ class TransactiveBase(MarketAgent, Model):
         self.current_schedule = None
         self.current_hour = None
         self.current_price = None
-        self.correction_market = False
         self.actuation_obj = None
         self.flexibility = None
         self.ct_flexibility = None
@@ -423,7 +422,7 @@ class TransactiveBase(MarketAgent, Model):
             if price is None:
                 return
         sets = self.outputs[name]["ct_flex"]
-        prices = self.price_manager.get_price_array(get_aware_utc_now())
+        prices = self.price_manager.get_price_array(self.get_current_datetime())
         _log.debug("Call determine_control: %s", self.core.identity)
         value = self.determine_control(sets, prices, price)
         self.outputs[name]["value"] = value
@@ -469,11 +468,10 @@ class TransactiveBase(MarketAgent, Model):
         """
         if not self.price_manager.correction_market:
             return True
-        else:
-            if self.market_list:
-                if market_name == self.market_list[0]:
-                    return True
-                return False
+        if self.market_list:
+            if market_name == self.market_list[0]:
+                return True
+            return False
 
     def offer_callback(self, timestamp, market_name, buyer_seller):
         for name, output in self.outputs.items():
@@ -494,7 +492,7 @@ class TransactiveBase(MarketAgent, Model):
             self.init_predictions(output_info)
 
         schedule_index = self.determine_schedule_index(market_index)
-        market_time = self.current_datetime + td(hours=market_index + 1)
+        market_time = self.get_current_datetime() + td(hours=market_index + 1)
         if self.schedule:
             occupied = self.check_future_schedule(market_time)
         else:
@@ -519,7 +517,8 @@ class TransactiveBase(MarketAgent, Model):
         _log.debug("%s create_demand_curve - index: %s - sched: %s",
                    self.core.identity,  market_index, sched_index)
         demand_curve = PolyLine()
-        prices = self.price_manager.get_price_array(get_aware_utc_now()+td(hours=market_index+1))
+        market_hour = self.get_current_datetime() + td(hours=market_index + 1)
+        prices = self.price_manager.get_price_array(market_hour)
         for control, price in zip(self.ct_flexibility, prices):
             if occupied:
                 _set = control
@@ -542,10 +541,11 @@ class TransactiveBase(MarketAgent, Model):
     def price_callback(self, timestamp, market_name, buyer_seller, price, quantity):
         market_index = self.market_list.index(market_name)
         if price is None:
-            # TODO:  Fix reference to self.market_prices
-            if self.market_prices:
+            market_prices = self.price_manager.cleared_prices
+            market_hour = self.get_current_datetime() + td(hours=market_index + 1)
+            if market_prices:
                 try:
-                    price = self.market_prices[market_index]
+                    price = market_prices[market_hour]
                     _log.warning("%s - market %s did not clear, "
                                  "using market_prices!",
                                  self.core.identity, market_name)
@@ -576,7 +576,8 @@ class TransactiveBase(MarketAgent, Model):
         # If a price is known update the state of agent (in concrete
         # implementation of transactive agent).
         if price is not None:
-            prices = self.price_manager.get_price_array(get_aware_utc_now() + td(hours=market_index + 1))
+            market_hour = self.get_current_datetime() + td(hours=market_index + 1)
+            prices = self.price_manager.get_price_array(market_hour)
             self.update_state(market_index, schedule_index, price, prices)
             # For single timestep market do actuation when price clears.
             if self.actuation_method == "market_clear" and market_index == 0:
@@ -619,7 +620,7 @@ class TransactiveBase(MarketAgent, Model):
     def update_input_data(self, peer, sender, bus, topic, headers, message):
         """
         Call back method for data subscription for
-        device data from MasterDriverAgent.
+        device data from MasterDriverAgent or building simulation.
         :param peer:
         :param sender:
         :param bus:
@@ -701,9 +702,22 @@ class TransactiveBase(MarketAgent, Model):
 
     def publish_record(self, topic_suffix, message):
         headers = {headers_mod.DATE: format_timestamp(get_aware_utc_now())}
-        message["TimeStamp"] = format_timestamp(self.current_datetime)
+        message["TimeStamp"] = format_timestamp(self.get_current_datetime())
         topic = "/".join([self.record_topic, topic_suffix])
         self.vip.pubsub.publish("pubsub", topic, headers, message).get()
+
+    def get_current_datetime(self):
+        """
+        Current datetime based on input data from
+        real building (MasterDriver) or simulation (Typically E+).
+        If no inputs are configured or no data has been ingested return
+        utc now time.
+        :return: tz aware datetime.
+        """
+        if self.current_datetime is not None:
+            return self.current_datetime
+        else:
+            return get_aware_utc_now()
 
 
 class MessageManager(object):
@@ -720,13 +734,10 @@ class MessageManager(object):
     def update_prices(self, peer, sender, bus, topic, headers, message):
         _log.debug("Get prices prior to market start.")
         price_info = message["price_info"]
-        correction_market = message.get("correction_market", False)
-        if self.parent.current_datetime is not None:
-            market_start_hour = self.parent.current_datetime + td(hours=1)
-        else:
-            market_start_hour = get_aware_utc_now() + td(hours=1)
-        price_info = message["price_info"]
+        initial_prices = message["prices"]
         oat_predictions = message.get("temp", [])
+        correction_market = message.get("correction_market", False)
+        market_start_hour = self.parent.get_current_datetime() + td(hours=1)
         if not correction_market:
             for _hour in range(24):
                 avg_price, stdev_price = price_info[_hour]
@@ -734,6 +745,7 @@ class MessageManager(object):
                 hour_of_year = calculate_hour_of_year(market_hour)
                 price_array = self.determine_prices(avg_price, stdev_price)
                 self.price_info[hour_of_year] = price_array
+                self.cleared_prices[hour_of_year] = initial_prices[_hour]
                 if oat_predictions:
                     self.parent.oat_predictions = oat_predictions
         else:
@@ -746,11 +758,8 @@ class MessageManager(object):
     def update_cleared_prices(self, peer, sender, bus, topic, headers, message):
         _log.debug("Get cleared prices.")
         correction_market = message.get("correction_market", False)
-        cleared_prices = message["price_info"]
-        if self.parent.current_datetime is not None:
-            market_start_hour = self.parent.current_datetime + td(hours=1)
-        else:
-            market_start_hour = get_aware_utc_now() + td(hours=1)
+        cleared_prices = message["prices"]
+        market_start_hour = self.parent.get_current_datetime() + td(hours=1)
         if not correction_market:
             for _hour in range(24):
                 market_hour = market_start_hour + td(hours=_hour)
@@ -800,8 +809,8 @@ class MessageManager(object):
         for k in range(len(self.price_info) - 48):
             self.price_info.popitem(last=False)
 
-    def get_current_cleared_price(self):
-        hour_of_year = calculate_hour_of_year(get_aware_utc_now())
+    def get_current_cleared_price(self, _dt):
+        hour_of_year = calculate_hour_of_year(_dt)
         if hour_of_year in self.cleared_prices:
             price = self.cleared_prices[hour_of_year]
         else:
@@ -809,8 +818,8 @@ class MessageManager(object):
             price = None
         return price
 
-    def get_price_array(self, utc_dt):
-        hour_of_year = calculate_hour_of_year(utc_dt)
+    def get_price_array(self, _dt):
+        hour_of_year = calculate_hour_of_year(_dt)
         if hour_of_year in self.price_info:
             price_array = self.price_info[hour_of_year]
         else:
