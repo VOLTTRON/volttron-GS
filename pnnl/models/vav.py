@@ -45,14 +45,6 @@ class firstorderzone(object):
         else:
             self.parent.commodity = "DischargeAirTemperature"
             self.predict_quantity = self.getT
-        message = {
-            "a1": self.a1,
-            "a2": self.a2,
-            "a3": self.a3,
-            "a4": self.a4
-        }
-        topic_suffix = "MODEL_COEFFICIENTS"
-        self.parent.publish_record(topic_suffix, message)
 
     def update_data(self):
         pass
