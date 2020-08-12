@@ -101,10 +101,14 @@ def uncontrol_agent(config_path, **kwargs):
     base_name = config.get('market_name', 'electric')
     market_name = []
     q_uc = []
-    price_multiplier = config.get('price_multiplier', 2.0)
+    price_multiplier = config.get('price_multiplier', 1.0)
     default_min_price = config.get('default_min_price', 0.01)
     default_max_price = config.get('default_min_price', 100.0)
-    for i in range(24):
+    market_type = config.get("market_type", "tns")
+    market_number = 24
+    if market_type == "rtp":
+        market_number = 1
+    for i in range(market_number):
         market_name.append('_'.join([base_name, str(i)]))
         q_uc.append(float(config.get("power_" + str(i), 0)))
 
