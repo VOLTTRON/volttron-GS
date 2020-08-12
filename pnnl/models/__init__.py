@@ -11,8 +11,9 @@ __all__ = ['Model']
 
 class Model(object):
     def __init__(self, config, **kwargs):
+        self.model = None
+        config = self.store_model_config(config)
         if not config:
-            self.model = None
             return
         base_module = "volttron.pnnl.models."
         try:
@@ -22,9 +23,18 @@ class Model(object):
             raise e
         _file, model_type = model_type.split(".")
         module = importlib.import_module(base_module + _file)
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
+        self.model_class = getattr(module, model_type)
 
     def get_q(self, _set, sched_index, market_index, occupied):
         q = self.model.predict(_set, sched_index, market_index, occupied)
         return q
+
+    def store_model_config(self, _config):
+        try:
+            config = self.vip.config.get("model")
+        except KeyError:
+            config = {}
+            self.vip.config.set("model", _config, send_update=False)
+        _config.update(config)
+        return _config
+

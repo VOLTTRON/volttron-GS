@@ -10,39 +10,53 @@ utils.setup_logging()
 class firstorderzone(object):
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
-        self.a1 = config.get("a1", 0)
-        self.a2 = config.get("a2", 0)
-        self.a3 = config.get("a3", 0)
-        self.a4 = config.get("a4", 0)
+        self.a1 = 0
+        self.a2 = 0
+        self.a3 = 0
+        self.a4 = 0
         self.coefficients = {"a1", "a2", "a3", "a4"}
-        type = config.get("terminal_box_type", "VAV")
+        self.parent.commodity = "ZoneAirFlow"
+        self.predict_quantity = self.getM
+
         self.get_input_value = parent.get_input_value
-        # parent mapping
-        # data inputs
+
+        # constants
         self.oat_name = data_names.OAT
         self.sfs_name = data_names.SFS
         self.zt_name = data_names.ZT
         self.zdat_name = data_names.ZDAT
         self.zaf_name = data_names.ZAF
-        print("MODEL: {}".format(self.a1))
         self.oat = self.get_input_value(self.oat_name)
         self.sfs = self.get_input_value(self.sfs_name)
         self.zt = self.get_input_value(self.zt_name)
-
         self.zt_predictions = [self.zt]*24
+        self.configure(config)
+
+    def configure(self, config):
+        self.a1 = config.get("a1", 0)
+        self.a2 = config.get("a2", 0)
+        self.a3 = config.get("a3", 0)
+        self.a4 = config.get("a4", 0)
+        type = config.get("terminal_box_type", "VAV")
         if type.lower() == "vav":
             self.parent.commodity = "ZoneAirFlow"
             self.predict_quantity = self.getM
         else:
             self.parent.commodity = "DischargeAirTemperature"
             self.predict_quantity = self.getT
-
-    def update_coefficients(self, coefficients):
         if set(coefficients.keys()) != self.coefficients:
             _log.warning("Missing required coefficient to update model")
             _log.warning("Provided coefficients %s -- required %s",
                          list(coefficients.keys()), self.coefficients)
             return
+        try:
+            config = self.parent.vip.config.get("model")
+            config.update(coefficients)
+        except KeyError:
+            _log.debug("No model in config store.")
+            _log.debug("Storing coefficients!")
+            config = coefficients
+        self.parent.vip.config.set("model", config, send_update=False)
         self.a1 = coefficients["a1"]
         self.a2 = coefficients["a2"]
         self.a3 = coefficients["a3"]

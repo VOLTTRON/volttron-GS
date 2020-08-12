@@ -712,9 +712,9 @@ class TransactiveBase(MarketAgent, Model):
             return None
 
     def update_model(self, peer, sender, bus, topic, headers, message):
-        coefficients = message
+        config = self.store_model_config(message)
         if self.model is not None:
-            self.model.update_coefficients(coefficients)
+            self.model.configure(config)
 
     def clamp(self, value, x1, x2):
         min_value = min(abs(x1), abs(x2))
