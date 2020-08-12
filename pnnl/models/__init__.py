@@ -24,6 +24,7 @@ class Model(object):
         _file, model_type = model_type.split(".")
         module = importlib.import_module(base_module + _file)
         self.model_class = getattr(module, model_type)
+        self.model = self.model_class(config, self)
 
     def get_q(self, _set, sched_index, market_index, occupied):
         q = self.model.predict(_set, sched_index, market_index, occupied)
