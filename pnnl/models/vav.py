@@ -33,6 +33,7 @@ class firstorderzone(object):
         self.configure(config)
 
     def configure(self, config):
+        _log.debug("MODEL CONFIGURE: {}".format(config))
         self.a1 = config.get("a1", 0)
         self.a2 = config.get("a2", 0)
         self.a3 = config.get("a3", 0)
@@ -44,23 +45,6 @@ class firstorderzone(object):
         else:
             self.parent.commodity = "DischargeAirTemperature"
             self.predict_quantity = self.getT
-        if set(coefficients.keys()) != self.coefficients:
-            _log.warning("Missing required coefficient to update model")
-            _log.warning("Provided coefficients %s -- required %s",
-                         list(coefficients.keys()), self.coefficients)
-            return
-        try:
-            config = self.parent.vip.config.get("model")
-            config.update(coefficients)
-        except KeyError:
-            _log.debug("No model in config store.")
-            _log.debug("Storing coefficients!")
-            config = coefficients
-        self.parent.vip.config.set("model", config, send_update=False)
-        self.a1 = coefficients["a1"]
-        self.a2 = coefficients["a2"]
-        self.a3 = coefficients["a3"]
-        self.a4 = coefficients["a4"]
         message = {
             "a1": self.a1,
             "a2": self.a2,
