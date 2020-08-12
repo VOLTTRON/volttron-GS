@@ -110,6 +110,7 @@ def uncontrol_agent(config_path, **kwargs):
         market_number = 1
     for i in range(market_number):
         market_name.append('_'.join([base_name, str(i)]))
+    for i in range(24):
         q_uc.append(float(config.get("power_" + str(i), 0)))
 
     verbose_logging = config.get('verbose_logging', True)

@@ -83,6 +83,7 @@ class MeterAgent(Aggregator, Meter):
             config = utils.load_config(config_path)
         except StandardError:
             config = {}
+        self.demand_limit = config.get("demand_limit")
         self.agent_name = config.get("agent_name", "meter")
         Aggregator.__init__(self, config, **kwargs)
         model_parms = config.get("model_parameters", {})
@@ -95,13 +96,17 @@ class MeterAgent(Aggregator, Meter):
 
     def translate_aggregate_demand(self, agg_demand, index):
         electric_supply_curve = PolyLine()
-        if self.market_prices is not None:
-            self.price = self.market_prices[0]
+        if self.demand_imit is not None:
+            electric_supply_curve.add(Point(price=0, quantity=self.demand_limit))
+            electric_supply_curve.add(Point(price=1000, quantity=self.demand_limit))
         else:
-            self.price = (agg_demand.min_y() + agg_demand.max_y())/2
+            if self.market_prices is not None:
+                self.price = self.market_prices[0]
+            else:
+                self.price = (agg_demand.min_y() + agg_demand.max_y())/2
 
-        electric_supply_curve.add(Point(price=self.price, quantity=0))
-        electric_supply_curve.add(Point(price=self.price, quantity=10000))
+            electric_supply_curve.add(Point(price=self.price, quantity=0))
+            electric_supply_curve.add(Point(price=self.price, quantity=10000))
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_supply_curve.points))
         self.supplier_curve[index] = electric_supply_curve
 
