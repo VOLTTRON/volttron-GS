@@ -34,7 +34,10 @@ class Model(object):
             config = self.vip.config.get("model")
         except KeyError:
             config = {}
+        try:
             self.vip.config.set("model", _config, send_update=False)
+        except RuntimeError:
+            _log.debug("Cannot change config store on config callback!")
         _config.update(config)
         return _config
 
