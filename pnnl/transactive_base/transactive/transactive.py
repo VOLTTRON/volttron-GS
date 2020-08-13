@@ -87,6 +87,7 @@ class TransactiveBase(MarketAgent, Model):
         self.actuation_rate = None
         self.actuate_topic = None
         self.price_multiplier = None
+        self.oat_predictions = []
         if config:
             default_config.update(config)
             self.default_config = default_config

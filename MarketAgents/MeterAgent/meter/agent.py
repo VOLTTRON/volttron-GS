@@ -90,7 +90,7 @@ class MeterAgent(Aggregator):
 
     def translate_aggregate_demand(self, agg_demand, index):
         electric_supply_curve = PolyLine()
-        if self.demand_imit is not None:
+        if self.demand_limit is not None:
             electric_supply_curve.add(Point(price=0, quantity=self.demand_limit))
             electric_supply_curve.add(Point(price=1000, quantity=self.demand_limit))
         else:
