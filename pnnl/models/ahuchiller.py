@@ -14,10 +14,10 @@ class ahuchiller(object):
         equipment_conf = config.get("equipment_configuration")
         model_conf = config.get("model_configuration")
         self.cpAir = model_conf["cpAir"]
-        self.c0 = model_conf["c0"]
-        self.c1 = model_conf["c1"]
-        self.c2 = model_conf["c2"]
-        self.c3 = model_conf["c3"]
+        self.c0 = float(model_conf["c0"])
+        self.c1 = float(model_conf["c1"])
+        self.c2 = float(model_conf["c2"])
+        self.c3 = float(model_conf["c3"])
         self.power_unit = model_conf.get("unit_power", "kw")
         self.cop = model_conf["COP"]
         self.mDotAir = model_conf.get("mDotAir", 0.0)
