@@ -78,6 +78,7 @@ class TransactiveBase(MarketAgent, Model):
         self.record_topic = None
         self.market_number = None
         self.single_market_contol_interval = None
+        self.hour_prediction_offset = 1
         self.inputs = {}
         self.outputs = {}
         self.schedule = {}
@@ -152,6 +153,7 @@ class TransactiveBase(MarketAgent, Model):
                     self.market_number = 24
                     self.single_market_contol_interval = None
                 else:
+                    self.hour_prediction_offset = 0
                     self.market_number = 1
                     self.single_market_contol_interval = config.get("single_market_control_interval", 15)
                 for i in range(self.market_number):
@@ -468,7 +470,7 @@ class TransactiveBase(MarketAgent, Model):
             self.init_predictions(output_info)
 
         schedule_index = self.determine_schedule_index(market_index)
-        market_time = self.current_datetime + td(hours=market_index + 1)
+        market_time = self.current_datetime + td(hours=market_index + self.hour_prediction_offset)
         if self.schedule:
             occupied = self.check_future_schedule(market_time)
         else:
@@ -693,9 +695,11 @@ class TransactiveBase(MarketAgent, Model):
         :param index: int; market_index
         :return:
         """
+
         if self.current_datetime is None:
             return index
-        schedule_index = index + self.current_datetime.hour + 1
+        if self.single_market_contol_interval is not None:
+        schedule_index = index + self.current_datetime.hour + self.hour_prediction_offset
         if schedule_index >= 24:
             schedule_index = schedule_index - 24
         return schedule_index

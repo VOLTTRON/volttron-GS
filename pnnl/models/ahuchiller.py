@@ -35,7 +35,6 @@ class ahuchiller(object):
         self.parent.supply_commodity = "ZoneAirFlow"
 
         self.fan_power = 0.
-        self.mDotAir = 0.
         self.coil_load = 0.
 
         self.get_input_value = parent.get_input_value

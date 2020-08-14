@@ -62,7 +62,6 @@ from volttron.platform.agent import utils
 from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregator
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
-# from pnnl.models.firstorderzone import FirstOrderZone
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
