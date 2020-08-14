@@ -698,7 +698,7 @@ class TransactiveBase(MarketAgent, Model):
 
         if self.current_datetime is None:
             return index
-        if self.single_market_contol_interval is not None:
+
         schedule_index = index + self.current_datetime.hour + self.hour_prediction_offset
         if schedule_index >= 24:
             schedule_index = schedule_index - 24
