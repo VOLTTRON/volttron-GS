@@ -239,7 +239,10 @@ class UncontrolAgent(MarketAgent):
                 self.current_power = sum(self.power_aggregation)
             else:
                 self.current_power = 0.
+            _log.debug("ERROR - topic: {} -- waiting on {}".format(topic, self.demand_aggregation_working))
             self.demand_aggregation_working = self.demand_aggregation_master.copy()
+            self.power_aggregation = []
+            return
 
         conversion = current_points.get("conversion")
         point_list = []
