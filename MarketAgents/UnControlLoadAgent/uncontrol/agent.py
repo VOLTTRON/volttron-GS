@@ -280,7 +280,7 @@ class UncontrolAgent(MarketAgent):
                     exp_power += power_sort[n] * smoothing_constant * (1.0 - smoothing_constant) ** n
                 exp_power += power_sort[-1] * (1.0 - smoothing_constant) ** (len(self.uc_load_array))
                 _log.debug("Projected power: {}".format(exp_power))
-                self.single_timestep_power = exp_power
+                self.single_timestep_power = -exp_power
             self.current_hour = current_hour
 
     def create_demand_curve(self, load_index, index):
