@@ -331,7 +331,7 @@ class TransactiveIlcCoordinator(MarketAgent):
             price_max = 0.07
         _log.debug("Prices: {} - avg: {} - std: {}".format(self.power_prices, avg_price, std_price))
         price_array = np.linspace(price_min, price_max, 11)
-        return price_array
+        return price_min, price_max
 
     def generate_power_points(self, current_power):
         positive_power, negative_power = self.clusters.get_power_bounds()
