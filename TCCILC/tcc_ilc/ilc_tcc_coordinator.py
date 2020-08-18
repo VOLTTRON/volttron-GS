@@ -69,6 +69,7 @@ import logging
 from datetime import timedelta as td, datetime as dt
 import uuid
 from dateutil.parser import parse
+import numpy as np
 
 from tcc_ilc.device_handler import ClusterContainer, DeviceClusters, parse_sympy, init_schedule, check_schedule
 import pandas as pd
@@ -177,16 +178,20 @@ class TransactiveIlcCoordinator(MarketAgent):
             self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
-        self.power_prices = pd.DataFrame(message)
-        self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
-        self.power_prices.index = pd.to_datetime(self.power_prices.index)
-        self.power_prices["price"] = self.power_prices
-        self.power_prices.resample('H').mean()
-        self.power_prices['MA'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).mean()[::-1]
-        self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
-        self.power_prices['month'] = self.power_prices.index.month.astype(int)
-        self.power_prices['day'] = self.power_prices.index.day.astype(int)
-        self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
+        # self.power_prices = pd.DataFrame(message)
+        # self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
+        # self.power_prices.index = pd.to_datetime(self.power_prices.index)
+        # self.power_prices["price"] = self.power_prices
+        # self.power_prices.resample('H').mean()
+        # self.power_prices['MA'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).mean()[::-1]
+        # self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
+        # self.power_prices['month'] = self.power_prices.index.month.astype(int)
+        # self.power_prices['day'] = self.power_prices.index.day.astype(int)
+        # self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
+        hour = float(message['hour'])
+        self.power_prices = message["prices"]
+        _log.debug("Get RTP Prices: {}".format(self.market_prices))
+        self.current_price = self.market_prices[-1]
 
     @Core.receiver("onstart")
     def starting_base(self, sender, **kwargs):
@@ -308,12 +313,25 @@ class TransactiveIlcCoordinator(MarketAgent):
     def generate_price_points(self):
         # need to figure out where we are getting the pricing information and the form
         # probably via RPC
-        _log.debug("DEBUG_PRICES: {}".format(self.current_time))
-        df_query = self.power_prices[(self.power_prices["hour"] == self.current_time.hour) & (self.power_prices["day"] == self.current_time.day) & (self.power_prices["month"] == self.current_time.month)]
-        price_min = df_query['MA'] - df_query['STD']*self.comfort_to_dollar
-        price_max = df_query['MA'] + df_query['STD']*self.comfort_to_dollar
-        _log.debug("DEBUG TCC price - min {} - max {}".format(float(price_min), float(price_max)))
-        return max(float(price_min), 0.0), float(price_max)
+        # _log.debug("DEBUG_PRICES: {}".format(self.current_time))
+        # df_query = self.power_prices[(self.power_prices["hour"] == self.current_time.hour) & (self.power_prices["day"] == self.current_time.day) & (self.power_prices["month"] == self.current_time.month)]
+        # price_min = df_query['MA'] - df_query['STD']*self.comfort_to_dollar
+        # price_max = df_query['MA'] + df_query['STD']*self.comfort_to_dollar
+        # _log.debug("DEBUG TCC price - min {} - max {}".format(float(price_min), float(price_max)))
+        # return max(float(price_min), 0.0), float(price_max)
+        if self.power_prices:
+            avg_price = np.mean(self.power_prices)
+            std_price = np.std(self.power_prices)
+            price_min = avg_price - self.comfort_to_dollar * std_price
+            price_max = avg_price + self.comfort_to_dollar * std_price
+        else:
+            avg_price = None
+            std_price = None
+            price_min = 0.01
+            price_max = 0.07
+        _log.debug("Prices: {} - avg: {} - std: {}".format(self.market_prices, avg_price, std_price))
+        price_array = np.linspace(price_min, price_max, 11)
+        return price_array
 
     def generate_power_points(self, current_power):
         positive_power, negative_power = self.clusters.get_power_bounds()

@@ -84,6 +84,7 @@ def extract_criteria(filename):
     """
     criteria_labels = {}
     criteria_matrix = {}
+    # config_matrix = utils.load_config(filename)
     config_matrix = utils.load_config(filename)
     # check if file has been updated or uses old format
     _log.debug("CONFIG_MATRIX: {}".format(config_matrix))
