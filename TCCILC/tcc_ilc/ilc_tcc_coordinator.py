@@ -382,7 +382,7 @@ class TransactiveIlcCoordinator(MarketAgent):
         avg_power_min = 0.
         avg_power = 0.
 
-        for n in xrange(len(self.bldg_power)):
+        for n in range(len(self.bldg_power)):
             avg_power += power_sort[n][1] * smoothing_constant * (1.0 - smoothing_constant) ** n
             avg_power_min += power_sort[n][2] * smoothing_constant * (1.0 - smoothing_constant) ** n
             avg_power_max += power_sort[n][3] * smoothing_constant * (1.0 - smoothing_constant) ** n
