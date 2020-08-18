@@ -151,7 +151,7 @@ class TransactiveIlcCoordinator(MarketAgent):
 
         self.average_building_power_window = td(minutes=config.get("average_building_power_window", 15))
         self.minimum_update_time = td(minutes=config.get("minimum_update_time", 5))
-        self.market_name = config.get("market", "electric")
+        self.market_name = config.get("market", "electric_0")
         self.tz = None
         # self.prices = power_prices
         self.oat_predictions = []
