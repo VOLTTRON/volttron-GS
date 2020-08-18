@@ -94,7 +94,10 @@ class MeterAgent(Aggregator):
             electric_supply_curve.add(Point(price=1000, quantity=self.demand_limit))
         else:
             if self.market_prices is not None:
-                self.price = self.market_prices[0]
+                if self.market_type == "rtp":
+                    self.price = self.current_price
+                else:
+                    self.price = self.market_prices[0]
             else:
                 self.price = (agg_demand.min_y() + agg_demand.max_y())/2
 

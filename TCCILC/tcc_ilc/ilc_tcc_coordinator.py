@@ -190,8 +190,8 @@ class TransactiveIlcCoordinator(MarketAgent):
         # self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
         hour = float(message['hour'])
         self.power_prices = message["prices"]
-        _log.debug("Get RTP Prices: {}".format(self.market_prices))
-        self.current_price = self.market_prices[-1]
+        _log.debug("Get RTP Prices: {}".format(self.power_prices))
+        self.current_price = self.power_prices[-1]
 
     @Core.receiver("onstart")
     def starting_base(self, sender, **kwargs):

@@ -68,6 +68,7 @@ class ahuchiller(object):
         else:
             self.tDis = q_load
             self.dat = q_load
+            self.mDotAir = self.saf
 
     def calculate_fan_power(self):
         if self.power_unit == 'W':
