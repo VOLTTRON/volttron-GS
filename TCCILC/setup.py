@@ -68,7 +68,7 @@ from setuptools import setup, find_packages
 packages = find_packages('.')
 package = packages[0]
 
-_temp = __import__(package+'.ilc_tcc_coordinator', globals(), locals(), ['__version__'], -1)
+_temp = __import__(package+'.ilc_tcc_coordinator', globals(), locals(), ['__version__'], 0)
 __version__ = _temp.__version__
 
 setup(
