@@ -19,7 +19,7 @@ def parse_sympy(data, condition=False):
     """
 
     def clean_text(text, rep={" ": ""}):
-        rep = dict((re.escape(k), v) for k, v in rep.iteritems())
+        rep = dict((re.escape(k), v) for k, v in rep.items())
         pattern = re.compile("|".join(rep.keys()))
         new_key = pattern.sub(lambda m: rep[re.escape(m.group(0))], text)
         return new_key
