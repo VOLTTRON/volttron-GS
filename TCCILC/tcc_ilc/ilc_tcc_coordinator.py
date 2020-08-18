@@ -329,7 +329,7 @@ class TransactiveIlcCoordinator(MarketAgent):
             std_price = None
             price_min = 0.01
             price_max = 0.07
-        _log.debug("Prices: {} - avg: {} - std: {}".format(self.market_prices, avg_price, std_price))
+        _log.debug("Prices: {} - avg: {} - std: {}".format(self.power_prices, avg_price, std_price))
         price_array = np.linspace(price_min, price_max, 11)
         return price_array
 
