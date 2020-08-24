@@ -132,7 +132,7 @@ class PricePublisherAgent(Agent):
         try:
             self.power_prices = pd.read_csv(self.price_file)
             self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
-            self.power_prices.index = pd.to_datetime(self.power_prices.index, format="%m/%d/%Y %H:%M")
+            self.power_prices.index = pd.to_datetime(self.power_prices.index)
 
             self.power_prices['month'] = self.power_prices.index.month.astype(int)
             self.power_prices['day'] = self.power_prices.index.day.astype(int)
