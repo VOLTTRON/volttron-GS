@@ -75,6 +75,7 @@ from tcc_ilc.device_handler import ClusterContainer, DeviceClusters, parse_sympy
 import pandas as pd
 from volttron.platform.agent import utils
 from volttron.platform.messaging import topics, headers as headers_mod
+import dateutil.tz
 
 from volttron.platform.agent.utils import setup_logging, format_timestamp, get_aware_utc_now
 from volttron.platform.agent.math_utils import mean, stdev
@@ -152,7 +153,7 @@ class TransactiveIlcCoordinator(MarketAgent):
         self.average_building_power_window = td(minutes=config.get("average_building_power_window", 15))
         self.minimum_update_time = td(minutes=config.get("minimum_update_time", 5))
         self.market_name = config.get("market", "electric_0")
-        self.tz = None
+        self.tz = config.get("timezone", "US/Pacific")
         # self.prices = power_prices
         self.oat_predictions = []
         self.comfort_to_dollar = config.get('comfort_to_dollar', 1.0)
@@ -354,7 +355,8 @@ class TransactiveIlcCoordinator(MarketAgent):
         # Use instantaneous power or average building power.
         data = message[0]
         current_power = data[self.power_point]
-        current_time = parse(headers["Date"])
+        tz_info = dateutil.tz.gettz(self.tz)
+        current_time = parse(headers["Date"]).astimezone(tz_info)
 
         power_max, power_min = self.generate_power_points(current_power)
         _log.debug("QUANTITIES: max {} - min {} - cur {}".format(power_max, power_min, current_power))
