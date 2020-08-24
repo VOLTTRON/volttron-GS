@@ -548,12 +548,16 @@ class ILCAgent(Agent):
         demand_goal = float(target) if target is not None else target
         task_id = target_info["id"]
         _log.debug("TARGET - id: {} - start: {} - goal: {}".format(task_id, start_time, demand_goal))
+        task_list = []
         for key, value in self.tasks.items():
             if start_time == value["end"]:
                 start_time += td(seconds=15)
             if (start_time < value["end"] and end_time > value["start"]) or value["start"] <= start_time <= value["end"]:
-                for item in self.tasks.pop(key)["schedule"]:
-                    item.cancel()
+                task_list.append(key)
+        for task in task_list:
+           sched_tasks = self.tasks.pop(task)["schedule"]
+           for current_task in sched_tasks:
+               current_task.cancel()
 
         current_task_exists = self.tasks.get(target_info["id"])
         if current_task_exists is not None:
