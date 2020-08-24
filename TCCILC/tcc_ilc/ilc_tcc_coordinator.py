@@ -119,6 +119,9 @@ class TransactiveIlcCoordinator(MarketAgent):
 
         self.device_topic_list = []
         self.device_topic_map = {}
+        self.static_price_flag = config.get('static_price_flag', False)
+        self.default_min_price = config.get('static_minimum_price', 0.01)
+        self.default_max_price = config.get('static_maximum_price', 0.1)
         all_devices = self.clusters.get_device_name_list()
         occupancy_schedule = config.get("occupancy_schedule", False)
         self.occupancy_schedule = init_schedule(occupancy_schedule)
@@ -320,7 +323,7 @@ class TransactiveIlcCoordinator(MarketAgent):
         # price_max = df_query['MA'] + df_query['STD']*self.comfort_to_dollar
         # _log.debug("DEBUG TCC price - min {} - max {}".format(float(price_min), float(price_max)))
         # return max(float(price_min), 0.0), float(price_max)
-        if self.power_prices:
+        if self.power_prices and not self.static_price_flag:
             avg_price = np.mean(self.power_prices)
             std_price = np.std(self.power_prices)
             price_min = avg_price - self.comfort_to_dollar * std_price
@@ -328,8 +331,8 @@ class TransactiveIlcCoordinator(MarketAgent):
         else:
             avg_price = None
             std_price = None
-            price_min = 0.01
-            price_max = 0.07
+            price_min = self.default_min_price
+            price_max = self.default_max_price
         _log.debug("Prices: {} - avg: {} - std: {}".format(self.power_prices, avg_price, std_price))
         price_array = np.linspace(price_min, price_max, 11)
         return price_min, price_max
