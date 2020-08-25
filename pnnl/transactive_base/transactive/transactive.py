@@ -88,6 +88,9 @@ class TransactiveBase(MarketAgent, Model):
         self.actuation_rate = None
         self.actuate_topic = None
         self.price_multiplier = None
+        self.static_price_flag = False
+        self.default_min_price = 0.01
+        self.default_max_price = 0.1
         self.oat_predictions = []
         if config:
             default_config.update(config)
@@ -135,6 +138,9 @@ class TransactiveBase(MarketAgent, Model):
             self.init_outputs(outputs)
             self.init_actuation_state(self.actuate_topic, self.actuate_onstart)
             self.init_input_subscriptions()
+            self.static_price_flag = config.get('static_price_flag', False)
+            self.default_min_price = config.get('static_minimum_price', 0.01)
+            self.default_max_price = config.get('static_maximum_price', 0.1)
             market_name = config.get("market_name", "electric")
             self.market_type = config.get("market_type", "tns")
             tns = False if self.market_type != "tns" else True
@@ -181,6 +187,19 @@ class TransactiveBase(MarketAgent, Model):
                                   prefix="/".join([self.record_topic,
                                                    "update_model"]),
                                   callback=self.update_model)
+
+    @Core.receiver("onstop")
+    def shutdown(self, sender, **kwargs):
+        _log.debug("Shutting down %s", self.core.identity)
+        if self.outputs and self.actuation_enabled:
+            for output_info in list(self.outputs.values()):
+                topic = output_info["topic"]
+                release = output_info["release"]
+                actuator = output_info["actuator"]
+                if self.actuation_obj is not None:
+                    self.actuation_obj.kill()
+                    self.actuation_obj = None
+                self.actuate(topic, release, actuator)
 
     def init_markets(self):
         """
@@ -628,7 +647,7 @@ class TransactiveBase(MarketAgent, Model):
         market architecture is not utilized, this function must be overwritten in the child class.
         :return:
         """
-        if self.market_prices:
+        if self.market_prices and not self.static_price_flag:
             avg_price = np.mean(self.market_prices)
             std_price = np.std(self.market_prices)
             price_min = avg_price - self.price_multiplier * std_price
