@@ -57,6 +57,7 @@ class TransactiveBase(MarketAgent, Model):
         self.flexibility = None
         self.ct_flexibility = None
         self.off_setpoint = None
+        self.demand_limiting = False
         self.occupied = False
         self.mapped = None
         self.market_prices = {}
@@ -111,6 +112,7 @@ class TransactiveBase(MarketAgent, Model):
             building = config.get("building", "")
             device = config.get("device", "")
             subdevice = config.get("subdevice", "")
+            self.demand_limiting = config.get("demand_limiting", False)
 
             base_record_list = ["tnc", campus, building, device, subdevice]
             base_record_list = list(filter(lambda a: a != "", base_record_list))
@@ -436,6 +438,8 @@ class TransactiveBase(MarketAgent, Model):
             prices = self.actuation_price_range
         else:
             prices = self.determine_prices()
+        if self.demand_limiting:
+            price = max(np.mean(prices), price)
         _log.debug("Call determine_control: %s", self.core.identity)
         value = self.determine_control(sets, prices, price)
         self.outputs[name]["value"] = value
