@@ -418,7 +418,7 @@ class TransactiveBase(MarketAgent, Model):
     def update_outputs(self, name, price):
         _log.debug("update_outputs: %s", self.core.identity)
         if price is None:
-            price = self.price_manager.get_current_cleared_price()
+            price = self.price_manager.get_current_cleared_price(self.get_current_datetime())
             if price is None:
                 return
         sets = self.outputs[name]["ct_flex"]
