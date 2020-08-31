@@ -1040,7 +1040,7 @@ class ILCAgent(Agent):
             control_value = max(control["minimum"], control_value)
         elif control["maximum"] is not None and control["minimum"] is None:
             control_value = min(control["maximum"], control_value)
-
+        control_pt, control_value, control_load, revert_priority, revert_value
         return control_pt, control_value, control_load, revert_priority, revert_value
 
     def setup_release(self):
@@ -1144,12 +1144,12 @@ class ILCAgent(Agent):
         if len(current_device_list) <= 1:
             return revert_value
 
-        index_value = max(current_device_list, key=lambda t: t[2])
-        return_value = index_value[2]
+        index_value = max(current_device_list, key=lambda t: t[4])
+        return_value = index_value[3]
         _log.debug("Stored revert value: {} for device: {}".format(return_value, device))
         control_set_index = self.devices.index(index_value)
-        self.devices[control_set_index][2] = revert_value
-        self.devices[control_set_index][3] = revert_priority
+        self.devices[control_set_index][3] = revert_value
+        self.devices[control_set_index][4] = revert_priority
 
         return return_value
 
