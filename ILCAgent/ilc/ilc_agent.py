@@ -1040,7 +1040,7 @@ class ILCAgent(Agent):
             control_value = max(control["minimum"], control_value)
         elif control["maximum"] is not None and control["minimum"] is None:
             control_value = min(control["maximum"], control_value)
-        control_pt, control_value, control_load, revert_priority, revert_value
+
         return control_pt, control_value, control_load, revert_priority, revert_value
 
     def setup_release(self):
