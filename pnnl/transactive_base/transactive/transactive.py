@@ -742,7 +742,7 @@ class TransactiveBase(MarketAgent, Model):
     def update_model(self, peer, sender, bus, topic, headers, message):
         config = self.store_model_config(message)
         if self.model is not None:
-            self.model.configure(config)
+            self.model.configure(message)
 
     def clamp(self, value, x1, x2):
         min_value = min(abs(x1), abs(x2))
