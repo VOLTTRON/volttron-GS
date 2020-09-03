@@ -17,7 +17,8 @@ class firstorderzone(object):
         self.coefficients = {"a1", "a2", "a3", "a4"}
         self.parent.commodity = "ZoneAirFlow"
         self.predict_quantity = self.getM
-
+        self.prediction_data = []
+        self.cleared_quantity = None
         self.get_input_value = parent.get_input_value
 
         # constants
@@ -26,6 +27,7 @@ class firstorderzone(object):
         self.zt_name = data_names.ZT
         self.zdat_name = data_names.ZDAT
         self.zaf_name = data_names.ZAF
+        self.predict_name = self.zaf_name
         self.oat = self.get_input_value(self.oat_name)
         self.sfs = self.get_input_value(self.sfs_name)
         self.zt = self.get_input_value(self.zt_name)
@@ -42,12 +44,18 @@ class firstorderzone(object):
         if type.lower() == "vav":
             self.parent.commodity = "ZoneAirFlow"
             self.predict_quantity = self.getM
+            self.predict_name = self.zaf_name
         else:
             self.parent.commodity = "DischargeAirTemperature"
             self.predict_quantity = self.getT
+            self.predict_name = self.zdat_name
 
     def update_data(self):
-        pass
+        zaf = self.get_input_value(self.zaf_name)
+        if zaf is None:
+            _log.debug("Cannot update prediction error ratio!  No data!")
+            return
+        self.prediction_data.append(zaf)
 
     def update(self, _set, sched_index, market_index):
         self.zt_predictions[market_index] = _set
@@ -68,11 +76,11 @@ class firstorderzone(object):
                 oat = self.parent.oat_predictions[market_index]
             else:
                 oat = self.get_input_value(self.oat_name)
-
         q = self.predict_quantity(oat, zt, _set, sched_index)
+        q_correct = q * self.parent.prediction_error
         _log.debug(
-            "%s: vav.firstorderzone q: %s - zt: %s- set: %s - sched: %s",
-            self.parent.agent_name, q, zt, _set, sched_index
+            "%s: vav.firstorderzone q: %s -  q_corrected %s- zt: %s- set: %s - sched: %s",
+            self.parent.agent_name, q, q_correct, zt, _set, sched_index
         )
         # might need to revisit this when doing both heating and cooling
         if occupied:

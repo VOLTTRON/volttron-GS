@@ -1,6 +1,7 @@
 import importlib
 import logging
 from volttron.platform.agent import utils
+from volttron.platform.agent.math_utils import mean, stdev
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
@@ -13,6 +14,7 @@ class Model(object):
     def __init__(self, config, **kwargs):
         self.model = None
         config = self.store_model_config(config)
+        self.cleared_quantity = None
         if not config:
             return
         base_module = "volttron.pnnl.models."
@@ -41,4 +43,23 @@ class Model(object):
             _log.debug("Cannot change config store on config callback!")
         _config.update(config)
         return _config
+
+    def update_prediction(self, quantity):
+        if self.model is not None:
+            self.cleared_quantity = quantity
+
+    def update_prediction_error(self):
+        prediction_data = (self.model, "prediction_data", None)
+        if prediction_data is None:
+            _log.debug("Prediction data not available for correction!")
+            return
+        if self.cleared_quantity is None:
+            _log.debug("Cleared quantity data is not available for correction!")
+            return
+        try:
+            average_quantity = mean(self.model.prediction_data)
+        except:
+            _log.debug("Problem finding average prediction data: %s", self.model.prediction_data)
+            return
+        self.prediction_error = average_quantity/self.cleared_quantity
 

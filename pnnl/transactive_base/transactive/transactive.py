@@ -90,6 +90,7 @@ class TransactiveBase(MarketAgent, Model):
         self.actuate_topic = None
         self.price_multiplier = None
         self.static_price_flag = False
+        self.prediction_error = 1.0
         self.default_min_price = 0.01
         self.default_max_price = 0.1
         self.oat_predictions = []
@@ -573,6 +574,7 @@ class TransactiveBase(MarketAgent, Model):
         self.publish_record(topic_suffix, message)
         # If a price is known update the state of agent (in concrete
         # implementation of transactive agent).
+        self.model.update_prediction(cleared_quantity)
         if price is not None:
             self.update_state(market_index, schedule_index, price)
             # For single timestep market do actuation when price clears.
