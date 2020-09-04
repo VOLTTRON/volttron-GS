@@ -520,6 +520,7 @@ class TransactiveBase(MarketAgent, Model):
                    self.core.identity,  market_index, sched_index)
         demand_curve = PolyLine()
         prices = self.determine_prices()
+        self.update_prediction_error()
         for control, price in zip(self.ct_flexibility, prices):
             if occupied:
                 _set = control

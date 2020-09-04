@@ -46,10 +46,11 @@ class Model(object):
 
     def update_prediction(self, quantity):
         if self.model is not None:
+            _log.debug("Update cleared quantity %s", quantity)
             self.cleared_quantity = quantity
 
     def update_prediction_error(self):
-        prediction_data = (self.model, "prediction_data", None)
+        prediction_data = getattr(self.model, "prediction_data", None)
         if prediction_data is None:
             _log.debug("Prediction data not available for correction!")
             return
