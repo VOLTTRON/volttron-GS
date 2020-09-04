@@ -55,6 +55,7 @@ class firstorderzone(object):
         if zaf is None:
             _log.debug("Cannot update prediction error ratio!  No data!")
             return
+        _log.debug("Prediction data %s", self.predict_data)
         self.prediction_data.append(zaf)
 
     def update(self, _set, sched_index, market_index):
@@ -84,7 +85,7 @@ class firstorderzone(object):
         )
         # might need to revisit this when doing both heating and cooling
         if occupied:
-            q = clamp(q, min(self.parent.flexibility), max(self.parent.flexibility))
+            q = clamp(q_correct, min(self.parent.flexibility), max(self.parent.flexibility))
         else:
             q = 0.0
         return q
