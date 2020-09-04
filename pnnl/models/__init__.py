@@ -63,5 +63,6 @@ class Model(object):
             _log.debug("Problem finding average prediction data: %s", self.model.prediction_data)
             return
         _log.debug("Update prediction error %s -- %s -- %s", self.model.prediction_data, average_quantity, self.cleared_quantity)
+        self.model.prediction_data = []
         self.prediction_error = average_quantity/self.cleared_quantity
 
