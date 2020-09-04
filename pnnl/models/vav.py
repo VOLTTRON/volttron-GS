@@ -55,8 +55,8 @@ class firstorderzone(object):
         if zaf is None:
             _log.debug("Cannot update prediction error ratio!  No data!")
             return
-        _log.debug("Prediction data %s", self.prediction_data)
         self.prediction_data.append(zaf)
+        _log.debug("Prediction data  zaf %s -- %s", zaf, self.prediction_data)
 
     def update(self, _set, sched_index, market_index):
         self.zt_predictions[market_index] = _set
