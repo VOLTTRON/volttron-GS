@@ -46,11 +46,11 @@ class Model(object):
 
     def update_prediction(self, quantity):
         if self.model is not None:
-            _log.debug("Update cleared quantity %s", quantity)
+            _log.debug("Update cleared quantity %s -- %s", quantity, self.prediction_error)
         if self.prediction_error is not None:
             self.cleared_quantity = quantity/self.prediction_error
         else:
-            self.cleared_quantity = quantity / self.prediction_error
+            self.cleared_quantity = quantity
 
     def update_prediction_error(self):
         prediction_data = getattr(self.model, "prediction_data", None)
