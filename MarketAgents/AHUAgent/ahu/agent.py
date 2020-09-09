@@ -92,7 +92,8 @@ class AHUAgent(Aggregator):
             electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
         # Hard-coding the market names is not ideal.  Need to come up with more robust solution
-        self.consumer_demand_curve["electric"][index] = electric_demand_curve
+        for market in self.consumer_market:
+            self.consumer_demand_curve[market][index] = electric_demand_curve
 
 
 def main():
