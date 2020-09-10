@@ -67,5 +67,8 @@ class Model(object):
             return
         _log.debug("Update prediction error %s -- %s -- %s", self.model.prediction_data, average_quantity, self.cleared_quantity)
         self.model.prediction_data = []
-        self.prediction_error = average_quantity/self.cleared_quantity
+        if self.cleared_quantity > 0:
+            self.prediction_error = average_quantity/self.cleared_quantity
+        else:
+            self.prediction_error = 1.0
 
