@@ -101,6 +101,7 @@ class ahuchiller(object):
     def single_market_coil_load(self):
         try:
             self.coil_load = self.mDotAir * self.cpAir * (self.dat - self.mat)
+            _log.debug("AHU MODEL - load: %s -- mdot: %s -- mat: %s -- dat: %s", self.coil_load, self.mDotAir, self.mat, self.dat)
         except:
             _log.debug("AHU for single market requires dat and mat measurements!")
             self.coil_load = 0.
