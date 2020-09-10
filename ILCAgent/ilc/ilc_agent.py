@@ -271,6 +271,7 @@ class ILCAgent(Agent):
         self.saved_config = None
         self.power_meter_topic = None
         self.kill_device_topic = None
+        self.load_control_modes = ["curtail"]
 
     def configure_main(self, config_name, action, contents):
         config = self.default_config.copy()
@@ -299,6 +300,7 @@ class ILCAgent(Agent):
         dashboard_topic = config.get("dashboard_topic")
         ilc_start_topic = self.agent_id
         self.control_mode = config.get("control_mode", "dollar")
+        self.load_control_modes = config.get("load_control_modes", ["curtail"])
 
         campus = config.get("campus", "")
         building = config.get("building", "")
@@ -832,14 +834,15 @@ class ILCAgent(Agent):
         _log.debug("Checking building load: {}".format(self.demand_limit))
 
         if self.demand_limit is not None:
-            if self.avg_power > self.demand_limit + self.demand_threshold:
+            if "curtail" in self.load_control_modes and self.avg_power > self.demand_limit + self.demand_threshold:
                 result = "Current load of {} kW exceeds demand limit of {} kW.".format(self.avg_power, self.demand_limit+self.demand_threshold)
                 self.curtail_load()
-            elif self.avg_power < self.demand_limit - self.demand_threshold:
+            elif "augment" in self.load_control_modes and self.avg_power < self.demand_limit - self.demand_threshold:
                 result = "Current load of {} kW is below demand limit of {} kW.".format(self.avg_power, self.demand_limit-self.demand_threshold)
                 self.augment_load()
             else:
                 result = "Current load of {} kW meets demand goal of {} kW.".format(self.avg_power, self.demand_limit)
+                self.release()
             if self.state != 'inactive':
                 self.lock = True
                 self.release()
