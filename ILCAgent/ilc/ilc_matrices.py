@@ -109,7 +109,7 @@ def extract_criteria(filename):
                 criteria_matrix[state][row][col] = float(config_matrix[state][j][k])
                 criteria_matrix[state][col][row] = float(1.0 / criteria_matrix[state][row][col])
 
-    return criteria_labels, criteria_matrix
+    return criteria_labels, criteria_matrix, list(config_matrix.keys())
 
 
 def calc_column_sums(criteria_matrix):

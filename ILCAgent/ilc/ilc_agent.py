@@ -116,7 +116,7 @@ class ILCAgent(Agent):
             'trigger': 'curtail_load',
             'source': 'curtail_holding',
             'dest': 'curtail',
-            'conditions':'confirm_elapsed'
+            'conditions': 'confirm_elapsed'
         },
         {
             'trigger': 'release',
@@ -300,7 +300,7 @@ class ILCAgent(Agent):
         dashboard_topic = config.get("dashboard_topic")
         ilc_start_topic = self.agent_id
         self.control_mode = config.get("control_mode", "dollar")
-        self.load_control_modes = config.get("load_control_modes", ["curtail"])
+        self.load_control_modes
 
         campus = config.get("campus", "")
         building = config.get("building", "")
@@ -341,7 +341,7 @@ class ILCAgent(Agent):
             cluster_actuator = cluster_config.get("cluster_actuator", "platform.actuator")
             # Check that all three parameters are not None
             if pairwise_criteria_config and criteria_config and control_config:
-                criteria_labels, criteria_array = extract_criteria(pairwise_criteria_config)
+                criteria_labels, criteria_array, self.load_control_modes = extract_criteria(pairwise_criteria_config)
                 col_sums = calc_column_sums(criteria_array)
                 row_average = normalize_matrix(criteria_array, col_sums)
                 _log.debug("VALIDATE - criteria_array {} - col_sums {}".format(criteria_array, col_sums))
