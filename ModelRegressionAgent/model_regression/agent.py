@@ -357,7 +357,7 @@ class Regression:
         dependent, independent = patsy.dmatrices(formula, df, return_type='dataframe')
         y = dependent[list(self.model_dependent)[0]]
         if not any(x in self.model_independent.keys() for x in ['Intercept', 'intercept']):
-            x = independent.drop(columns=['Intercept', 'intercept'])
+            x = independent.drop(columns=['Intercept'])
         else:
             x = independent.rename(columns={'Intercept': self.intercept})
             x = x.rename(columns={'intercept': self.intercept})
@@ -461,7 +461,7 @@ class RegressionAgent(Agent):
             _log.exception('At least one of the model fields is missing in config')
             sys.exit()
 
-        device_list = subdevices if subdevices else [device]
+        device_list = subdevices if subdevices else ''
         self.device_list = {}
         self.regression_list = {}
         for unit in device_list:
