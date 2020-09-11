@@ -26,7 +26,7 @@ class firstorderzone(object):
         self.on = [0]*24
         self.off = [0]*24
 
-        self.predict = self.getQ
+        self.predict_quantity = self.getQ
         self.smc_interval = parent.single_market_contol_interval
         self.get_input_value = parent.get_input_value
 
