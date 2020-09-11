@@ -48,6 +48,7 @@ class firstorderzone(object):
         self.mhtg = self.get_input_value(self.mhtg_name)
         self.sfs = self.get_input_value(self.sfs_name)
         self.zt_predictions = [self.zt] * 24
+        self.configure(config)
 
     def update_data(self):
         self.oat = self.get_input_value(self.oat_name)
