@@ -41,7 +41,7 @@ class Model(object):
             self.vip.config.set("model", _config, send_update=False)
         except RuntimeError:
             _log.debug("Cannot change config store on config callback!")
-        config.update(_config)
+        _config.update(config)
         return config
 
     def update_prediction(self, quantity):
