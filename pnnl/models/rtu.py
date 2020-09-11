@@ -23,8 +23,8 @@ class firstorderzone(object):
         self.coefficients = {"c1", "c2", "c3", "c4"}
         self.rated_power = config["rated_power"]
 
-        self.on = [0]*parent.market_number
-        self.off = [0]*parent.market_number
+        self.on = [0]*24
+        self.off = [0]*24
 
         self.predict = self.getQ
         self.smc_interval = parent.single_market_contol_interval
