@@ -42,7 +42,7 @@ class Model(object):
         except RuntimeError:
             _log.debug("Cannot change config store on config callback!")
         _config.update(config)
-        return config
+        return _config
 
     def update_prediction(self, quantity):
         if self.model is not None:
