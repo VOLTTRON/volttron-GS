@@ -130,6 +130,8 @@ class Device:
         :param subdevice_points:
         """
         self.device = device
+        if not subdevice_points:
+            subdevice = ""
         base_record_list = ["tnc", site, building, device, subdevice, "update_model"]
         base_record_list = list(filter(lambda a: a != "", base_record_list))
         self.record_topic = '/'.join(base_record_list)
@@ -461,7 +463,7 @@ class RegressionAgent(Agent):
             _log.exception('At least one of the model fields is missing in config')
             sys.exit()
 
-        device_list = subdevices if subdevices else ''
+        device_list = subdevices if subdevices else [device]
         self.device_list = {}
         self.regression_list = {}
         for unit in device_list:
