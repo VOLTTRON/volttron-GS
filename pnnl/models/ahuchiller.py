@@ -25,12 +25,15 @@ class ahuchiller(object):
         self.name = 'AhuChiller'
 
         self.has_economizer = equipment_conf["has_economizer"]
-        self.economizer_limit = equipment_conf["economizer_limit"]
+        if self.has_economizer:
+            self.economizer_limit = equipment_conf["economizer_limit"]
+        else:
+            self.economizer_limit = 0
         self.min_oaf = equipment_conf.get("minimum_oaf", 0.15)
-        self.vav_flag = equipment_conf.get("variable-volume", True)
-        self.sat_setpoint = equipment_conf["supply-air sepoint"]
-        self.building_chiller = equipment_conf["building chiller"]
-        self.tset_avg = equipment_conf["nominal zone-setpoint"]
+        self.vav_flag = equipment_conf.get("variable_volume", True)
+        self.sat_setpoint = equipment_conf["supply_air_sepoint"]
+        self.building_chiller = equipment_conf["building_chiller"]
+        self.tset_avg = equipment_conf["nominal_zone_setpoint"]
         self.tDis = self.sat_setpoint
         self.parent.supply_commodity = "ZoneAirFlow"
 
