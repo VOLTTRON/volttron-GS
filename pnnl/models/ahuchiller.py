@@ -31,7 +31,7 @@ class ahuchiller(object):
             self.economizer_limit = 0
         self.min_oaf = equipment_conf.get("minimum_oaf", 0.15)
         self.vav_flag = equipment_conf.get("variable_volume", True)
-        self.sat_setpoint = equipment_conf["supply_air_sepoint"]
+        self.sat_setpoint = equipment_conf["supply_air_setpoint"]
         self.building_chiller = equipment_conf["building_chiller"]
         self.tset_avg = equipment_conf["nominal_zone_setpoint"]
         self.tDis = self.sat_setpoint
