@@ -102,8 +102,8 @@ def uncontrol_agent(config_path, **kwargs):
     market_name = []
     q_uc = []
     price_multiplier = config.get('price_multiplier', 1.0)
-    default_min_price = config.get('default_min_price', 0.01)
-    default_max_price = config.get('default_min_price', 100.0)
+    default_min_price = config.get('static_minimum_price', 0.01)
+    default_max_price = config.get('static_maximum_price', 100.0)
     market_type = config.get("market_type", "tns")
     single_market_interval = config.get("single_market_interval", 15)
     market_number = 24
@@ -121,15 +121,18 @@ def uncontrol_agent(config_path, **kwargs):
                                           path="",
                                           point="all")
     devices = config.get("devices")
+    static_price_flag = config.get('static_price_flag', False)
+
     record_topic = '/'.join(["tnc", config.get("campus", ""), config.get("building", "")])
     sim_flag = config.get("sim_flag", False)
+
     return UncontrolAgent(agent_name, market_name, single_market_interval, verbose_logging, q_uc, building_topic, devices,
-                          price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, **kwargs)
+                          price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, static_price_flag**kwargs)
 
 
 class UncontrolAgent(MarketAgent):
     def __init__(self, agent_name, market_name, single_market_interval, verbose_logging, q_uc, building_topic, devices,
-                 price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, **kwargs):
+                 price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, static_price_flag, **kwargs):
         super(UncontrolAgent, self).__init__(verbose_logging, **kwargs)
         self.market_name = market_name
         self.q_uc = q_uc
@@ -137,6 +140,8 @@ class UncontrolAgent(MarketAgent):
         self.price_multiplier = price_multiplier
         self.default_max_price = default_max_price
         self.default_min_price = default_min_price
+        self.static_price_flag = static_price_flag
+
         self.infinity = 1000000
         self.current_hour = None
         self.power_aggregation = []
@@ -309,7 +314,7 @@ class UncontrolAgent(MarketAgent):
 
     def determine_prices(self):
         try:
-            if self.prices:
+            if self.prices and not self.static_price_flag:
                 avg_price = mean(self.prices)
                 std_price = stdev(self.prices)
                 price_min = avg_price - self.price_multiplier * std_price
