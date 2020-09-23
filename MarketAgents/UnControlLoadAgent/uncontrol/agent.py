@@ -127,7 +127,7 @@ def uncontrol_agent(config_path, **kwargs):
     sim_flag = config.get("sim_flag", False)
 
     return UncontrolAgent(agent_name, market_name, single_market_interval, verbose_logging, q_uc, building_topic, devices,
-                          price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, static_price_flag**kwargs)
+                          price_multiplier, default_min_price, default_max_price, sim_flag, record_topic, static_price_flag, **kwargs)
 
 
 class UncontrolAgent(MarketAgent):
