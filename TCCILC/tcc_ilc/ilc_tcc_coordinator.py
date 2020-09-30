@@ -100,7 +100,7 @@ class TransactiveIlcCoordinator(MarketAgent):
         config = utils.load_config(config_path)
         campus = config.get("campus", "")
         building = config.get("building", "")
-        logging_topic = config.get("logging_topic", "tnc")
+        logging_topic = config.get("logging_topic", "record")
         self.target_topic = '/'.join(['record', 'target_agent', campus, building, 'goal'])
         self.logging_topic = '/'.join([logging_topic, campus, building, "TCILC"])
         cluster_configs = config["clusters"]
