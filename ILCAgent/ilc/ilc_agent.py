@@ -142,7 +142,8 @@ class ILCAgent(Agent):
         {
             'trigger': 'curtail_load',
             'source': 'curtail_releasing',
-            'dest': 'curtail'
+            'dest': 'curtail',
+            'conditions': 'confirm_next_release'
         },
         {
             'trigger': 'augment_load',
@@ -182,7 +183,8 @@ class ILCAgent(Agent):
         {
             'trigger': 'augment_load',
             'source': 'augment_releasing',
-            'dest': 'augment'
+            'dest': 'augment',
+            'conditions': 'confirm_next_release'
         },
         {
             'trigger': 'curtail_load',
