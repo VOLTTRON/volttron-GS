@@ -86,7 +86,7 @@ from ilc.criteria_handler import CriteriaContainer, CriteriaCluster, parse_sympy
 from transitions import Machine
 # from transitions.extensions import GraphMachine as Machine
 __author__ = "Robert Lutes, robert.lutes@pnnl.gov"
-__version__ = "1.0.0"
+__version__ = "2.0.1"
 
 setup_logging()
 _log = logging.getLogger(__name__)
