@@ -152,6 +152,7 @@ class TransactiveIlcCoordinator(MarketAgent):
         self.power_prices = None
         self.power_min = None
         self.power_max = None
+        self.current_price = None
 
         self.average_building_power_window = td(minutes=config.get("average_building_power_window", 15))
         self.minimum_update_time = td(minutes=config.get("minimum_update_time", 5))
@@ -239,6 +240,9 @@ class TransactiveIlcCoordinator(MarketAgent):
             _log.debug("Price is {} at {}".format(price, self.bldg_power[-1][0]))
             dt = self.bldg_power[-1][0]
             occupied = check_schedule(dt, self.occupancy_schedule)
+        if price is None and self.price is not None:
+            _log.debug("Using stored price information! - market price: %x -- price: %s", price, self.current_price)
+            price = self.current_price
 
         if self.demand_curve is not None and price is not None and occupied:
             demand_goal = self.demand_curve.x(price)
