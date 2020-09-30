@@ -841,11 +841,13 @@ class ILCAgent(Agent):
                 result = "Current load of {} kW is below demand limit of {} kW.".format(self.avg_power, self.demand_limit-self.demand_threshold)
                 self.augment_load()
             else:
-                result = "Current load of {} kW meets demand goal of {} kW.".format(self.avg_power, self.demand_limit)
-                self.release()
-            if self.state != 'inactive':
-                self.lock = True
-                self.release()
+                result = "ILC is not active  - Current load: {} kW -- demand goal: {}".format(self.avg_power,
+                                                                                              self.demand_limit)
+                if self.state != 'inactive':
+                    result = "Current load of {} kW meets demand goal of {} kW.".format(self.avg_power,
+                                                                                        self.demand_limit)
+                    self.lock = True
+                    self.release()
         else:
             result = "Demand goal has not been set. Current load: ({load}) kW.".format(load=self.avg_power)
             if self.state != 'inactive':
