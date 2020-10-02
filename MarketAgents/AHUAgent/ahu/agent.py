@@ -83,16 +83,19 @@ class AHUAgent(Aggregator):
         model_config = config.get("model_parameters")
         self.agent_name = config.get("agent_name", "ahu")
         Aggregator.__init__(self, config, **kwargs)
-        #self.init_markets()
 
-    def translate_aggregate_demand(self, air_demand, index):
+    def update_state(self, market_time, market_index, price, prices):
+        pass
+
+    def translate_aggregate_demand(self, air_demand, index, market_time, realtime):
         electric_demand_curve = PolyLine()
-        oat = self.oat_predictions[index] if self.oat_predictions else None
+        oat = self.oat_predictions[market_time] if self.oat_predictions else None
         for point in air_demand.points:
-            electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
+            electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat, realtime)))
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
         # Hard-coding the market names is not ideal.  Need to come up with more robust solution
-        self.consumer_demand_curve["electric"][index] = electric_demand_curve
+        market_base = list(self.consumer_markets.keys())[0]
+        self.consumer_demand_curves[market_base][market_time] = electric_demand_curve
 
 
 def main():

@@ -24,7 +24,6 @@ class firstorderzone(object):
         self.zt_name = data_names.ZT
         self.zdat_name = data_names.ZDAT
         self.zaf_name = data_names.ZAF
-        print("MODEL: {}".format(self.a1))
         self.oat = self.get_input_value(self.oat_name)
         self.sfs = self.get_input_value(self.sfs_name)
         self.zt = self.get_input_value(self.zt_name)
@@ -59,30 +58,31 @@ class firstorderzone(object):
     def update_data(self):
         pass
 
-    def update(self, _set, sched_index, market_index):
-        self.zt_predictions[market_index] = _set
+    def update(self, _set, market_time):
+        index = market_time.hour
+        self.zt_predictions[index] = _set
 
-    def predict(self, _set, sched_index, market_index, occupied):
-        if self.parent.market_number == 1:
+    def predict(self, _set, market_time, occupied, realtime=True):
+        index = market_time.hour
+        if realtime:
             oat = self.get_input_value(self.oat_name)
             sfs = self.get_input_value(self.sfs_name)
             zt = self.get_input_value(self.zt_name)
             occupied = sfs if sfs is not None else occupied
-            sched_index = self.parent.current_datetime.hour
         else:
-            zt = self.zt_predictions[market_index]
-            if zt is None:
-                zt = self.get_input_value(self.zt_name)
+            zt_index = index - 1 if index > 0 else 23
+            zt = self.zt_predictions[zt_index]
+            oat = self.get_input_value(self.oat_name)
+            if market_time is self.parent.oat_predictions:
+                oat = self.parent.oat_predictions[market_time]
+        q = 0.0
+        if oat is not None and zt is not None:
+            _log.debug("OAT: %s -- ZT: %s", oat, zt)
+            q = self.predict_quantity(oat, zt, _set, index)
 
-            if self.parent.oat_predictions:
-                oat = self.parent.oat_predictions[market_index]
-            else:
-                oat = self.get_input_value(self.oat_name)
-
-        q = self.predict_quantity(oat, zt, _set, sched_index)
         _log.debug(
             "%s: vav.firstorderzone q: %s - zt: %s- set: %s - sched: %s",
-            self.parent.agent_name, q, zt, _set, sched_index
+            self.parent.agent_name, q, zt, _set, index
         )
         # might need to revisit this when doing both heating and cooling
         if occupied:

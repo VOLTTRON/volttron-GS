@@ -66,9 +66,9 @@ class MarketList(object):
             self.markets[market_name] = market
 
             # Set price for the market
-            parts = market_name.split('_')
-            forecast_hour = int(parts[-1])
-            market.set_price(self.prices[forecast_hour])
+            #parts = market_name.split('_')
+            #forecast_hour = int(parts[-1])
+            #market.set_price(self.prices[forecast_hour])
 
     def make_offer(self, market_name, participant, curve):
         market = self.get_market(market_name)
