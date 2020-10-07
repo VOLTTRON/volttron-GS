@@ -95,9 +95,7 @@ class Market(object):
                 _set = control
             else:
                 _set = self.off_setpoint
-            #q = self.get_q(_set, market_time, occupied, realtime=False)
-            q = 100*(i+1)
-            i +=1
+            q = self.get_q(_set, market_time, occupied, realtime=False)
             demand_curve.add(Point(price=price, quantity=q))
 
         topic_suffix = "DemandCurve"
@@ -150,13 +148,14 @@ class RealTimeMarket(Market):
         output_info, mapped = self.parent.get_current_output()
         self.ct_flexibility = output_info["ct_flex"]
         self.off_setpoint = output_info["off_setpoint"]
+        self.parent.flexibility = output_info["flex"]
         market_time = self.market_intervals[market_name]
         occupied = True
 
         if self.schedule:
             occupied = self.check_schedule(market_time)
 
-        demand_curve = self.create_demand_curve(market_name, market_time, occupied)
+        demand_curve = self.create_demand_curve(market_name, parse(market_time), occupied)
         self.demand_curve[market_time] = demand_curve
         result, message = self.make_offer(market_name, buyer_seller, demand_curve)
 
@@ -211,6 +210,7 @@ class DayAheadMarket(Market):
         output_info, mapped = self.parent.get_current_output()
         self.ct_flexibility = output_info["ct_flex"]
         self.off_setpoint = output_info["off_setpoint"]
+        self.parent.flexibility = output_info["flex"]
         market_index = self.market_list.index(market_name)
         if market_index > 0:
             while not self.update_flag[market_index - 1]:
@@ -223,7 +223,7 @@ class DayAheadMarket(Market):
         if self.schedule:
             occupied = self.check_schedule(market_time)
 
-        demand_curve = self.create_demand_curve(market_name, market_time, occupied)
+        demand_curve = self.create_demand_curve(market_name, parse(market_time), occupied)
         self.demand_curve[market_name] = demand_curve
         result, message = self.make_offer(market_name, buyer_seller, demand_curve)
 

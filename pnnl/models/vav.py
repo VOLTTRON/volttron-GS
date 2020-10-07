@@ -62,7 +62,7 @@ class firstorderzone(object):
         index = market_time.hour
         self.zt_predictions[index] = _set
 
-    def predict(self, _set, market_time, occupied, realtime=True):
+    def predict(self, _set, market_time, occupied, realtime=False):
         index = market_time.hour
         if realtime:
             oat = self.get_input_value(self.oat_name)

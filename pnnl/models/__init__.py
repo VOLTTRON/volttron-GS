@@ -25,6 +25,6 @@ class Model(object):
         model_class = getattr(module, model_type)
         self.model = model_class(config, self)
 
-    def get_q(self, _set, sched_index, market_index, occupied):
-        q = self.model.predict(_set, sched_index, market_index, occupied)
+    def get_q(self, _set, market_time, occupied, realtime=False):
+        q = self.model.predict(_set, market_time, occupied, realtime=False)
         return q
