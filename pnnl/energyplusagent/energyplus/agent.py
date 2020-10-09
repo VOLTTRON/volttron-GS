@@ -199,6 +199,8 @@ class PubSubAgent(Agent):
             self.vip.pubsub.subscribe(peer='pubsub', prefix=self.cosimulation_advance, callback=self.advance_simulation)
         elif self.pause_until_message is not None:
             self.vip.pubsub.subscribe(peer='pubsub', prefix=self.pause_until_message, callback=self.release_pause)
+        else:
+            self.proceed = True
 
     def publish_all_outputs(self):
         # Publish messages
