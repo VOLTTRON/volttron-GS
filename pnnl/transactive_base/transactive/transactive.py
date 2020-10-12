@@ -579,12 +579,12 @@ class MessageManager(object):
         self.run_dayahead_market = False
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
-        _log.debug("Get prices prior to market start.")
         raw_price_info = message["price_info"]
         raw_initial_prices = message["prices"]
         oat_predictions = message.get("temp", [])
         correction_market = message.get("correction_market", False)
         market_intervals = message.get("market_intervals")
+        _log.debug("Update prices price: {} - for interval: {}".format(raw_initial_prices, market_intervals))
         self.parent.update_market_intervals(market_intervals, correction_market)
         price_info = lists_to_dict(market_intervals, raw_price_info)
         initial_prices = lists_to_dict(market_intervals, raw_initial_prices)
@@ -601,14 +601,16 @@ class MessageManager(object):
         self.correction_market = correction_market
         if not correction_market:
             self.run_dayahead_market = True
+        else:
+            self.run_dayahead_market = False
 
     def update_cleared_prices(self, peer, sender, bus, topic, headers, message):
-        _log.debug("Get cleared prices.")
         correction_market = message.get("correction_market", False)
         raw_cleared_prices = message["prices"]
         market_intervals = message.get("market_intervals")
+        _log.debug("Update cleared price: {} - for interval: {}".format(raw_cleared_prices, market_intervals))
         self.parent.update_market_intervals(market_intervals, correction_market)
-        market_intervals = [parse(interval) for interval in market_intervals]
+        market_intervals = [interval for interval in market_intervals]
         cleared_prices = lists_to_dict(market_intervals, raw_cleared_prices)
         for market_time in market_intervals:
             hour_of_year = calculate_hour_of_year(market_time)
