@@ -1299,10 +1299,13 @@ class ILCAgent(Agent):
         task_id = target_info["id"]
 
         _log.debug("TARGET: Simulation running.")
+        key_list = []
         for key, value in self.tasks.items():
             if (start_time < value["end"] and end_time > value["start"]) or (
                     value["start"] <= start_time <= value["end"]):
-                self.tasks.pop(key)
+                key_list.append(key)
+        for key in key_list:
+            self.tasks.pop(key)
 
         _log.debug("TARGET: received demand goal schedule - start: {} - end: {} - target: {}.".format(start_time,
                                                                                                       end_time,

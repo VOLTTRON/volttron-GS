@@ -160,8 +160,11 @@ class PricePublisherAgent(Agent):
             current_time = get_aware_utc_now()
         _log.debug("Current_time: {}".format(current_time))
         try:
-            to_zone = dateutil.tz.gettz(self.timezone)
-            timestamp = current_time.astimezone(to_zone)
+            if self.building_sim_topic is  None:
+                to_zone = dateutil.tz.gettz(self.timezone)
+                timestamp = current_time.astimezone(to_zone)
+            else:
+                timestamp = current_time
         except:
             _log.debug("Not a valid timezone!")
             timestamp = current_time
