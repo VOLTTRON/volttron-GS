@@ -655,13 +655,16 @@ class ILCAgent(Agent):
         :return:
         """
         if self.tasks:
+            task_list = []
             current_time = current_time.replace(tzinfo=self.tz)
             for key, value in self.tasks.items():
                 if value["start"] <= current_time < value["end"]:
                     self.demand_limit = value["target"]
                 elif current_time >= value["end"]:
                     self.demand_limit = None
-                    self.tasks.pop(key)
+                    task_list.append(key)
+            for key in task_list:
+                self.tasks.pop(key)
 
     def handle_agent_kill(self, peer, sender, bus, topic, headers, message):
         """
