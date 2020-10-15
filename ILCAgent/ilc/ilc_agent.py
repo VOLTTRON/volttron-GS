@@ -302,7 +302,7 @@ class ILCAgent(Agent):
         dashboard_topic = config.get("dashboard_topic")
         ilc_start_topic = self.agent_id
         self.control_mode = config.get("control_mode", "dollar")
-        self.load_control_modes
+        self.load_control_modes = config.get("load_control_modes", ["curtail"])
 
         campus = config.get("campus", "")
         building = config.get("building", "")
@@ -836,7 +836,7 @@ class ILCAgent(Agent):
         :param current_time:
         :return:
         """
-        _log.debug("Checking building load: {}".format(self.demand_limit))
+        _log.debug("Checking building load: {} -- mode: {}".format(self.demand_limit, self.control_mode))
 
         if self.demand_limit is not None:
             if "curtail" in self.load_control_modes and self.avg_power > self.demand_limit + self.demand_threshold:
@@ -881,7 +881,7 @@ class ILCAgent(Agent):
         est_curtailed = 0.0
         remaining_devices = score_order[:]
 
-        if self.control_mode.lower != "dollar":
+        if self.control_mode.lower() != "dollar":
             for device in self.devices:
                 current_tuple = (device[0], device[1], device[7])
                 if current_tuple in remaining_devices:
@@ -954,7 +954,6 @@ class ILCAgent(Agent):
 
             device, token, device_actuator = item
             point_device = self.control_container.get_device((device, device_actuator)).get_point_device(token, self.state)
-
             if point_device is None:
                 continue
 
