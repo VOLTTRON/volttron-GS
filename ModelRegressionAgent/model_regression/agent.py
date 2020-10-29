@@ -78,6 +78,7 @@ import scipy
 import pytz
 import re
 
+
 utils.setup_logging()
 _log = logging.getLogger(__name__)
 UTC_TZ = pytz.timezone('UTC')
@@ -299,7 +300,8 @@ class Regression:
                 process_df = df
 
             if self.debug:
-                filename = '{}/{}-hourly-{}-{}.csv'.format(WORKING_DIR, device, i, format_timestamp(dt.now()))
+                filename = '{}/{}-hourly-{}-{}.csv'.format(WORKING_DIR, device.replace('/', '_'),
+                                                           i, format_timestamp(dt.now()))
                 with open(filename, 'w') as outfile:
                     process_df.to_csv(outfile, mode='w', index=True)
 
@@ -654,7 +656,7 @@ class RegressionAgent(Agent):
             result = result.to_dict(orient='list')
             self.coefficient_results[device.record_topic] = result
             if self.debug:
-                with open('{}/{}_results.json'.format(WORKING_DIR, name), 'w+') as outfile:
+                with open('{}/{}_results.json'.format(WORKING_DIR, name.replace('/', '_')), 'w+') as outfile:
                     json.dump(result, outfile, indent=4, separators=(',', ': '))
                 _log.debug('*** Finished outputting coefficients ***')
             self.publish_coefficients(device.record_topic, result)
@@ -757,7 +759,7 @@ class RegressionAgent(Agent):
         except Exception as e:
             _log.error('Failed to convert Date column to localtime - {}'.format(e))
         if self.debug:
-            filename = '{}/{}-{} - {}.csv'.format(WORKING_DIR, self.start, self.end, device)
+            filename = '{}/{}-{} - {}.csv'.format(WORKING_DIR, self.start, self.end, device.replace('/', '_'))
             try:
                 with open(filename, 'w+') as outfile:
                     df.to_csv(outfile, mode='a', index=True)
