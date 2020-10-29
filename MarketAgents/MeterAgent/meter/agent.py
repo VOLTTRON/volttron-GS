@@ -100,9 +100,11 @@ class MeterAgent(Aggregator):
                     self.price = self.market_prices[0]
             else:
                 self.price = (agg_demand.min_y() + agg_demand.max_y())/2
+            min_q = agg_demand.min_x()*0.9
+            max_q = agg_demand.max_x()*1.1
 
-            electric_supply_curve.add(Point(price=self.price, quantity=0))
-            electric_supply_curve.add(Point(price=self.price, quantity=10000))
+            electric_supply_curve.add(Point(price=self.price, quantity=min_q))
+            electric_supply_curve.add(Point(price=self.price, quantity=max_q))
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_supply_curve.points))
         self.supplier_curve[index] = electric_supply_curve
 
