@@ -409,6 +409,8 @@ class TransactiveBase(MarketAgent, Model):
         prices = self.price_manager.get_price_array(self.get_current_datetime())
         _log.debug("Call determine_control: %s", self.core.identity)
         value = self.determine_control(sets, prices, price)
+        _log.debug("determine_control for time: %s -  price: %s - price_range: %s - control: %s",
+                   format_timestamp(self.get_current_datetime()), price, prices, value)
         self.outputs[name]["value"] = value
         point = self.outputs.get("point", name)
         topic_suffix = "Actuate"
@@ -427,8 +429,8 @@ class TransactiveBase(MarketAgent, Model):
             actuator = output_info["actuator"]
             value = output_info.get("value")
             offset = output_info["offset"]
-            _log.debug("ACTUATE: %s -- %s", self.occupied, value)
             if value is not None and self.occupied:
+                _log.debug("ACTUATE: %s -- %s", self.occupied, value)
                 value = value + offset
                 self.actuate(topic, value, actuator)
 
@@ -590,7 +592,7 @@ class MessageManager(object):
         initial_prices = lists_to_dict(market_intervals, raw_initial_prices)
         if oat_predictions:
             self.parent.oat_predictions = lists_to_dict(market_intervals, oat_predictions)
-            _log.debug("OAT %s", self.parent.oat_predictions)
+            _log.debug("OAT predictions: %s", self.parent.oat_predictions)
         for market_time in market_intervals:
             avg_price, stdev_price = price_info[market_time]
             hour_of_year = calculate_hour_of_year(market_time)
@@ -606,14 +608,19 @@ class MessageManager(object):
 
     def update_cleared_prices(self, peer, sender, bus, topic, headers, message):
         correction_market = message.get("correction_market", False)
+        raw_price_info = message["price_info"]
         raw_cleared_prices = message["prices"]
         market_intervals = message.get("market_intervals")
         _log.debug("Update cleared price: {} - for interval: {}".format(raw_cleared_prices, market_intervals))
         self.parent.update_market_intervals(market_intervals, correction_market)
         market_intervals = [interval for interval in market_intervals]
         cleared_prices = lists_to_dict(market_intervals, raw_cleared_prices)
+        price_info = lists_to_dict(market_intervals, raw_price_info)
         for market_time in market_intervals:
             hour_of_year = calculate_hour_of_year(market_time)
+            avg_price, stdev_price = price_info[market_time]
+            price_array = self.determine_prices(avg_price, stdev_price)
+            self.price_info[hour_of_year] = price_array
             self.cleared_prices[hour_of_year] = cleared_prices[market_time]
         self.prune_data()
 
