@@ -8,6 +8,7 @@
   "max_deliver_capacity": 120,
   "demand_threshold_coef": 0.8,
   "monthly_peak_power": 60,
+  "campus_loss_factor": 0.01,
 
   "ts_name": "Date",
   "weather_file": "/home/ngoh511/PycharmProjects/volttron-applications/pnnl/TNSAgent/tns/weather_data/forecast.csv"

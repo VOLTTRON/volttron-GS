@@ -80,12 +80,12 @@ class PolyLine:
                     return
         doSort = False
         # if len(self.points) > 0 and point.y < self.points[-1].y:
-        if len(self.points) > 0 and point.x < self.points[-1].x:
+        if len(self.points) > 0:
             doSort = True
 
         self.points.append(point)
         if doSort:
-            self.points.sort()
+            self.points.sort(key=lambda tup: tup[1], reverse=True)
         self.xs = None
         self.ys = None
         if point.x is not None and point.y is not None:
@@ -284,20 +284,36 @@ class PolyLine:
         p1_qmax = max([point[0] for point in pl_1])
         p1_qmin = min([point[0] for point in pl_1])
 
+        p2_qmax = max([point[0] for point in pl_2])
+        p2_qmin = min([point[0] for point in pl_2])
+
         p1_pmax = max([point[1] for point in pl_1])
         p2_pmax = max([point[1] for point in pl_2])
+
         p1_pmin = min([point[1] for point in pl_1])
         p2_pmin = min([point[1] for point in pl_2])
         # The lines don't intersect, add the auxillary information
-        if p1_pmax <= p2_pmax and p1_pmax <= p2_pmin:
+        # TODO - clean this method up.
+        if p1_pmax <= p2_pmax and p1_pmax <=p2_pmin:
             quantity = p1_qmin
             price = p2_pmax
-        elif p2_pmin <= p1_pmin and p2_pmax <= p1_pmin:
+
+        elif p2_pmin <=p1_pmin and p2_pmax <=p1_pmin:
             quantity = p1_qmax
             price = p2_pmin
+
+        elif p2_qmax >= p1_qmin and p2_qmax >= p1_qmax:
+            quantity = np.mean([point[0] for point in pl_1])
+            price = np.mean([point[1] for point in pl_1])
+
+        elif p2_qmin <= p1_qmin and p2_qmin <= p1_qmax:
+            quantity = p2_qmax
+            price = p1_pmax
+
         else:
-            quantity = None
             price = None
+            quantity = None
+
         return quantity, price
 
     @staticmethod
@@ -338,7 +354,6 @@ class PolyLine:
                 p2_second_point = poly2[j + 1]
 
                 if PolyLine.line_intersection((p1_first_point, p1_second_point), (p2_first_point, p2_second_point)):
-                    print p1_first_point, p1_second_point, p2_first_point, p2_second_point
                     x, y = PolyLine.line_intersection((p1_first_point, p1_second_point), (p2_first_point, p2_second_point))
                     return x, y
 
@@ -356,15 +371,13 @@ class PolyLine:
         supply_max_price = supply_curve.max_y()
         supply_min_price = supply_curve.min_y()
 
-        aux['SQn,DQn'] = cmp(supply_min_quantity, demand_min_quantity)
-        aux['SQn,DQx'] = cmp(supply_min_quantity, demand_max_quantity)
-        aux['SQx,DQn'] = cmp(supply_max_quantity, demand_min_quantity)
-        aux['SQx,DQx'] = cmp(supply_max_quantity, demand_max_quantity)
+        aux['SQn,DQn'] = (supply_min_quantity > demand_min_quantity) - (supply_min_quantity < demand_min_quantity)
+        aux['SQn,DQx'] = (supply_min_quantity > demand_max_quantity) - (supply_min_quantity < demand_max_quantity)
+        aux['SQx,DQn'] = (supply_max_quantity > demand_min_quantity) - (supply_max_quantity < demand_min_quantity)
+        aux['SQx,DQx'] = (supply_max_quantity > demand_max_quantity) - (supply_max_quantity < demand_max_quantity)
 
-        aux['SPn,DPn'] = cmp(supply_min_price, demand_min_price)
-        aux['SPn,DPx'] = cmp(supply_min_price, demand_max_price)
-        aux['SPx,DPn'] = cmp(supply_max_price, demand_min_price)
-        aux['SPx,DPx'] = cmp(supply_max_price, demand_max_price)
+        aux['SPn,DPn'] = (supply_min_price > demand_min_price) - (supply_min_price < demand_min_price)
+        aux['SPn,DPx'] = (supply_min_price > demand_max_price) - (supply_min_price < demand_max_price)
+        aux['SPx,DPn'] = (supply_max_price > demand_min_price) - (supply_max_price < demand_min_price)
+        aux['SPx,DPx'] = (supply_max_price > demand_max_price) - (supply_max_price < demand_max_price)
         return aux
-
-

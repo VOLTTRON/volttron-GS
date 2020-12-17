@@ -61,7 +61,7 @@ import logging
 from datetime import timedelta as td
 from volttron.platform.agent import utils
 
-from volttron.pnnl.models.vav import VAV
+
 from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
 
 #from decorators import time_cls_methods
@@ -72,7 +72,7 @@ __version__ = '0.3'
 
 
 #@time_cls_methods
-class VAVAgent(TransactiveBase, VAV):
+class VAVAgent(TransactiveBase):
     """
     The SampleElectricMeterAgent serves as a sample of an electric meter that
     sells electricity for a single building at a fixed price.
@@ -85,9 +85,6 @@ class VAVAgent(TransactiveBase, VAV):
             config = {}
         self.agent_name = config.get("agent_name", "vav")
         TransactiveBase.__init__(self, config, **kwargs)
-        model_config = config.get("model_parameters", {})
-        VAV.__init__(self, model_config, **kwargs)
-        self.init_markets()
 
     def init_predictions(self, output_info):
         pass

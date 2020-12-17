@@ -63,16 +63,12 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from volttron.pnnl.models.meter import Meter
-
-# from pnnl.models.firstorderzone import FirstOrderZone
-
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = "0.2"
 
 
-class MeterAgent(Aggregator, Meter):
+class MeterAgent(Aggregator):
     """
     The SampleElectricMeterAgent serves as a sample of an electric meter that
     sells electricity for a single building at a fixed price.
@@ -83,25 +79,32 @@ class MeterAgent(Aggregator, Meter):
             config = utils.load_config(config_path)
         except StandardError:
             config = {}
+        self.demand_limit = config.get("demand_limit")
         self.agent_name = config.get("agent_name", "meter")
         Aggregator.__init__(self, config, **kwargs)
-        model_parms = config.get("model_parameters", {})
-        Meter.__init__(self, model_parms, **kwargs)
         self.price = None
-        self.init_markets()
 
     def init_predictions(self, output_info):
         pass
 
     def translate_aggregate_demand(self, agg_demand, index):
         electric_supply_curve = PolyLine()
-        if self.market_prices is not None:
-            self.price = self.market_prices[0]
+        if self.demand_limit is not None:
+            electric_supply_curve.add(Point(price=0, quantity=self.demand_limit))
+            electric_supply_curve.add(Point(price=1000, quantity=self.demand_limit))
         else:
-            self.price = (agg_demand.min_y() + agg_demand.max_y())/2
+            if self.market_prices is not None:
+                if self.market_type == "rtp":
+                    self.price = self.current_price
+                else:
+                    self.price = self.market_prices[0]
+            else:
+                self.price = (agg_demand.min_y() + agg_demand.max_y())/2
+            min_q = agg_demand.min_x()*0.9
+            max_q = agg_demand.max_x()*1.1
 
-        electric_supply_curve.add(Point(price=self.price, quantity=0))
-        electric_supply_curve.add(Point(price=self.price, quantity=10000))
+            electric_supply_curve.add(Point(price=self.price, quantity=min_q))
+            electric_supply_curve.add(Point(price=self.price, quantity=max_q))
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_supply_curve.points))
         self.supplier_curve[index] = electric_supply_curve
 

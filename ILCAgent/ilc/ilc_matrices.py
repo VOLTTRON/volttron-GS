@@ -67,6 +67,7 @@ import logging
 import math
 from volttron.platform.agent import utils
 from collections import defaultdict
+from functools import reduce
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -83,7 +84,8 @@ def extract_criteria(filename):
     """
     criteria_labels = {}
     criteria_matrix = {}
-    config_matrix = utils.load_config(filename)
+    # config_matrix = utils.load_config(filename)
+    config_matrix = filename
     # check if file has been updated or uses old format
     _log.debug("CONFIG_MATRIX: {}".format(config_matrix))
     if "curtail" not in config_matrix.keys() and "augment" not in config_matrix.keys():
@@ -107,7 +109,7 @@ def extract_criteria(filename):
                 criteria_matrix[state][row][col] = float(config_matrix[state][j][k])
                 criteria_matrix[state][col][row] = float(1.0 / criteria_matrix[state][row][col])
 
-    return criteria_labels, criteria_matrix
+    return criteria_labels, criteria_matrix, list(config_matrix.keys())
 
 
 def calc_column_sums(criteria_matrix):
@@ -238,7 +240,7 @@ def input_matrix(builder, criteria_labels):
     """
     sum_mat = defaultdict(float)
     inp_mat = {}
-    label_check = builder.values()[-1].keys()
+    label_check = list(list(builder.values())[-1].keys())
     if set(label_check) != set(criteria_labels):
         raise Exception('Input criteria and data criteria do not match.')
     for device_data in builder.values():

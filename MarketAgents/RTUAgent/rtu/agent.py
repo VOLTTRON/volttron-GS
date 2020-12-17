@@ -61,41 +61,27 @@ import logging
 
 from datetime import timedelta as td
 from volttron.platform.agent import utils
-from volttron.pnnl.models.rtu import RTU
 from volttron.pnnl.transactive_base.transactive.transactive import TransactiveBase
-
-
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = "0.3"
 
 
-class RTUAgent(TransactiveBase, RTU):
+class RTUAgent(TransactiveBase):
     """
-    TCC RTU agent
+        TCC RTU agent
     """
-
     def __init__(self, config_path, **kwargs):
         try:
             config = utils.load_config(config_path)
         except StandardError:
             config = {}
+        self.agent_name = config.get("agent_name", "rtu")
         TransactiveBase.__init__(self, config, **kwargs)
-        model_config = config.get("model_parameters", {})
-        RTU.__init__(self, model_config, **kwargs)
-        self.agent_name = config.get("agent_name")
-        self.init_markets()
 
     def init_predictions(self, output_info):
-        if self.single_market_contol_interval is not None:
-            return
-        occupied = self.check_future_schedule(self.current_datetime)
-        if occupied:
-           _set = output_info["value"]
-        else:
-            _set = self.off_setpoint
-        q = self.model.predict(_set, -1, -1, occupied, False)
+        pass
 
     def update_state(self, market_index, sched_index, price):
         market_time = self.current_datetime + td(hours=market_index + 1)

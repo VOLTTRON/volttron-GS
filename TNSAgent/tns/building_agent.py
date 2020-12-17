@@ -72,24 +72,24 @@ from volttron.platform.agent.base_market_agent.point import Point
 from volttron.platform.agent.base_market_agent.buy_sell import BUYER
 from volttron.platform.agent.base_market_agent.buy_sell import SELLER
 
-from helpers import *
-from measurement_type import MeasurementType
-from measurement_unit import MeasurementUnit
-from meter_point import MeterPoint
-from market import Market
-from market_state import MarketState
-from neighbor import Neighbor
-from local_asset import LocalAsset
-from local_asset_model import LocalAssetModel
-from myTransactiveNode import myTransactiveNode
-from neighbor_model import NeighborModel
-from temperature_forecast_model import TemperatureForecastModel
-from solar_pv_resource import SolarPvResource
-from solar_pv_resource_model import SolarPvResourceModel
-from vertex import Vertex
-from interval_value import IntervalValue
-from timer import Timer
-from tcc_model import TccModel
+from .helpers import *
+from .measurement_type import MeasurementType
+from .measurement_unit import MeasurementUnit
+from .meter_point import MeterPoint
+from .market import Market
+from .market_state import MarketState
+from .neighbor import Neighbor
+from .local_asset import LocalAsset
+from .local_asset_model import LocalAssetModel
+from .myTransactiveNode import myTransactiveNode
+from .neighbor_model import NeighborModel
+from .temperature_forecast_model import TemperatureForecastModel
+from .solar_pv_resource import SolarPvResource
+from .solar_pv_resource_model import SolarPvResourceModel
+from .vertex import Vertex
+from .interval_value import IntervalValue
+from .timer import Timer
+from .tcc_model import TccModel
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -299,7 +299,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
                     self.vip.pubsub.publish(peer='pubsub',
                                             topic='mixmarket/start_new_cycle',
                                             message={"prices": self.prices[-24:],
-                                                     "hour": now.hour})
+                                                     "Date": format_timestamp(now)})
                 else:
                     temps = [x.value for x in weather_service.predictedValues]
                     temps = temps[-24:]
@@ -308,7 +308,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
                                             topic='mixmarket/start_new_cycle',
                                             message={"prices": self.prices[-24:],
                                                      "temp": temps,
-                                                     "hour": now.hour})
+                                                     "Date": format_timestamp(now)})
 
     def balance_market(self, run_cnt):
         market = self.markets[0]  # Assume only 1 TNS market per node
@@ -439,10 +439,11 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
         campus_model.name = 'PNNL_Campus_Model'
         campus_model.location = self.name
         campus_model.defaultVertices = [Vertex(0.045, 25, 0, True), Vertex(0.048, 0, self.max_deliver_capacity, True)]
+
+        campus_model.transactive = True
         campus_model.demand_threshold_coef = self.demand_threshold_coef
         # campus_model.demandThreshold = self.demand_threshold_coef * self.monthly_peak_power
         campus_model.demandThreshold = self.monthly_peak_power
-        campus_model.transactive = True
         campus_model.inject(self,
                             system_loss_topic=self.system_loss_topic,
                             dc_threshold_topic=self.dc_threshold_topic)

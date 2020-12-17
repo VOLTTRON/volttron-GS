@@ -58,7 +58,7 @@
 
 
 
-from abstract_object import AbstractObject
+from .abstract_object import AbstractObject
 
 
 class Neighbor(AbstractObject):

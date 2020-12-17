@@ -69,11 +69,13 @@ import logging
 from datetime import timedelta as td, datetime as dt
 import uuid
 from dateutil.parser import parse
+import numpy as np
 
 from tcc_ilc.device_handler import ClusterContainer, DeviceClusters, parse_sympy, init_schedule, check_schedule
 import pandas as pd
 from volttron.platform.agent import utils
 from volttron.platform.messaging import topics, headers as headers_mod
+import dateutil.tz
 
 from volttron.platform.agent.utils import setup_logging, format_timestamp, get_aware_utc_now
 from volttron.platform.agent.math_utils import mean, stdev
@@ -98,7 +100,7 @@ class TransactiveIlcCoordinator(MarketAgent):
         config = utils.load_config(config_path)
         campus = config.get("campus", "")
         building = config.get("building", "")
-        logging_topic = config.get("logging_topic", "tnc")
+        logging_topic = config.get("logging_topic", "record")
         self.target_topic = '/'.join(['record', 'target_agent', campus, building, 'goal'])
         self.logging_topic = '/'.join([logging_topic, campus, building, "TCILC"])
         cluster_configs = config["clusters"]
@@ -117,6 +119,9 @@ class TransactiveIlcCoordinator(MarketAgent):
 
         self.device_topic_list = []
         self.device_topic_map = {}
+        self.static_price_flag = config.get('static_price_flag', False)
+        self.default_min_price = config.get('static_minimum_price', 0.01)
+        self.default_max_price = config.get('static_maximum_price', 0.1)
         all_devices = self.clusters.get_device_name_list()
         occupancy_schedule = config.get("occupancy_schedule", False)
         self.occupancy_schedule = init_schedule(occupancy_schedule)
@@ -147,11 +152,12 @@ class TransactiveIlcCoordinator(MarketAgent):
         self.power_prices = None
         self.power_min = None
         self.power_max = None
+        self.current_price = None
 
         self.average_building_power_window = td(minutes=config.get("average_building_power_window", 15))
         self.minimum_update_time = td(minutes=config.get("minimum_update_time", 5))
-        self.market_name = config.get("market", "electric")
-        self.tz = None
+        self.market_name = config.get("market", "electric_0")
+        self.tz = config.get("timezone", "US/Pacific")
         # self.prices = power_prices
         self.oat_predictions = []
         self.comfort_to_dollar = config.get('comfort_to_dollar', 1.0)
@@ -177,16 +183,20 @@ class TransactiveIlcCoordinator(MarketAgent):
             self.vip.pubsub.subscribe(peer="pubsub", prefix=self.prices_topic, callback=self.update_prices)
 
     def update_prices(self, peer, sender, bus, topic, headers, message):
-        self.power_prices = pd.DataFrame(message)
-        self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
-        self.power_prices.index = pd.to_datetime(self.power_prices.index)
-        self.power_prices["price"] = self.power_prices
-        self.power_prices.resample('H').mean()
-        self.power_prices['MA'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).mean()[::-1]
-        self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
-        self.power_prices['month'] = self.power_prices.index.month.astype(int)
-        self.power_prices['day'] = self.power_prices.index.day.astype(int)
-        self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
+        # self.power_prices = pd.DataFrame(message)
+        # self.power_prices = self.power_prices.set_index(self.power_prices.columns[0])
+        # self.power_prices.index = pd.to_datetime(self.power_prices.index)
+        # self.power_prices["price"] = self.power_prices
+        # self.power_prices.resample('H').mean()
+        # self.power_prices['MA'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).mean()[::-1]
+        # self.power_prices['STD'] = self.power_prices["price"][::-1].rolling(window=24, min_periods=1).std()[::-1]
+        # self.power_prices['month'] = self.power_prices.index.month.astype(int)
+        # self.power_prices['day'] = self.power_prices.index.day.astype(int)
+        # self.power_prices['hour'] = self.power_prices.index.hour.astype(int)
+        hour = float(message['hour'])
+        self.power_prices = message["prices"]
+        _log.debug("Get RTP Prices: {}".format(self.power_prices))
+        self.current_price = self.power_prices[-1]
 
     @Core.receiver("onstart")
     def starting_base(self, sender, **kwargs):
@@ -230,6 +240,9 @@ class TransactiveIlcCoordinator(MarketAgent):
             _log.debug("Price is {} at {}".format(price, self.bldg_power[-1][0]))
             dt = self.bldg_power[-1][0]
             occupied = check_schedule(dt, self.occupancy_schedule)
+        if price is None and self.price is not None:
+            _log.debug("Using stored price information! - market price: %x -- price: %s", price, self.current_price)
+            price = self.current_price
 
         if self.demand_curve is not None and price is not None and occupied:
             demand_goal = self.demand_curve.x(price)
@@ -308,12 +321,25 @@ class TransactiveIlcCoordinator(MarketAgent):
     def generate_price_points(self):
         # need to figure out where we are getting the pricing information and the form
         # probably via RPC
-        _log.debug("DEBUG_PRICES: {}".format(self.current_time))
-        df_query = self.power_prices[(self.power_prices["hour"] == self.current_time.hour) & (self.power_prices["day"] == self.current_time.day) & (self.power_prices["month"] == self.current_time.month)]
-        price_min = df_query['MA'] - df_query['STD']*self.comfort_to_dollar
-        price_max = df_query['MA'] + df_query['STD']*self.comfort_to_dollar
-        _log.debug("DEBUG TCC price - min {} - max {}".format(float(price_min), float(price_max)))
-        return max(float(price_min), 0.0), float(price_max)
+        # _log.debug("DEBUG_PRICES: {}".format(self.current_time))
+        # df_query = self.power_prices[(self.power_prices["hour"] == self.current_time.hour) & (self.power_prices["day"] == self.current_time.day) & (self.power_prices["month"] == self.current_time.month)]
+        # price_min = df_query['MA'] - df_query['STD']*self.comfort_to_dollar
+        # price_max = df_query['MA'] + df_query['STD']*self.comfort_to_dollar
+        # _log.debug("DEBUG TCC price - min {} - max {}".format(float(price_min), float(price_max)))
+        # return max(float(price_min), 0.0), float(price_max)
+        if self.power_prices and not self.static_price_flag:
+            avg_price = np.mean(self.power_prices)
+            std_price = np.std(self.power_prices)
+            price_min = avg_price - self.comfort_to_dollar * std_price
+            price_max = avg_price + self.comfort_to_dollar * std_price
+        else:
+            avg_price = None
+            std_price = None
+            price_min = self.default_min_price
+            price_max = self.default_max_price
+        _log.debug("Prices: {} - avg: {} - std: {}".format(self.power_prices, avg_price, std_price))
+        price_array = np.linspace(price_min, price_max, 11)
+        return price_min, price_max
 
     def generate_power_points(self, current_power):
         positive_power, negative_power = self.clusters.get_power_bounds()
@@ -336,7 +362,8 @@ class TransactiveIlcCoordinator(MarketAgent):
         # Use instantaneous power or average building power.
         data = message[0]
         current_power = data[self.power_point]
-        current_time = parse(headers["Date"])
+        tz_info = dateutil.tz.gettz(self.tz)
+        current_time = parse(headers["Date"]).astimezone(tz_info)
 
         power_max, power_min = self.generate_power_points(current_power)
         _log.debug("QUANTITIES: max {} - min {} - cur {}".format(power_max, power_min, current_power))
@@ -364,7 +391,7 @@ class TransactiveIlcCoordinator(MarketAgent):
         avg_power_min = 0.
         avg_power = 0.
 
-        for n in xrange(len(self.bldg_power)):
+        for n in range(len(self.bldg_power)):
             avg_power += power_sort[n][1] * smoothing_constant * (1.0 - smoothing_constant) ** n
             avg_power_min += power_sort[n][2] * smoothing_constant * (1.0 - smoothing_constant) ** n
             avg_power_max += power_sort[n][3] * smoothing_constant * (1.0 - smoothing_constant) ** n

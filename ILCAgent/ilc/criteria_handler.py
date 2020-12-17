@@ -135,7 +135,7 @@ class CriteriaContainer(object):
             if state not in cluster.criteria_labels.keys() or state not in cluster.row_average.keys():
                 _log.debug("Criteria - Not configured for current state: {}".format(state))
                 continue
-
+            _log.debug("EVAL: {} - {}".format(evaluations.values(), cluster.criteria_labels[state]))
             input_arr = input_matrix(evaluations, cluster.criteria_labels[state])
             scores = build_score(input_arr, cluster.row_average[state], cluster.priority)
             all_scored.extend(scores)
@@ -154,7 +154,7 @@ class CriteriaContainer(object):
     # this passes all data coming in to all device criteria
     # TODO:  rethink this approach.  Is there a better way to create the topic map to pass only data needed
     def ingest_data(self, time_stamp, data):
-        for device in self.devices.itervalues():
+        for device in self.devices.values():
             device.ingest_data(time_stamp, data)
 
 
@@ -235,7 +235,7 @@ class BaseCriterion(object):
         :param value:
         :return:
         """
-        if not isinstance(value, (int, float, long, numbers.Float, numbers.Integer)):
+        if not isinstance(value, (int, float, numbers.Float, numbers.Integer)):
             if isinstance(value, str):
                 try:
                     value = float(value)
@@ -353,7 +353,7 @@ class FormulaCriterion(BaseCriterion):
 
         result = {"always": [], "nc": []}
 
-        for key, value in operation_args.iteritems():
+        for key, value in operation_args.items():
             if value != "nc":
                 result["always"].append(key)
             else:
@@ -367,11 +367,11 @@ class FormulaCriterion(BaseCriterion):
         self.update_points = {}
         self.operation_arg_count = 0
 
-        for arg_type, arg_list in operation_args.iteritems():
+        for arg_type, arg_list in operation_args.items():
             topic_map, topic_set = create_device_topic_map(arg_list, self.device_topic)
             self.device_topic_map.update(topic_map)
             self.device_topics |= topic_set
-            self.update_points[arg_type] = set(topic_map.itervalues())
+            self.update_points[arg_type] = set(topic_map.values())
             self.operation_arg_count += len(topic_map)
 
     def evaluate(self):
@@ -383,7 +383,7 @@ class FormulaCriterion(BaseCriterion):
         return value
 
     def ingest_data(self, time_stamp, data):
-        for topic, point in self.device_topic_map.iteritems():
+        for topic, point in self.device_topic_map.items():
             if topic in data:
                 if not self.status or point not in self.update_points.get("nc", set()):
                     value = data[topic]

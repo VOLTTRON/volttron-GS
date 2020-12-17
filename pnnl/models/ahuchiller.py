@@ -2,40 +2,22 @@ import logging
 import importlib
 
 from volttron.platform.agent import utils
+import volttron.pnnl.models.input_names as data_names
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
-
-
-class AHUChiller(object):
-    SFS = "sfs"
-    MAT = "mat"
-    DAT = "dat"
-    SAF = "saf"
-    OAT = "oat"
-    RAT = "rat"
-
-    def __init__(self, config, **kwargs):
-        model_type = config.get("model_type", "ahuchiller")
-        module = importlib.import_module("volttron.pnnl.models.ahuchiller")
-        model_class = getattr(module, model_type)
-        self.model = model_class(config, self)
-
-    def get_q(self, _set, sched_index, market_index, occupied):
-        pass
-
 
 class ahuchiller(object):
 
     def __init__(self, config, parent, **kwargs):
         self.parent = parent
-        equipment_conf = config.get("model_parameters").get("equipment_configuration")
-        model_conf = config.get("model_parameters").get("model_configuration")
+        equipment_conf = config.get("equipment_configuration")
+        model_conf = config.get("model_configuration")
         self.cpAir = model_conf["cpAir"]
-        self.c0 = model_conf["c0"]
-        self.c1 = model_conf["c1"]
-        self.c2 = model_conf["c2"]
-        self.c3 = model_conf["c3"]
+        self.c0 = float(model_conf["c0"])
+        self.c1 = float(model_conf["c1"])
+        self.c2 = float(model_conf["c2"])
+        self.c3 = float(model_conf["c3"])
         self.power_unit = model_conf.get("unit_power", "kw")
         self.cop = model_conf["COP"]
         self.mDotAir = model_conf.get("mDotAir", 0.0)
@@ -43,28 +25,30 @@ class ahuchiller(object):
         self.name = 'AhuChiller'
 
         self.has_economizer = equipment_conf["has_economizer"]
-        self.economizer_limit = equipment_conf["economizer_limit"]
+        if self.has_economizer:
+            self.economizer_limit = equipment_conf["economizer_limit"]
+        else:
+            self.economizer_limit = 0
         self.min_oaf = equipment_conf.get("minimum_oaf", 0.15)
-        self.vav_flag = equipment_conf.get("variable-volume", True)
-        self.sat_setpoint = equipment_conf["supply-air sepoint"]
-        self.building_chiller = equipment_conf["building chiller"]
-        self.tset_avg = equipment_conf["nominal zone-setpoint"]
+        self.vav_flag = equipment_conf.get("variable_volume", True)
+        self.sat_setpoint = equipment_conf["supply_air_setpoint"]
+        self.building_chiller = equipment_conf["building_chiller"]
+        self.tset_avg = equipment_conf["nominal_zone_setpoint"]
         self.tDis = self.sat_setpoint
         self.parent.supply_commodity = "ZoneAirFlow"
 
         self.fan_power = 0.
-        self.mDotAir = 0.
         self.coil_load = 0.
 
         self.get_input_value = parent.get_input_value
         self.smc_interval = parent.single_market_contol_interval
         self.parent = parent
-        self.sfs_name = parent.SFS
-        self.mat_name = parent.MAT
-        self.dat_name = parent.DAT
-        self.saf_name = parent.SAF
-        self.oat_name = parent.OAT
-        self.rat_name = parent.RAT
+        self.sfs_name = data_names.SFS
+        self.mat_name = data_names.MAT
+        self.dat_name = data_names.DAT
+        self.saf_name = data_names.SAF
+        self.oat_name = data_names.OAT
+        self.rat_name = data_names.RAT
 
         self.sfs = None
         self.mat = None
@@ -87,6 +71,7 @@ class ahuchiller(object):
         else:
             self.tDis = q_load
             self.dat = q_load
+            self.mDotAir = self.saf
 
     def calculate_fan_power(self):
         if self.power_unit == 'W':
@@ -119,6 +104,7 @@ class ahuchiller(object):
     def single_market_coil_load(self):
         try:
             self.coil_load = self.mDotAir * self.cpAir * (self.dat - self.mat)
+            _log.debug("AHU MODEL - load: %s -- mdot: %s -- mat: %s -- dat: %s", self.coil_load, self.mDotAir, self.mat, self.dat)
         except:
             _log.debug("AHU for single market requires dat and mat measurements!")
             self.coil_load = 0.

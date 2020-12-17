@@ -63,16 +63,13 @@ from volttron.pnnl.transactive_base.transactive.aggregator_base import Aggregato
 from volttron.platform.agent.base_market_agent.poly_line import PolyLine
 from volttron.platform.agent.base_market_agent.point import Point
 
-from volttron.pnnl.models.ahuchiller import AHUChiller
-
-# from pnnl.models.firstorderzone import FirstOrderZone
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = "0.2"
 
 
-class AHUAgent(Aggregator, AHUChiller):
+class AHUAgent(Aggregator):
     """
     The SampleElectricMeterAgent serves as a sample of an electric meter that
     sells electricity for a single building at a fixed price.
@@ -83,11 +80,10 @@ class AHUAgent(Aggregator, AHUChiller):
             config = utils.load_config(config_path)
         except StandardError:
             config = {}
+        model_config = config.get("model_parameters")
         self.agent_name = config.get("agent_name", "ahu")
-
         Aggregator.__init__(self, config, **kwargs)
-        AHUChiller.__init__(self, config, **kwargs)
-        self.init_markets()
+        #self.init_markets()
 
     def translate_aggregate_demand(self, air_demand, index):
         electric_demand_curve = PolyLine()
@@ -96,7 +92,8 @@ class AHUAgent(Aggregator, AHUChiller):
             electric_demand_curve.add(Point(price=point.y, quantity=self.model.calculate_load(point.x, oat)))
         _log.debug("{}: electric demand : {}".format(self.agent_name, electric_demand_curve.points))
         # Hard-coding the market names is not ideal.  Need to come up with more robust solution
-        self.consumer_demand_curve["electric"][index] = electric_demand_curve
+        for market in self.consumer_market:
+            self.consumer_demand_curve[market][index] = electric_demand_curve
 
 
 def main():

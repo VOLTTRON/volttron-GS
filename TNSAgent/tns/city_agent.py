@@ -63,25 +63,25 @@ from volttron.platform.vip.agent import Agent, Core, PubSub, RPC, compat
 from volttron.platform.agent import utils
 from volttron.platform.agent.utils import (get_aware_utc_now, format_timestamp)
 
-from helpers import *
-from measurement_type import MeasurementType
-from measurement_unit import MeasurementUnit
-from meter_point import MeterPoint
-from market import Market
-from market_state import MarketState
-from neighbor import Neighbor
-from local_asset import LocalAsset
-from local_asset_model import LocalAssetModel
-from myTransactiveNode import myTransactiveNode
-from neighbor_model import NeighborModel
-from temperature_forecast_model import TemperatureForecastModel
-from solar_pv_resource import SolarPvResource
-from solar_pv_resource_model import SolarPvResourceModel
-from openloop_richland_load_predictor import OpenLoopRichlandLoadPredictor
-from bulk_supplier_dc import BulkSupplier_dc
-from transactive_record import TransactiveRecord
-from vertex import Vertex
-from timer import Timer
+from .helpers import *
+from .measurement_type import MeasurementType
+from .measurement_unit import MeasurementUnit
+from .meter_point import MeterPoint
+from .market import Market
+from .market_state import MarketState
+from .neighbor import Neighbor
+from .local_asset import LocalAsset
+from .local_asset_model import LocalAssetModel
+from .myTransactiveNode import myTransactiveNode
+from .neighbor_model import NeighborModel
+from .temperature_forecast_model import TemperatureForecastModel
+from .solar_pv_resource import SolarPvResource
+from .solar_pv_resource_model import SolarPvResourceModel
+from .openloop_richland_load_predictor import OpenLoopRichlandLoadPredictor
+from .bulk_supplier_dc import BulkSupplier_dc
+from .transactive_record import TransactiveRecord
+from .vertex import Vertex
+from .timer import Timer
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -99,11 +99,18 @@ class CityAgent(Agent, myTransactiveNode):
         self.market_cycle_in_min = int(self.config.get('market_cycle_in_min', 60))
         self.duality_gap_threshold = float(self.config.get('duality_gap_threshold', 0.01))
         self.supplier_loss_factor = float(self.config.get('supplier_loss_factor'))
+
+        self.demand_threshold_coef = float(self.config.get('demand_threshold_coef'))
+        self.monthly_peak_power = float(self.config.get('monthly_peak_power'))
+
         self.neighbors = []
 
         self.db_topic = self.config.get("db_topic", "tnc")
         self.campus_demand_topic = "{}/campus/city/demand".format(self.db_topic)
         self.city_supply_topic = "{}/city/campus/supply".format(self.db_topic)
+        self.system_loss_topic = "{}/{}/system_loss".format(self.db_topic, self.name)
+        self.dc_threshold_topic = "{}/{}/dc_threshold_topic".format(self.db_topic, self.name)
+        self.price_topic = "{}/{}/marginal_prices".format(self.db_topic, self.name)
 
         self.reschedule_interval = timedelta(minutes=10, seconds=1)
 
@@ -178,6 +185,16 @@ class CityAgent(Agent, myTransactiveNode):
         # Balance
         market = self.markets[0]  # Assume only 1 TNS market per node
         market.balance(self)
+        prices = market.marginalPrices
+        prices = prices[-25:]
+        prices = [x.value for x in prices]
+        _time = format_timestamp(Timer.get_cur_time())
+        self.vip.pubsub.publish(peer='pubsub',
+                                topic=self.price_topic,
+                                message={'prices': prices,
+                                         'current_time': _time
+                                         }
+                                )
         self.campus.model.prep_transactive_signal(market, self)
         self.campus.model.send_transactive_signal(self, self.city_supply_topic,
                                                   start_of_cycle=start_of_cycle)
@@ -226,6 +243,18 @@ class CityAgent(Agent, myTransactiveNode):
                     if dt.hour == next_run_dt.hour and run_cnt >= 1:
                         _log.debug("{} reschedule to run at {}".format(self.name, next_run_dt))
                         self.core.schedule(next_run_dt, self.balance_market, run_cnt + 1)
+            prices = market.marginalPrices
+
+            # There is a case where the balancing happens at the end of the hour and continues to the next hour, which
+            # creates 26 values. Get the last 25 values.
+            prices = prices[-25:]
+            prices = [x.value for x in prices]
+            self.vip.pubsub.publish(peer='pubsub',
+                                        topic=self.price_topic,
+                                        message={'prices': prices,
+                                                 'current_time': format_timestamp(Timer.get_cur_time())
+                                                 }
+                                        )
         else:
             _log.debug("Market balancing sub-problem failed.")
 
@@ -341,7 +370,14 @@ class CityAgent(Agent, myTransactiveNode):
         supplierModel.convergenceThreshold = 0  # Not yet implemented
         supplierModel.effectiveImpedance = 0.0  # Not yet implemented
         supplierModel.friend = False  # Separate business entity from COR
+
         supplierModel.transactive = False  # Not a transactive neighbor
+        supplierModel.demand_threshold_coef = self.demand_threshold_coef
+        supplierModel.demandThreshold = self.monthly_peak_power
+        supplierModel.inject(self,
+                             system_loss_topic=self.system_loss_topic,
+                             dc_threshold_topic=self.dc_threshold_topic)
+
 
         # Add vertices
         # The first default vertex is, for now, based on the flat COR rate to

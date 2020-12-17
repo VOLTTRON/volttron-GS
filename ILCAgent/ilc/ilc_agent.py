@@ -1,4 +1,67 @@
+"""
+-*- coding: utf-8 -*- {{{
+vim: set fenc=utf-8 ft=python sw=4 ts=4 sts=4 et:
 
+Copyright (c) 2019, Battelle Memorial Institute
+All rights reserved.
+
+1.  Battelle Memorial Institute (hereinafter Battelle) hereby grants
+    permission to any person or entity lawfully obtaining a copy of this
+    software and associated documentation files (hereinafter "the Software")
+    to redistribute and use the Software in source and binary forms, with or
+    without modification.  Such person or entity may use, copy, modify, merge,
+    publish, distribute, sublicense, and/or sell copies of the Software, and
+    may permit others to do so, subject to the following conditions:
+
+    -   Redistributions of source code must retain the above copyright notice,
+        this list of conditions and the following disclaimers.
+
+    -	Redistributions in binary form must reproduce the above copyright
+        notice, this list of conditions and the following disclaimer in the
+        documentation and/or other materials provided with the distribution.
+
+    -	Other than as used herein, neither the name Battelle Memorial Institute
+        or Battelle may be used in any form whatsoever without the express
+        written consent of Battelle.
+
+2.	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL BATTELLE OR CONTRIBUTORS BE LIABLE FOR
+    ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+    DAMAGE.
+
+The views and conclusions contained in the software and documentation are those
+of the authors and should not be interpreted as representing official policies,
+either expressed or implied, of the FreeBSD Project.
+
+This material was prepared as an account of work sponsored by an agency of the
+United States Government. Neither the United States Government nor the United
+States Department of Energy, nor Battelle, nor any of their employees, nor any
+jurisdiction or organization that has cooperated in the development of these
+materials, makes any warranty, express or implied, or assumes any legal
+liability or responsibility for the accuracy, completeness, or usefulness or
+any information, apparatus, product, software, or process disclosed, or
+represents that its use would not infringe privately owned rights.
+
+Reference herein to any specific commercial product, process, or service by
+trade name, trademark, manufacturer, or otherwise does not necessarily
+constitute or imply its endorsement, recommendation, or favoring by the
+United States Government or any agency thereof, or Battelle Memorial Institute.
+The views and opinions of authors expressed herein do not necessarily state or
+reflect those of the United States Government or any agency thereof.
+
+PACIFIC NORTHWEST NATIONAL LABORATORY
+operated by
+BATTELLE for the UNITED STATES DEPARTMENT OF ENERGY
+under Contract DE-AC05-76RL01830
+}}}
+"""
 import os
 import sys
 import logging
@@ -22,16 +85,17 @@ from ilc.criteria_handler import CriteriaContainer, CriteriaCluster, parse_sympy
 
 from transitions import Machine
 # from transitions.extensions import GraphMachine as Machine
-
-__version__ = "1.0.0"
+__author__ = "Robert Lutes, robert.lutes@pnnl.gov"
+__version__ = "2.0.1"
 
 setup_logging()
 _log = logging.getLogger(__name__)
 APP_CAT = "LOAD CONTROL"
 APP_NAME = "ILC"
 
+
 class ILCAgent(Agent):
-    states = ['inactive', 'curtail', 'curtail_holding', 'curtail_releasing','augment', "augment_holding", 'augment_releasing']
+    states = ['inactive', 'curtail', 'curtail_holding', 'curtail_releasing', 'augment', "augment_holding", 'augment_releasing']
     transitions = [
         {
             'trigger': 'curtail_load',
@@ -52,7 +116,7 @@ class ILCAgent(Agent):
             'trigger': 'curtail_load',
             'source': 'curtail_holding',
             'dest': 'curtail',
-            'conditions':'confirm_elapsed'
+            'conditions': 'confirm_elapsed'
         },
         {
             'trigger': 'release',
@@ -78,7 +142,8 @@ class ILCAgent(Agent):
         {
             'trigger': 'curtail_load',
             'source': 'curtail_releasing',
-            'dest': 'curtail'
+            'dest': 'curtail',
+            'conditions': 'confirm_next_release'
         },
         {
             'trigger': 'augment_load',
@@ -118,7 +183,8 @@ class ILCAgent(Agent):
         {
             'trigger': 'augment_load',
             'source': 'augment_releasing',
-            'dest': 'augment'
+            'dest': 'augment',
+            'conditions': 'confirm_next_release'
         },
         {
             'trigger': 'curtail_load',
@@ -134,7 +200,7 @@ class ILCAgent(Agent):
         },
         {
             'trigger': 'finished',
-            'source': ['shed_releasing', 'augment_releasing'],
+            'source': ['curtail_releasing', 'augment_releasing'],
             'dest': 'inactive',
             "after": 'reinitialize_release'
         },
@@ -148,7 +214,7 @@ class ILCAgent(Agent):
 
     def __init__(self, config_path, **kwargs):
         super(ILCAgent, self).__init__(**kwargs)
-        config = utils.load_config(config_path)
+        #config = utils.load_config(config_path)
         self.state_machine = Machine(model=self, states=ILCAgent.states,
                                      transitions= ILCAgent.transitions, initial='inactive', queued=True)
         # self.get_graph().draw('my_state_diagram.png', prog='dot')
@@ -156,7 +222,87 @@ class ILCAgent(Agent):
         self.state_machine.on_enter_augment('modify_load')
         self.state_machine.on_enter_curtail_releasing('setup_release')
         self.state_machine.on_enter_augment_releasing('setup_release')
+
+        self.default_config = {
+            "campus": "CAMPUS",
+            "building": "BUILDING",
+            "power_meter": {},
+            "agent_id": "ILC",
+            "demand_limit": 30.0,
+            "control_time": 20.0,
+            "curtailment_confirm": 5.0,
+            "curtailment_break": 20.0,
+            "average_building_power_window": 15.0,
+            "stagger_release": True,
+            "stagger_off_time": True,
+            "simulation_running": False,
+            "confirm_time": 5,
+            "clusters": []
+        }
+        self.confirm_time = td(minutes=self.default_config.get("confirm_time"))
+        self.current_time = td(minutes=0)
+        self.state_machine = Machine(model=self, states=ILCAgent.states,
+                                     transitions= ILCAgent.transitions, initial='inactive', queued=True)
+        # self.get_graph().draw('my_state_diagram.png', prog='dot')
+        self.state_machine.on_enter_curtail('modify_load')
+        self.state_machine.on_enter_augment('modify_load')
+        self.state_machine.on_enter_curtail_releasing('setup_release')
+        self.state_machine.on_enter_augment_releasing('setup_release')
+
+        self.vip.config.set_default("config", self.default_config)
+        self.vip.config.subscribe(self.configure_main,
+                                 actions=["NEW", "UPDATE"],
+                                 pattern="config")
+
+        self.next_confirm = None
+        self.action_end = None
+        self.kill_signal_received = False
+        self.scheduled_devices = set()
+        self.devices = []
+        self.bldg_power = []
+        self.avg_power = None
+        self.device_group_size = None
+        self.current_stagger = None
+        self.next_release = None
+        self.power_meta = None
+        self.tasks = {}
+        self.tz = None
+        self.lock = False
+        self.sim_time = 0
+        self.config_reload_needed = False
+        self.saved_config = None
+        self.power_meter_topic = None
+        self.kill_device_topic = None
+        self.load_control_modes = ["curtail"]
+
+    def configure_main(self, config_name, action, contents):
+        config = self.default_config.copy()
+        config.update(contents)
+        if action == "NEW" or "UPDATE":
+            _log.debug("CONFIG NAME: {}, ACTION: {}, STATE: {}".format(config_name, action, self.state))
+            if self.state not in ['curtail', 'curtail_holding', 'curtail_releasing', 'augment', 'augment_holding', 'augment_releasing']:
+                self.reset_parameters(config)
+            else:
+                _log.debug("ENTER CONFIG UPDATE..CURTAIL IN ACTION, UPDATE DEFERRED")
+                # Defer reloading of parameters after curtailment operation
+                self.config_reload_needed = True
+                # self.new_config = self.default_config.copy()
+                self.saved_config = self.default_config.copy()
+                self.saved_config.update(contents)
+
+    def reset_parameters(self, config=None):
+        """
+        Reset all parameters based on configuration change
+        :param config: config
+        :return:
+        """
+        campus = config.get("campus", "")
+        building = config.get("building", "")
+        self.agent_id = config.get("agent_id", APP_NAME)
+        dashboard_topic = config.get("dashboard_topic")
+        ilc_start_topic = self.agent_id
         self.control_mode = config.get("control_mode", "dollar")
+        self.load_control_modes = config.get("load_control_modes", ["curtail"])
 
         campus = config.get("campus", "")
         building = config.get("building", "")
@@ -187,41 +333,31 @@ class ILCAgent(Agent):
         self.control_container = ControlContainer()
 
         for cluster_config in cluster_configs:
-            criteria_file_name = cluster_config["pairwise_criteria_file"]
+            _log.debug("CLUSTER CONFIG: {}".format(cluster_config))
+            pairwise_criteria_config = cluster_config["pairwise_criteria_config"]
 
-            if criteria_file_name.startswith("~"):
-                criteria_file_name = os.path.expanduser(criteria_file_name)
-
-            device_criteria_config = cluster_config["device_criteria_file"]
-            device_control_config = cluster_config["device_control_file"]
-            _log.debug("ALL_DEV: {}".format(device_control_config))
+            criteria_config = cluster_config["device_criteria_config"]
+            control_config = cluster_config["device_control_config"]
 
             cluster_priority = cluster_config["cluster_priority"]
             cluster_actuator = cluster_config.get("cluster_actuator", "platform.actuator")
+            # Check that all three parameters are not None
+            if pairwise_criteria_config and criteria_config and control_config:
+                criteria_labels, criteria_array, self.load_control_modes = extract_criteria(pairwise_criteria_config)
+                col_sums = calc_column_sums(criteria_array)
+                row_average = normalize_matrix(criteria_array, col_sums)
+                _log.debug("VALIDATE - criteria_array {} - col_sums {}".format(criteria_array, col_sums))
+                if not validate_input(criteria_array, col_sums):
+                    _log.debug("Inconsistent pairwise configuration. Check "
+                               "configuration in: {}".format(pairwise_criteria_config))
+                    sys.exit()
 
-            criteria_labels, criteria_array = extract_criteria(criteria_file_name)
-            col_sums = calc_column_sums(criteria_array)
-            row_average = normalize_matrix(criteria_array, col_sums)
-            _log.debug("VALIDATE - criteria_array {} - col_sums {}".format(criteria_array, col_sums))
-            if not validate_input(criteria_array, col_sums):
-                _log.debug("Inconsistent pairwise configuration. Check "
-                           "configuration in: {}".format(criteria_file_name))
-                sys.exit()
-
-            if device_criteria_config[0] == "~":
-                device_criteria_config = os.path.expanduser(device_criteria_config)
-
-            criteria_config = utils.load_config(device_criteria_config)
-            criteria_cluster = CriteriaCluster(cluster_priority, criteria_labels, row_average, criteria_config, self.record_topic, self)
-            self.criteria_container.add_criteria_cluster(criteria_cluster)
-
-            if device_control_config[0] == "~":
-                device_control_config = os.path.expanduser(device_control_config)
-
-            control_config = utils.load_config(device_control_config)
-            control_cluster = ControlCluster(control_config, cluster_actuator, self.record_topic, self)
-            self.control_container.add_control_cluster(control_cluster)
-            all_devices = self.control_container.get_device_topic_set()
+                criteria_cluster = CriteriaCluster(cluster_priority, criteria_labels, row_average, criteria_config,
+                                                   self.record_topic, self)
+                self.criteria_container.add_criteria_cluster(criteria_cluster)
+                _log.debug("CONTROL config: {}, ------------------- CRITERIA config: {}".format(control_config, criteria_config))
+                control_cluster = ControlCluster(control_config, cluster_actuator, self.record_topic, self)
+                self.control_container.add_control_cluster(control_cluster)
 
         self.base_rpc_path = topics.RPC_DEVICE_PATH(campus="",
                                                     building="",
@@ -239,10 +375,10 @@ class ILCAgent(Agent):
 
             self.device_topic_list.append(device_topic)
 
-        power_token = config["power_meter"]
-        power_meter = power_token["device"]
-        self.power_point = power_token["point"]
-        demand_formula = power_token.get("demand_formula")
+        power_meter_info = config.get("power_meter", {})
+        power_meter = power_meter_info.get("device_topic", None)
+        self.power_point = power_meter_info.get("point", None)
+        demand_formula = power_meter_info.get("demand_formula")
         self.calculate_demand = False
 
         if demand_formula is not None:
@@ -260,10 +396,10 @@ class ILCAgent(Agent):
                 _log.debug("Unexpected error when reading demand formula parameters!")
                 self.calculate_demand = False
 
-        self.power_meter_topic = topics.DEVICES_VALUE(campus=campus,
-                                                      building=building,
-                                                      unit=power_meter,
-                                                      path="",
+        self.power_meter_topic = topics.DEVICES_VALUE(campus="",
+                                                      building="",
+                                                      unit="",
+                                                      path=power_meter,
                                                       point="all")
         self.kill_device_topic = None
         kill_token = config.get("kill_switch")
@@ -279,7 +415,11 @@ class ILCAgent(Agent):
         if isinstance(demand_limit, (int, float)):
             self.demand_limit = float(demand_limit)
         else:
-            self.demand_limit = None
+            try:
+                self.demand_limit = float(demand_limit)
+            except ValueError:
+                self.demand_limit = None
+
         self.demand_schedule = config.get("demand_schedule")
         action_time = config.get("control_time", 15)
         self.action_time = td(minutes=action_time)
@@ -293,27 +433,11 @@ class ILCAgent(Agent):
         self.stagger_release = config.get("stagger_release", False)
         self.need_actuator_schedule = config.get("need_actuator_schedule", False)
         self.demand_threshold = config.get("demand_threshold", 5.0)
-        self.next_confirm = None
-        self.action_end = None
-
-        self.kill_signal_received = False
-        self.scheduled_devices = set()
-        self.devices = []
-        self.bldg_power = []
-        self.avg_power = None
-        self.current_time = None
-        self.device_group_size = None
-        self.current_stagger = None
-        self.next_release = None
-        self.power_meta = None
-        self.tasks = {}
-        self.tz = None
-        self.lock = False
         self.sim_running = config.get("simulation_running", False)
-        self.sim_time = 0
-        self.state_at_actuation = self.state
+        self.starting_base('core')
+        self.config_reload_needed = False
 
-    @Core.receiver("onstart")
+#    @Core.receiver("onstart")
     def starting_base(self, sender, **kwargs):
         """
         Startup method:
@@ -328,8 +452,9 @@ class ILCAgent(Agent):
             self.vip.pubsub.subscribe(peer="pubsub",
                                       prefix=device_topic,
                                       callback=self.new_data)
-        _log.debug("Subscribing to " + self.power_meter_topic)
-        self.vip.pubsub.subscribe(peer="pubsub",
+        if self.power_meter_topic is not None:
+            _log.debug("Subscribing to " + self.power_meter_topic)
+            self.vip.pubsub.subscribe(peer="pubsub",
                                   prefix=self.power_meter_topic,
                                   callback=self.load_message_handler)
 
@@ -427,12 +552,16 @@ class ILCAgent(Agent):
         demand_goal = float(target) if target is not None else target
         task_id = target_info["id"]
         _log.debug("TARGET - id: {} - start: {} - goal: {}".format(task_id, start_time, demand_goal))
+        task_list = []
         for key, value in self.tasks.items():
             if start_time == value["end"]:
                 start_time += td(seconds=15)
             if (start_time < value["end"] and end_time > value["start"]) or value["start"] <= start_time <= value["end"]:
-                for item in self.tasks.pop(key)["schedule"]:
-                    item.cancel()
+                task_list.append(key)
+        for task in task_list:
+           sched_tasks = self.tasks.pop(task)["schedule"]
+           for current_task in sched_tasks:
+               current_task.cancel()
 
         current_task_exists = self.tasks.get(target_info["id"])
         if current_task_exists is not None:
@@ -526,13 +655,16 @@ class ILCAgent(Agent):
         :return:
         """
         if self.tasks:
+            task_list = []
             current_time = current_time.replace(tzinfo=self.tz)
             for key, value in self.tasks.items():
                 if value["start"] <= current_time < value["end"]:
                     self.demand_limit = value["target"]
                 elif current_time >= value["end"]:
                     self.demand_limit = None
-                    self.tasks.pop(key)
+                    task_list.append(key)
+            for key in task_list:
+                self.tasks.pop(key)
 
     def handle_agent_kill(self, peer, sender, bus, topic, headers, message):
         """
@@ -586,7 +718,7 @@ class ILCAgent(Agent):
         power_sort.sort(reverse=True)
         exp_power = 0
 
-        for n in xrange(len(self.bldg_power)):
+        for n in range(len(self.bldg_power)):
             exp_power += power_sort[n][1] * smoothing_constant * (1.0 - smoothing_constant) ** n
 
         exp_power += power_sort[-1][1] * (1.0 - smoothing_constant) ** (len(self.bldg_power))
@@ -695,9 +827,6 @@ class ILCAgent(Agent):
             # TODO: Refactor this code block.  Disparate code paths for simulation and real devices is undesireable
             if self.sim_running:
                 gevent.sleep(0.25)
-                while self.sim_time >= 15:
-                    _log.debug("HOLDING {}".format(self.sim_time))
-                    gevent.sleep(1)
                 self.vip.pubsub.publish("pubsub", "applications/ilc/advance", headers={}, message={})
 
     def check_load(self):
@@ -707,20 +836,23 @@ class ILCAgent(Agent):
         :param current_time:
         :return:
         """
-        _log.debug("Checking building load: {}".format(self.demand_limit))
+        _log.debug("Checking building load: {} -- mode: {}".format(self.demand_limit, self.control_mode))
 
         if self.demand_limit is not None:
-            if self.avg_power > self.demand_limit + self.demand_threshold:
-                result = "Current load of {} kW exceeds demand limit of {} kW.".format(self.avg_power, self.demand_limit)
+            if "curtail" in self.load_control_modes and self.avg_power > self.demand_limit + self.demand_threshold:
+                result = "Current load of {} kW exceeds demand limit of {} kW.".format(self.avg_power, self.demand_limit+self.demand_threshold)
                 self.curtail_load()
-            if self.avg_power < self.demand_limit - self.demand_threshold:
-                result = "Current load of {} kW is below demand limit of {} kW.".format(self.avg_power, self.demand_limit)
+            elif "augment" in self.load_control_modes and self.avg_power < self.demand_limit - self.demand_threshold:
+                result = "Current load of {} kW is below demand limit of {} kW.".format(self.avg_power, self.demand_limit-self.demand_threshold)
                 self.augment_load()
             else:
-                result = "Current load of {} kW meets demand goal of {} kW.".format(self.avg_power, self.demand_limit)
-            if self.state != 'inactive':
-                self.lock = True
-                self.release()
+                result = "ILC is not active  - Current load: {} kW -- demand goal: {}".format(self.avg_power,
+                                                                                              self.demand_limit)
+                if self.state != 'inactive':
+                    result = "Current load of {} kW meets demand goal of {} kW.".format(self.avg_power,
+                                                                                        self.demand_limit)
+                    self.lock = True
+                    self.release()
         else:
             result = "Demand goal has not been set. Current load: ({load}) kW.".format(load=self.avg_power)
             if self.state != 'inactive':
@@ -736,6 +868,7 @@ class ILCAgent(Agent):
         :param now:
         :return:
         """
+        _log.debug("***** ENTERING MODIFY LOADS *****************{}".format(self.state))
         scored_devices = self.criteria_container.get_score_order(self.state)
         _log.debug("SCORED devices: {}".format(scored_devices))
         active_devices = self.control_container.get_devices_status(self.state)
@@ -748,7 +881,7 @@ class ILCAgent(Agent):
         est_curtailed = 0.0
         remaining_devices = score_order[:]
 
-        if self.control_mode.lower != "dollar":
+        if self.control_mode.lower() != "dollar":
             for device in self.devices:
                 current_tuple = (device[0], device[1], device[7])
                 if current_tuple in remaining_devices:
@@ -775,6 +908,7 @@ class ILCAgent(Agent):
             try:
                 if self.kill_signal_received:
                     break
+                _log.debug("***** ENTER SET POINT *****************")
                 result = self.vip.rpc.call(actuator, "set_point", "ilc_agent", control_pt, control_value).get(timeout=30)
                 prefix = self.update_base_topic.split("/")[0]
                 topic = "/".join([prefix, control_pt, "Actuate"])
@@ -820,7 +954,6 @@ class ILCAgent(Agent):
 
             device, token, device_actuator = item
             point_device = self.control_container.get_device((device, device_actuator)).get_point_device(token, self.state)
-
             if point_device is None:
                 continue
 
@@ -920,7 +1053,7 @@ class ILCAgent(Agent):
         return control_pt, control_value, control_load, revert_priority, revert_value
 
     def setup_release(self):
-        if self.stagger_release:
+        if self.stagger_release and self.devices:
             _log.debug("Number or controlled devices: {}".format(len(self.devices)))
 
             confirm_in_minutes = self.confirm_time.total_seconds()/60.0
@@ -1020,12 +1153,12 @@ class ILCAgent(Agent):
         if len(current_device_list) <= 1:
             return revert_value
 
-        index_value = max(current_device_list, key=lambda t: t[2])
-        return_value = index_value[2]
+        index_value = max(current_device_list, key=lambda t: t[4])
+        return_value = index_value[3]
         _log.debug("Stored revert value: {} for device: {}".format(return_value, device))
         control_set_index = self.devices.index(index_value)
-        self.devices[control_set_index][2] = revert_value
-        self.devices[control_set_index][3] = revert_priority
+        self.devices[control_set_index][3] = revert_value
+        self.devices[control_set_index][4] = revert_priority
 
         return return_value
 
@@ -1039,6 +1172,10 @@ class ILCAgent(Agent):
         self.action_end = None
         self.next_confirm = self.current_time + self.confirm_time
         self.reset_all_devices()
+        if self.state == 'inactive':
+            _log.debug("**********TRYING TO RELOAD CONFIG PARAMETERS*********");
+            if self.config_reload_needed:
+                self.reset_parameters(self.saved_config)
 
     def reset_all_devices(self):
         for device in self.scheduled_devices:
@@ -1164,10 +1301,13 @@ class ILCAgent(Agent):
         task_id = target_info["id"]
 
         _log.debug("TARGET: Simulation running.")
+        key_list = []
         for key, value in self.tasks.items():
             if (start_time < value["end"] and end_time > value["start"]) or (
                     value["start"] <= start_time <= value["end"]):
-                self.tasks.pop(key)
+                key_list.append(key)
+        for key in key_list:
+            self.tasks.pop(key)
 
         _log.debug("TARGET: received demand goal schedule - start: {} - end: {} - target: {}.".format(start_time,
                                                                                                       end_time,

@@ -59,8 +59,8 @@
 
 from datetime import datetime
 
-from time_interval import TimeInterval
-from helpers import format_ts
+from .time_interval import TimeInterval
+from .helpers import format_ts
 
 
 class TransactiveRecord:

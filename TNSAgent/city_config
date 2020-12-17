@@ -6,6 +6,9 @@
   "duality_gap_threshold": 0.001,
   "supplier_loss_factor": 0.02,
 
+  # For initial demand charge threshold
+  "demand_threshold_coef": 0.8,
+  "monthly_peak_power": 100000,
 
   "ts_name": "Date",
   "weather_forecast": {
