@@ -12,7 +12,7 @@ from dateutil.parser import parse
 from sympy.parsing.sympy_parser import parse_expr
 from sympy.logic.boolalg import BooleanFalse, BooleanTrue
 from gevent import sleep
-from volttron.platform.scheduling import cron
+from volttron.platform.scheduling import cron, periodic
 from volttron.platform.vip.agent import Agent, Core
 from volttron.platform.jsonrpc import RemoteError
 from volttron.platform.agent import utils
@@ -49,8 +49,8 @@ class AFDDSchedulerAgent(Agent):
                 }
             }
         }
-        self.mht: 5.0
-        self.excess_operation: false
+        self.maximum_hour_threshold: 5.0
+        self.excess_operation: False
         self.interval: 60
         self.timezone = "US/Pacific"
         self.condition_list = None
@@ -61,7 +61,7 @@ class AFDDSchedulerAgent(Agent):
             "schedule_time": self.schedule_time,
             "device": self.device,
             "mht": 3600,
-            "excess_operation": false,
+            "excess_operation": False,
             "interval": 60,
             "timezone": self.timezone,
             "conditions_list": None
@@ -95,13 +95,25 @@ class AFDDSchedulerAgent(Agent):
         self.analysis_name = self.current_config.get("analysis_name")
         self.schedule_time = self.current_config.get("schedule_time")
         self.device = self.current_config.get("device")
-        self.mht = self.current_config.get("mht")
+        self.maximum_hour_threshold = self.current_config.get("mht")
         self.excess_operation = self.current_config.get("excess_operation")
-        self.interval = self.current_config.get("interval")
-        self.timezone = self.current_config.get("timezone")
+        self.timezone = self.current_config.get("timezone", "PDT")
         self.condition_list = self.current_config.get("condition_list", {})
         self.device_true_time = 0
+        self.core.schedule(cron("01 00 * * 0-6"), self.run_schedule())
 
+    def run_schedule(self):
+        _log.info("current date time {}".format(datetime.utcnow()))
+        # self.core.periodic(self.interval, self.on_schedule)
+        self.device_true_time = 0 #at mid night zero the total minute
+        date_today = datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone))
+        if date_today in holidays.US(years=2020) or date_today.weekday() == 5 and 6:
+            schedule_time = "* * * * *"
+        else:
+            schedule_time = self.schedule_time
+        self.core.schedule(cron(schedule_time), self.on_schedule)
+
+    def on_subscribe(self):
         campus = self.device["campus"]
         building = self.device["building"]
         device_config = self.device["unit"]
@@ -121,16 +133,6 @@ class AFDDSchedulerAgent(Agent):
         except Exception as e:
             _log.error('Error configuring signal: {}'.format(e))
 
-        date_today = datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone))
-        print(date_today)
-        if date_today in holidays.US(years=2020) or date_today.weekday() == 5 and 6:
-            schedule_time = "* * * * *"
-            self.core.schedule(cron(schedule_time), self.run_schedule)
-        else:
-            self.core.schedule(cron(self.schedule_time), self.run_schedule)
-
-    def run_schedule(self):
-        _log.info("current date time {}".format(datetime.utcnow()))
         try:
             for device in self.device_topic_list:
                 _log.info("Subscribing to " + device)
@@ -139,9 +141,7 @@ class AFDDSchedulerAgent(Agent):
         except Exception as e:
             _log.error('Error configuring signal: {}'.format(e))
             _log.error("Missing {} data to execute the AIRx process".format(device))
-        # self.core.periodic(self.interval, self.on_schedule)
-        if self.condition_data:
-            self.on_schedule()
+
 
     def on_data(self, peer, sender, bus, topic, headers, message):
         """
@@ -165,8 +165,14 @@ class AFDDSchedulerAgent(Agent):
         TODO:The output for the agent should be similar to the EconomizerRCx agent
 
         """
+        self.on_subscribe()
         conditions = self.condition_list.get("conditions")
-        if all([parse_expr(condition).subs(self.condition_data) for condition in conditions]):
+        try:
+            condition_status = all([parse_expr(condition).subs(self.condition_data) for condition in conditions])
+        except Exception as e:
+            _log.error("Conditions are not correctly implemented in the config file : {}".format(str(e)))
+
+        if condition_status:
             self.device_true_time += self.interval
             self.device_status = True
             _log.Info('All condition true time {}'.format(self.device_true_time))
@@ -174,18 +180,11 @@ class AFDDSchedulerAgent(Agent):
             self.device_status = False
             _log.Info("one of the condition is false")
 
-        rthr = self.device_true_time / 3600
-        if rthr > self.mht:
+        runtime_threshold = self.device_true_time / 3600
+        if runtime_threshold > self.maximum_hour_threshold:
             self.excess_operation = True
 
-        if self.is_midnight(self.input_datetime):
-            self.device_true_time = 0
-            for device_topic in self.device_topic_list:
-                print(device_topic)
-                self.publish_daily_record(device_topic)
-
         for device_topic in self.device_topic_list:
-            print(device_topic)
             self.publish_daily_record(device_topic)
 
     def publish_daily_record(self, device_topic):
@@ -232,16 +231,30 @@ class AFDDSchedulerAgent(Agent):
         except Exception as e:
             _log.error("In Publish: {}".format(str(e)))
 
-    def is_midnight(self, current_time):
-        midnight = datetime.combine(current_time, time.max). \
-            astimezone(dateutil.tz.gettz(self.timezone))
-        _log.debug("Midnight time {}".format(midnight))
-        next_time = current_time + timedelta(seconds=self.interval)
-        _log.debug("next interval time {}".format(next_time))
-        if midnight > next_time:
-            return False
-        else:
-            return True
+    def get_point(self, point, tries=None):
+        """
+        This function will get point value using RPC calll
+        :param point: point
+        :param tries:
+        :return: value
+        """
+        tries_remaining = tries if tries else self.default_write_attempts
+        while tries_remaining > 0:
+            try:
+                value = self.vip.rpc.call(
+                    'platform.actuator',
+                    'get_point',
+                    point
+                ).get()
+                return value
+            except Exception as e:
+                tries_remaining -= 1
+                _log.warning("{} tries remaining of {}, got exception {} while getting {}".format(
+                    tries_remaining, tries, point, str(e)))
+                sleep(3)
+                continue
+        return False
+
 
 
 def main(argv=sys.argv):
