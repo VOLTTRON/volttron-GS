@@ -101,7 +101,6 @@ class SensorDiagnosisAgent(Agent):
             except Exception as e:
                 _log.error('Error configuring signal: {}'.format(e))
 
-
         self.core.schedule(cron(self.run_schedule), self.run_diagnostics_realtime)
 
     def on_data(self, peer, sender, bus, topic, headers, message):
@@ -124,7 +123,7 @@ class SensorDiagnosisAgent(Agent):
         """
         Running sensor diagnosis
         Sensor diagnosis:
-        Compare the sensor measurement with weather data; if difference between them is greather than threshold
+        Compare the sensor measurement with weather data; if difference between them is greater than threshold
         set  fault condition to "True"
         While performing the check, average the sensor measurment data
 
@@ -141,8 +140,9 @@ class SensorDiagnosisAgent(Agent):
                 if self.device_data[x][0] == args:
                     device_data_value.append(self.device_data[x][1])
             device_data_mean.append((args, mean(device_data_value)))
-
+            # averaging the sensor data
         self.device_data = device_data_mean
+        # measuring the current weather data
         self.get_current_weather()
         try:
             for args in self.weather_point_name:
@@ -160,7 +160,7 @@ class SensorDiagnosisAgent(Agent):
         if self.weather_data is None:
             _log.error('No weather data available: {}'.format(e))
             return
-
+        #Comparing the mesured sensored data with the measured weather data from weather.gov api
         _log.debug("Running sensor diagnosis")
         for conditions in self.sensors_condition:
             conditions = self.sensors_condition.get(conditions)
