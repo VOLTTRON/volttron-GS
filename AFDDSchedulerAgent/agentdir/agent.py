@@ -100,20 +100,22 @@ class AFDDSchedulerAgent(Agent):
         self.timezone = self.current_config.get("timezone", "PDT")
         self.condition_list = self.current_config.get("condition_list", {})
         self.device_true_time = 0
-        self.core.schedule(cron("01 00 * * 0-6"), self.run_schedule())
-
-    def run_schedule(self):
         _log.info("current date time {}".format(datetime.utcnow()))
-        # self.core.periodic(self.interval, self.on_schedule)
+        # self.core.periodic(self.interval, self.run_schedule)
         self.device_true_time = 0 #at mid night zero the total minute
         date_today = datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone))
         if date_today in holidays.US(years=2020) or date_today.weekday() == 5 and 6:
             schedule_time = "* * * * *"
         else:
             schedule_time = self.schedule_time
-        self.core.schedule(cron(schedule_time), self.on_schedule)
+        self.core.schedule(cron(schedule_time), self.run_schedule)
+        self.on_subscribe()
 
     def on_subscribe(self):
+        """
+
+        :return:
+        """
         campus = self.device["campus"]
         building = self.device["building"]
         device_config = self.device["unit"]
@@ -158,7 +160,7 @@ class AFDDSchedulerAgent(Agent):
 
         _log.info("condition data {}".format(self.condition_data))
 
-    def on_schedule(self):
+    def run_schedule(self):
         """
         execute the condition of the device, If all condition are true then add time into true_time.
         If true time is exceed the threshold time (mht) flag the excess operation
@@ -190,38 +192,9 @@ class AFDDSchedulerAgent(Agent):
     def publish_daily_record(self, device_topic):
         headers = {'Date': utils.format_timestamp(datetime.utcnow() \
                                                   .astimezone(dateutil.tz.gettz(self.timezone)))}
-        message = [
-            {'excess_operation': bool(self.excess_operation),
-             'device_status': bool(self.device_status),
-             'device_true_time': int(self.device_true_time)
-             },
-            {'excess_operation': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
-             'device_status': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
-             'device_true_time': {'units': 'seconds', 'tz': 'UTC', 'data_type': 'integer'}
-             }
-        ]
-        device_topic = device_topic.replace("all", "report/all")
-        try:
-            self.vip.pubsub.publish(peer='pubsub',
-                                    topic=device_topic,
-                                    message=message,
-                                    headers=headers)
-        except Exception as e:
-            _log.error("In Publish: {}".format(str(e)))
-
-    def publish(self, device_topic):
-        headers = {'Date': utils.format_timestamp(
-            datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone)))}
-        message = [
-            {'excess_operation': bool(self.excess_operation),
-             'device_status': bool(self.device_status),
-             'device_true_time': int(self.device_true_time)
-             },
-            {'excess_operation': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
-             'device_status': {'units': 'None', 'tz': 'UTC', 'data_type': 'bool'},
-             'device_true_time': {'units': 'seconds', 'tz': 'UTC', 'data_type': 'integer'}
-             }
-        ]
+        message = {'excess_operation': bool(self.excess_operation),
+                   'device_status': bool(self.device_status),
+                   'device_true_time': int(self.device_true_time)}
         device_topic = device_topic.replace("all", "report/all")
         try:
             self.vip.pubsub.publish(peer='pubsub',
