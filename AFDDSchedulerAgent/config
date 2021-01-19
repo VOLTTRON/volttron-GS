@@ -1,7 +1,7 @@
 {
     "analysis_name": "devices",
     # this is initiated based on a cron scheduling string - https://crontab.guru
-    "schedule_time": "* 18-23,0-6 * * 0-5",
+    "schedule_time": "* 0-6, 18-23 * * 0-5",
     "device": {
         "campus": "campus",
         "building": "building",

@@ -101,6 +101,7 @@ class AFDDSchedulerAgent(Agent):
         self.condition_list = self.current_config.get("condition_list", {})
         self.device_true_time = 0
         _log.info("current date time {}".format(datetime.utcnow()))
+        self.on_subscribe()
         # self.core.periodic(self.interval, self.run_schedule)
         self.device_true_time = 0 #at mid night zero the total minute
         date_today = datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone))
@@ -109,7 +110,6 @@ class AFDDSchedulerAgent(Agent):
         else:
             schedule_time = self.schedule_time
         self.core.schedule(cron(schedule_time), self.run_schedule)
-        self.on_subscribe()
 
     def on_subscribe(self):
         """
@@ -167,7 +167,6 @@ class AFDDSchedulerAgent(Agent):
         TODO:The output for the agent should be similar to the EconomizerRCx agent
 
         """
-        self.on_subscribe()
         conditions = self.condition_list.get("conditions")
         try:
             condition_status = all([parse_expr(condition).subs(self.condition_data) for condition in conditions])
@@ -175,6 +174,7 @@ class AFDDSchedulerAgent(Agent):
             _log.error("Conditions are not correctly implemented in the config file : {}".format(str(e)))
 
         if condition_status:
+            # Sum the number of minutes when both conditions are true and log each day
             self.device_true_time += self.interval
             self.device_status = True
             _log.Info('All condition true time {}'.format(self.device_true_time))
