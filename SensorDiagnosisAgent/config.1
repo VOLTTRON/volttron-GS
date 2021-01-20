@@ -1,0 +1,21 @@
+{
+    "campus": "campus",
+    "building": "building",
+    "station_code": "KRLD",
+    "run_schedule": "*/9 * * * *",
+    "timezone": "US/Pacific",
+    "sensor_conditions": {
+        "RTU4":  [
+            {
+                "sensor": "OutsideAirTemperature",
+                "weather_station_name": "temperature",
+                "sensor_threshold": 5
+            },
+            {
+                "sensor": "OutdoorAirHumidity",
+                "weather_station_name": "relativeHumidity",
+                "sensor_threshold": 5
+            }
+        ]
+    }
+}

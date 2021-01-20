@@ -342,7 +342,6 @@ class Regression:
             new_df[token] = df.eval(evaluate)
             if self.shift_dependent_data:
                 new_df[token] = new_df[token].shift(periods=1)
-
         new_df.dropna(inplace=True)
         new_df["Date"] = df["Date"]
         return new_df, formula
@@ -427,6 +426,7 @@ class RegressionAgent(Agent):
         super(RegressionAgent, self).__init__(**kwargs)
         config = utils.load_config(config_path)
         self.debug = config.get("debug", True)
+        self.regression_inprogress = False
         # Read equipment configuration parameters
         self.regression_inprogress = False
         site = config.get('campus', '')
@@ -662,6 +662,7 @@ class RegressionAgent(Agent):
             self.publish_coefficients(device.record_topic, result)
             exec_end = utils.get_aware_utc_now()
             exec_dif = exec_end - self.exec_start
+            self.regression_inprogress = False
             _log.debug("Regression for %s duration: %s", device, exec_dif)
 
     def publish_coefficients(self, topic, result):

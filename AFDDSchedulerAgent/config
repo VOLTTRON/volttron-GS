@@ -1,0 +1,20 @@
+{
+    "analysis_name": "devices",
+    # this is initiated based on a cron scheduling string - https://crontab.guru
+    "schedule_time": "* 0-6, 18-23 * * 0-5",
+    "device": {
+        "campus": "campus",
+        "building": "building",
+        "unit": {
+            "rtu4"
+        }
+    },
+    "mht": 3600,
+    "excess_operation": false,
+    "interval": 60,
+    "timezone": "US/Pacific",
+    "condition_list": {
+        "conditions": ["ReturnAirTemperature > 65.0", "ReturnAirTemperature < 75.0", "SupplyFanStatus"],
+        "condition_args": ["SupplyFanStatus", "ReturnAirTemperature"]
+    },
+}
