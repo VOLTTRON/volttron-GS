@@ -19,6 +19,9 @@ from volttron.platform.agent import utils
 from volttron.platform.messaging import topics
 from datetime import datetime, timedelta, date, time
 import holidays
+from volttron.platform.agent.utils import (get_aware_utc_now, format_timestamp)
+from volttron.platform.scheduling import cron
+from dateutil import parser
 
 utils.setup_logging()
 _log = logging.getLogger(__name__)
@@ -77,6 +80,7 @@ class AFDDSchedulerAgent(Agent):
         self.condition_data = []
         self.rthr = 0
         self.device_name = []
+        self.simulation = True
 
         self.default_config = utils.load_config(config_path)
         self.vip.config.set_default("config", self.default_config)
@@ -99,6 +103,7 @@ class AFDDSchedulerAgent(Agent):
         self.excess_operation = self.current_config.get("excess_operation")
         self.timezone = self.current_config.get("timezone", "PDT")
         self.condition_list = self.current_config.get("condition_list", {})
+        self.simulation = self.current_config.get("simulation", True)
         self.device_true_time = 0
         _log.info("current date time {}".format(datetime.utcnow()))
         self.on_subscribe()
@@ -110,6 +115,60 @@ class AFDDSchedulerAgent(Agent):
         else:
             schedule_time = self.schedule_time
         self.core.schedule(cron(schedule_time), self.run_schedule)
+
+        if not self.simulation:
+            self.core.schedule(cron(self.run_schedule), self.scheduled_run_process)
+        else:
+            self.simulation_setup()
+
+    def simulation_setup(self):
+        _log.debug("Running with simulation using topic %s",
+                   self.simulation_data_topic)
+        campus = self.device["campus"]
+        building = self.device["building"]
+        device_config = self.device["unit"]
+        self.publish_topics = "/".join([self.analysis_name, campus, building])
+        multiple_devices = isinstance(device_config, dict)
+        self.command_devices = device_config.keys()
+
+        try:
+            for device_name in device_config:
+                device_topic = topics.DEVICES_VALUE(campus=campus, building=building, \
+                                                    unit=device_name, path="", \
+                                                    point="all")
+
+                self.device_topic_list.update({device_topic: device_name})
+                self.device_name.append(device_name)
+
+        except Exception as e:
+            _log.error('Error configuring signal: {}'.format(e))
+
+        try:
+            for device in self.device_topic_list:
+                _log.info("Subscribing to " + device)
+                self.vip.pubsub.subscribe(peer="pubsub", prefix=device,
+                                          callback=self.simulation_time_handler)
+        except Exception as e:
+            _log.error('Error configuring signal: {}'.format(e))
+            _log.error("Missing {} data to execute the AIRx process".format(device))
+
+    def simulation_time_handler(self, peer, sender, bus, topic, header, message):
+        current_time = parser.parse(header["Date"])
+        _log.debug("Simulation time handler current_time: %s", current_time)
+        if (self.simulation_initial_time and self.simulation_start_timedelta) is None:
+            self.time_delta(current_time)
+        retraining_time_delta = current_time - self.simulation_initial_time
+        _log.debug(f"Simulation initial time {self.simulation_initial_time},"
+                   f" time handler time delta {retraining_time_delta}")
+        # convert all the required data into a dict
+        self.current_data = dict(zip(self.data_point_name,
+                                     [float(message[0][x]) for x in
+                                      self.data_point_name]))
+        self.current_data["Date"] = current_time
+        # _log.debug(self.current_data)
+        if retraining_time_delta >= self.simulation_start_timedelta:
+            self.time_delta(current_time)
+            self.parameter_identification(current_time)
 
     def on_subscribe(self):
         """
@@ -165,7 +224,6 @@ class AFDDSchedulerAgent(Agent):
         execute the condition of the device, If all condition are true then add time into true_time.
         If true time is exceed the threshold time (mht) flag the excess operation
         TODO:The output for the agent should be similar to the EconomizerRCx agent
-
         """
         conditions = self.condition_list.get("conditions")
         try:
@@ -190,7 +248,7 @@ class AFDDSchedulerAgent(Agent):
             self.publish_daily_record(device_topic)
 
     def publish_daily_record(self, device_topic):
-        headers = {'Date': utils.format_timestamp(datetime.utcnow() \
+        headers = {'Date': utils.format_timestamp(datetime.utcnow()\
                                                   .astimezone(dateutil.tz.gettz(self.timezone)))}
         message = {'excess_operation': bool(self.excess_operation),
                    'device_status': bool(self.device_status),

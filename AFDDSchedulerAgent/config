@@ -13,6 +13,7 @@
     "excess_operation": false,
     "interval": 60,
     "timezone": "US/Pacific",
+    "simulation": true,
     "condition_list": {
         "conditions": ["ReturnAirTemperature > 65.0", "ReturnAirTemperature < 75.0", "SupplyFanStatus"],
         "condition_args": ["SupplyFanStatus", "ReturnAirTemperature"]
