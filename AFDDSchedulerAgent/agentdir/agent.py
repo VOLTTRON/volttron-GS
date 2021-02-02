@@ -76,6 +76,8 @@ class AFDDSchedulerAgent(Agent):
         self.subdevices_list = []
         self.device_status = False
         self.excess_operation = False
+        self.simulation_initial_time = None
+        self.simulation_start_timedelta = None
         self.day = None
         self.condition_data = []
         self.rthr = 0
@@ -141,7 +143,7 @@ class AFDDSchedulerAgent(Agent):
                 self.device_name.append(device_name)
 
         except Exception as e:
-            _log.error('Error configuring signal: {}'.format(e))
+            _log.error('Error configuring device topic {}'.format(e))
 
         try:
             for device in self.device_topic_list:
@@ -160,15 +162,24 @@ class AFDDSchedulerAgent(Agent):
         retraining_time_delta = current_time - self.simulation_initial_time
         _log.debug(f"Simulation initial time {self.simulation_initial_time},"
                    f" time handler time delta {retraining_time_delta}")
+
         # convert all the required data into a dict
-        self.current_data = dict(zip(self.data_point_name,
-                                     [float(message[0][x]) for x in
-                                      self.data_point_name]))
-        self.current_data["Date"] = current_time
-        # _log.debug(self.current_data)
+        self.condition_data = []
+        condition_args = self.condition_list.get("condition_args")
+        symbols(condition_args)
+
+        for args in condition_args:
+            self.condition_data.append((args, message[0][args]))
+
+        _log.info("condition data {}".format(self.condition_data))
         if retraining_time_delta >= self.simulation_start_timedelta:
             self.time_delta(current_time)
-            self.parameter_identification(current_time)
+            self.run_schedule(current_time)
+
+    def time_delta(self, current_time):
+        self.simulation_initial_time = current_time
+        self.simulation_start_timedelta = (self.simulation_initial_time.replace(hour=0, minute=0, second=0) + td(
+            days=self.model_start_interval)) - self.simulation_initial_time
 
     def on_subscribe(self):
         """
