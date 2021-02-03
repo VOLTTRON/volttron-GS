@@ -14,6 +14,13 @@
     "interval": 60,
     "timezone": "US/Pacific",
     "simulation": true,
+    "year": 2021,
+    "schedule" : {
+        "weekday": ["6:00","18:00"],
+        "weekend_holiday": ["0:00","0:00"],
+    }
+    "publish_time": "0:00"
+
     "condition_list": {
         "conditions": ["ReturnAirTemperature > 65.0", "ReturnAirTemperature < 75.0", "SupplyFanStatus"],
         "condition_args": ["SupplyFanStatus", "ReturnAirTemperature"]

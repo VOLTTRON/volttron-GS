@@ -52,7 +52,7 @@ class AFDDSchedulerAgent(Agent):
                 }
             }
         }
-        self.maximum_hour_threshold: 5.0
+        self.maximum_hour_threshold = 5.0
         self.excess_operation: False
         self.interval: 60
         self.timezone = "US/Pacific"
@@ -76,14 +76,13 @@ class AFDDSchedulerAgent(Agent):
         self.subdevices_list = []
         self.device_status = False
         self.excess_operation = False
-        self.simulation_initial_time = None
-        self.simulation_start_timedelta = None
         self.day = None
         self.condition_data = []
         self.rthr = 0
         self.device_name = []
         self.simulation = True
-
+        self.year = 2021
+        self.schedule = {"weekday_sch": ["5:30","18:30"], "weekend_holiday_sch": ["0:00","0:00"]}
         self.default_config = utils.load_config(config_path)
         self.vip.config.set_default("config", self.default_config)
         self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], \
@@ -106,26 +105,18 @@ class AFDDSchedulerAgent(Agent):
         self.timezone = self.current_config.get("timezone", "PDT")
         self.condition_list = self.current_config.get("condition_list", {})
         self.simulation = self.current_config.get("simulation", True)
+        self.year = self.current_config.get("year", 2021)
+        self.schedule = self.current_config.get("schedule", "")
         self.device_true_time = 0
         _log.info("current date time {}".format(datetime.utcnow()))
         self.on_subscribe()
         # self.core.periodic(self.interval, self.run_schedule)
         self.device_true_time = 0 #at mid night zero the total minute
-        date_today = datetime.utcnow().astimezone(dateutil.tz.gettz(self.timezone))
-        if date_today in holidays.US(years=2020) or date_today.weekday() == 5 and 6:
-            schedule_time = "* * * * *"
-        else:
-            schedule_time = self.schedule_time
-        self.core.schedule(cron(schedule_time), self.run_schedule)
 
-        if not self.simulation:
-            self.core.schedule(cron(self.run_schedule), self.scheduled_run_process)
-        else:
-            self.simulation_setup()
-
-    def simulation_setup(self):
+    def on_subscribe(self):
         _log.debug("Running with simulation using topic %s",
                    self.simulation_data_topic)
+
         campus = self.device["campus"]
         building = self.device["building"]
         device_config = self.device["unit"]
@@ -149,21 +140,23 @@ class AFDDSchedulerAgent(Agent):
             for device in self.device_topic_list:
                 _log.info("Subscribing to " + device)
                 self.vip.pubsub.subscribe(peer="pubsub", prefix=device,
-                                          callback=self.simulation_time_handler)
+                                          callback=self.scheduler_time_handler)
         except Exception as e:
             _log.error('Error configuring signal: {}'.format(e))
             _log.error("Missing {} data to execute the AIRx process".format(device))
 
-    def simulation_time_handler(self, peer, sender, bus, topic, header, message):
-        current_time = parser.parse(header["Date"])
+    def scheduler_time_handler(self, peer, sender, bus, topic, header, message):
+        if self.simulation:
+            current_time = parse(header["Date"])
+        else:
+            current_time = get_aware_utc_now()
         _log.debug("Simulation time handler current_time: %s", current_time)
-        if (self.simulation_initial_time and self.simulation_start_timedelta) is None:
-            self.time_delta(current_time)
-        retraining_time_delta = current_time - self.simulation_initial_time
-        _log.debug(f"Simulation initial time {self.simulation_initial_time},"
-                   f" time handler time delta {retraining_time_delta}")
+        date_today = current_time.date()
+        if date_today in holidays.US(years=self.year) or date_today.weekday() == 5 and 6:
+            schedule = self.schedule["weekday"]
+        else:
+            schedule = self.schedule["weekend_holiday"]
 
-        # convert all the required data into a dict
         self.condition_data = []
         condition_args = self.condition_list.get("condition_args")
         symbols(condition_args)
@@ -172,65 +165,11 @@ class AFDDSchedulerAgent(Agent):
             self.condition_data.append((args, message[0][args]))
 
         _log.info("condition data {}".format(self.condition_data))
-        if retraining_time_delta >= self.simulation_start_timedelta:
-            self.time_delta(current_time)
+        # convert all the required data into a dict
+        if current_time.time() < parse(schedule[0]).time() or current_time.time() > parse(schedule[1]).time():
             self.run_schedule(current_time)
 
-    def time_delta(self, current_time):
-        self.simulation_initial_time = current_time
-        self.simulation_start_timedelta = (self.simulation_initial_time.replace(hour=0, minute=0, second=0) + td(
-            days=self.model_start_interval)) - self.simulation_initial_time
-
-    def on_subscribe(self):
-        """
-
-        :return:
-        """
-        campus = self.device["campus"]
-        building = self.device["building"]
-        device_config = self.device["unit"]
-        self.publish_topics = "/".join([self.analysis_name, campus, building])
-        multiple_devices = isinstance(device_config, dict)
-        self.command_devices = device_config.keys()
-
-        try:
-            for device_name in device_config:
-                device_topic = topics.DEVICES_VALUE(campus=campus, building=building, \
-                                                    unit=device_name, path="", \
-                                                    point="all")
-
-                self.device_topic_list.update({device_topic: device_name})
-                self.device_name.append(device_name)
-
-        except Exception as e:
-            _log.error('Error configuring signal: {}'.format(e))
-
-        try:
-            for device in self.device_topic_list:
-                _log.info("Subscribing to " + device)
-                self.vip.pubsub.subscribe(peer="pubsub", prefix=device,
-                                          callback=self.on_data)
-        except Exception as e:
-            _log.error('Error configuring signal: {}'.format(e))
-            _log.error("Missing {} data to execute the AIRx process".format(device))
-
-
-    def on_data(self, peer, sender, bus, topic, headers, message):
-        """
-        Subscribe device data.
-
-        """
-        self.condition_data = []
-        self.input_datetime = parse(headers.get("Date")).astimezone(dateutil.tz.gettz(self.timezone))
-        condition_args = self.condition_list.get("condition_args")
-        symbols(condition_args)
-
-        for args in condition_args:
-            self.condition_data.append((args, message[0][args]))
-
-        _log.info("condition data {}".format(self.condition_data))
-
-    def run_schedule(self):
+    def run_schedule(self, current_time):
         """
         execute the condition of the device, If all condition are true then add time into true_time.
         If true time is exceed the threshold time (mht) flag the excess operation
@@ -256,11 +195,10 @@ class AFDDSchedulerAgent(Agent):
             self.excess_operation = True
 
         for device_topic in self.device_topic_list:
-            self.publish_daily_record(device_topic)
+            self.publish_daily_record(device_topic, current_time)
 
-    def publish_daily_record(self, device_topic):
-        headers = {'Date': utils.format_timestamp(datetime.utcnow()\
-                                                  .astimezone(dateutil.tz.gettz(self.timezone)))}
+    def publish_daily_record(self, device_topic, current_time):
+        headers = {'Date': format_timestamp(current_time)}
         message = {'excess_operation': bool(self.excess_operation),
                    'device_status': bool(self.device_status),
                    'device_true_time': int(self.device_true_time)}
