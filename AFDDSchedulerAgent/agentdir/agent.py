@@ -190,22 +190,32 @@ class AFDDSchedulerAgent(Agent):
             self.device_status = False
             _log.Info("one of the condition is false")
 
-        runtime_threshold = self.device_true_time / 3600
-        if runtime_threshold > self.maximum_hour_threshold:
+        if self.initial_time:
+            self.initial_time = current_time
+        time_delta = current_time - self.simulation_initial_time
+        _log.debug(f"Initial time = {self.simulation_initial_time},"
+                   f"time delta = {time_delta}")
+
+        if time_delta >= self.maximum_hour_threshold:
             self.excess_operation = True
 
-        for device_topic in self.device_topic_list:
-            self.publish_daily_record(device_topic, current_time)
-
-    def publish_daily_record(self, device_topic, current_time):
-        headers = {'Date': format_timestamp(current_time)}
+        #for device_topic in self.device_topic_list:
         message = {'excess_operation': bool(self.excess_operation),
-                   'device_status': bool(self.device_status),
-                   'device_true_time': int(self.device_true_time)}
-        device_topic = device_topic.replace("all", "report/all")
+                   'device_status': bool(self.device_status)
+                   }
+        self.publish_daily_record(self.affd_topic_name, message, current_time)
+
+        if self.midnight():
+            message = {'device_true_time': int(self.device_true_time)}
+            self.publish_daily_record(self.affd_topic_name, message, current_time)
+            self.device_true_time = 0
+
+    def publish_daily_record(self, topic, message, current_time):
+        headers = {'Date': format_timestamp(current_time)}
+        #device_topic = topic.replace("all", "report/all")
         try:
             self.vip.pubsub.publish(peer='pubsub',
-                                    topic=device_topic,
+                                    topic=topic,
                                     message=message,
                                     headers=headers)
         except Exception as e:
