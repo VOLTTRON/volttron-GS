@@ -39,16 +39,15 @@ class AFDDSchedulerAgent(Agent):
         super(AFDDSchedulerAgent, self).__init__(**kwargs)
         # Set up default configuration and config store
         self.analysis_name = "Scheduler"
-        self.schedule_time = "* 18 * * *"
         self.campus = "campus"
         self.building = "building"
         self.device = {
-                "rtu1": {
-                    "subdevices": []
-                },
-                "rtu4": {
-                    "subdevices": []
-                }
+            "rtu1": {
+                "subdevices": []
+            },
+            "rtu4": {
+                "subdevices": []
+            }
         }
         self.maximum_hour_threshold = 5.0
         self.excess_operation: False
@@ -58,7 +57,8 @@ class AFDDSchedulerAgent(Agent):
         # Set up default configuration and config store
         self.default_config = {
             "analysis_name": self.analysis_name,
-            "schedule_time": self.schedule_time,
+            "campus": self.campus,
+            "building": self.building,
             "device": self.device,
             "mht": 3600,
             "excess_operation": False,
@@ -81,7 +81,7 @@ class AFDDSchedulerAgent(Agent):
         self.year = 2021
         self.midnight_time = None
         self.initial_time = None
-        self.schedule = {"weekday_sch": ["5:30","18:30"], "weekend_holiday_sch": ["0:00","0:00"]}
+        self.schedule = {"weekday_sch": ["5:30", "18:30"], "weekend_holiday_sch": ["0:00", "0:00"]}
         self.default_config = utils.load_config(config_path)
         self.vip.config.set_default("config", self.default_config)
         self.vip.config.subscribe(self.configure, actions=["NEW", "UPDATE"], \
@@ -97,9 +97,9 @@ class AFDDSchedulerAgent(Agent):
         self.current_config.update(contents)
 
         self.analysis_name = self.current_config.get("analysis_name")
-        self.schedule_time = self.current_config.get("schedule_time")
         self.campus = self.current_config.get("campus")
         self.building = self.current_config.get("building")
+        self.device = self.current_config.get("device")
         self.maximum_hour_threshold = self.current_config.get("mht")
         self.excess_operation = self.current_config.get("excess_operation")
         self.timezone = self.current_config.get("timezone", "PDT")
@@ -111,18 +111,17 @@ class AFDDSchedulerAgent(Agent):
         _log.info("current date time {}".format(datetime.utcnow()))
         self.on_subscribe()
         # self.core.periodic(self.interval, self.run_schedule)
-        self.device_true_time = 0 #at mid night zero the total minute
+        self.device_true_time = 0  # at mid night zero the total minute
 
     def on_subscribe(self):
         _log.debug("Running with simulation using topic %s",
                    self.simulation_data_topic)
-        device_config = self.device["unit"]
         self.publish_topics = "/".join([self.analysis_name, self.campus, self.building])
-        multiple_devices = isinstance(device_config, dict)
-        self.command_devices = device_config.keys()
+        multiple_devices = isinstance(self.device, dict)
+        self.command_devices = self.device.keys()
 
         try:
-            for device_name in device_config:
+            for device_name in self.device:
                 device_topic = topics.DEVICES_VALUE(campus=self.campus, building=self.building, \
                                                     unit=device_name, path="", \
                                                     point="all")
@@ -168,9 +167,11 @@ class AFDDSchedulerAgent(Agent):
 
     def run_schedule(self, current_time):
         """
+
+        :param current_time:
+        :return: this function publishes ---
         execute the condition of the device, If all condition are true then add time into true_time.
         If true time is exceed the threshold time (mht) flag the excess operation
-        TODO:The output for the agent should be similar to the EconomizerRCx agent
         """
         conditions = self.condition_list.get("conditions")
         try:
@@ -197,7 +198,7 @@ class AFDDSchedulerAgent(Agent):
         if time_delta >= self.maximum_hour_threshold:
             self.excess_operation = True
 
-        #for device_topic in self.device_topic_list:
+        # for device_topic in self.device_topic_list:
         message = {'excess_operation': bool(self.excess_operation),
                    'device_status': bool(self.device_status)
                    }
@@ -209,6 +210,11 @@ class AFDDSchedulerAgent(Agent):
             self.device_true_time = 0
 
     def midnight(self, current_time):
+        """
+
+        :param current_time:
+        :return: If it is midnight returns true otherwise false
+        """
         if self.midnight_time:
             self.midnight_time = datetime.combine(current_time, time.max)
         if current_time >= self.midnight_time:
@@ -219,7 +225,7 @@ class AFDDSchedulerAgent(Agent):
 
     def publish_daily_record(self, topic, message, current_time):
         headers = {'Date': format_timestamp(current_time)}
-        #device_topic = topic.replace("all", "report/all")
+        # device_topic = topic.replace("all", "report/all")
         try:
             self.vip.pubsub.publish(peer='pubsub',
                                     topic=topic,
@@ -251,7 +257,6 @@ class AFDDSchedulerAgent(Agent):
                 sleep(3)
                 continue
         return False
-
 
 
 def main(argv=sys.argv):
