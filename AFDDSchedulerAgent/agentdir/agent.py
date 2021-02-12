@@ -82,6 +82,7 @@ class AFDDSchedulerAgent(Agent):
         self.device_name = []
         self.simulation = True
         self.year = 2021
+        self.midnight_time = None
         self.schedule = {"weekday_sch": ["5:30","18:30"], "weekend_holiday_sch": ["0:00","0:00"]}
         self.default_config = utils.load_config(config_path)
         self.vip.config.set_default("config", self.default_config)
@@ -140,12 +141,12 @@ class AFDDSchedulerAgent(Agent):
             for device in self.device_topic_list:
                 _log.info("Subscribing to " + device)
                 self.vip.pubsub.subscribe(peer="pubsub", prefix=device,
-                                          callback=self.scheduler_time_handler)
+                                          callback=self.time_scheduler_handler)
         except Exception as e:
             _log.error('Error configuring signal: {}'.format(e))
             _log.error("Missing {} data to execute the AIRx process".format(device))
 
-    def scheduler_time_handler(self, peer, sender, bus, topic, header, message):
+    def time_scheduler_handler(self, peer, sender, bus, topic, header, message):
         if self.simulation:
             current_time = parse(header["Date"])
         else:
@@ -205,10 +206,19 @@ class AFDDSchedulerAgent(Agent):
                    }
         self.publish_daily_record(self.affd_topic_name, message, current_time)
 
-        if self.midnight():
+        if self.midnight(current_time):
             message = {'device_true_time': int(self.device_true_time)}
             self.publish_daily_record(self.affd_topic_name, message, current_time)
             self.device_true_time = 0
+
+    def midnight(self, current_time):
+        if self.midnight_time:
+            self.midnight_time = datetime.combine(current_time, time.max)
+        if current_time >= self.midnight_time:
+            self.midnight_time = datetime.combine(current_time, time.max)
+            return True
+        else:
+            return False
 
     def publish_daily_record(self, topic, message, current_time):
         headers = {'Date': format_timestamp(current_time)}
