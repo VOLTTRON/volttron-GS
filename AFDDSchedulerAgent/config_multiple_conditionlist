@@ -22,7 +22,8 @@
     "publish_time": "0:00"
 
     "condition_list": {
-        "conditions": {"rtu": ["ReturnAirTemperature > 50.0", "ReturnAirTemperature < 75.0", "SupplyFanStatus"], "ahu" : []
-        "condition_args":{"rtu": ["SupplyFanStatus", "ReturnAirTemperature"]
+        "conditions": ["ReturnAirTemperature > 65.0", "ReturnAirTemperature < 75.0", "SupplyFanStatus"],
+        "condition_args": ["SupplyFanStatus", "ReturnAirTemperature"]
     },
 }
+

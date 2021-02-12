@@ -40,21 +40,18 @@ class AFDDSchedulerAgent(Agent):
         # Set up default configuration and config store
         self.analysis_name = "Scheduler"
         self.schedule_time = "* 18 * * *"
+        self.campus = "campus"
+        self.building = "building"
         self.device = {
-            "campus": "campus",
-            "building": "building",
-            "unit": {
                 "rtu1": {
                     "subdevices": []
                 },
                 "rtu4": {
                     "subdevices": []
                 }
-            }
         }
         self.maximum_hour_threshold = 5.0
         self.excess_operation: False
-        self.interval: 60
         self.timezone = "US/Pacific"
         self.condition_list = None
 
@@ -83,6 +80,7 @@ class AFDDSchedulerAgent(Agent):
         self.simulation = True
         self.year = 2021
         self.midnight_time = None
+        self.initial_time = None
         self.schedule = {"weekday_sch": ["5:30","18:30"], "weekend_holiday_sch": ["0:00","0:00"]}
         self.default_config = utils.load_config(config_path)
         self.vip.config.set_default("config", self.default_config)
@@ -100,7 +98,8 @@ class AFDDSchedulerAgent(Agent):
 
         self.analysis_name = self.current_config.get("analysis_name")
         self.schedule_time = self.current_config.get("schedule_time")
-        self.device = self.current_config.get("device")
+        self.campus = self.current_config.get("campus")
+        self.building = self.current_config.get("building")
         self.maximum_hour_threshold = self.current_config.get("mht")
         self.excess_operation = self.current_config.get("excess_operation")
         self.timezone = self.current_config.get("timezone", "PDT")
@@ -117,17 +116,14 @@ class AFDDSchedulerAgent(Agent):
     def on_subscribe(self):
         _log.debug("Running with simulation using topic %s",
                    self.simulation_data_topic)
-
-        campus = self.device["campus"]
-        building = self.device["building"]
         device_config = self.device["unit"]
-        self.publish_topics = "/".join([self.analysis_name, campus, building])
+        self.publish_topics = "/".join([self.analysis_name, self.campus, self.building])
         multiple_devices = isinstance(device_config, dict)
         self.command_devices = device_config.keys()
 
         try:
             for device_name in device_config:
-                device_topic = topics.DEVICES_VALUE(campus=campus, building=building, \
+                device_topic = topics.DEVICES_VALUE(campus=self.campus, building=self.building, \
                                                     unit=device_name, path="", \
                                                     point="all")
 
@@ -189,10 +185,11 @@ class AFDDSchedulerAgent(Agent):
             _log.Info('All condition true time {}'.format(self.device_true_time))
         else:
             self.device_status = False
-            _log.Info("one of the condition is false")
+            _log.Info("One of the condition is false")
 
         if self.initial_time:
             self.initial_time = current_time
+
         time_delta = current_time - self.simulation_initial_time
         _log.debug(f"Initial time = {self.simulation_initial_time},"
                    f"time delta = {time_delta}")
