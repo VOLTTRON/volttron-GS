@@ -255,7 +255,7 @@ class AFDDSchedulerAgent(Agent):
         :return: this publishes the message on the volttron message bus
         """
         headers = {'Date': format_timestamp(current_time)}
-        device_topic = topic.replace("devices", "analysis")
+        device_topic = topic.replace("devices", self.analysis_name)
         print(device_topic)
         try:
             self.vip.pubsub.publish(peer='pubsub',

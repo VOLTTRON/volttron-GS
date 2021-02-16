@@ -12,25 +12,29 @@ The json format of the config files are specified below.
 
 *  Agent config file:
 
-```json
+```
 {
-    "analysis_name": "devices",
-    "campus": "campus",
-    "building": "building",
-    "device": "rtu4",
-    "mht": 3600,
+    "analysis_name": "analysis",
+    "campus": "PNNL",
+    "building": "BUILDING1",
+    "maximum_hour_threshold" :5.0,
     "excess_operation": false,
     "interval": 60,
     "timezone": "US/Pacific",
     "simulation": true,
     "year": 2021,
+    #"device": {
+    #        "AHU1": ["VAV102", "VAV118"],
+    #        "AHU3": ["VAV104", "VAV105"]
+    #    },
+    "device":["AHU1", "AHU3"],
     "schedule" : {
         "weekday": ["6:00","18:00"],
         "weekend_holiday": ["0:00","0:00"]
     },
     "condition_list": {
-        "conditions": ["ReturnAirTemperature > 65.0", "ReturnAirTemperature < 75.0", "SupplyFanStatus"],
-        "condition_args": ["SupplyFanStatus", "ReturnAirTemperature"]
+        "conditions": ["DischargeAirTemperature > 75.0", "SupplyFanStatus"],
+        "condition_args": ["SupplyFanStatus", "DischargeAirTemperature"]
     }
 }
 ````
