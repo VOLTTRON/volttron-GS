@@ -1,10 +1,9 @@
 # AFDDSchedulerAgents Agent
-There may be a secondary AFDD
-(analyze hours of operation for RTUs with inherent heating capability) or simply forego using discharge
-temperature as a proxy for proof of fan operations. Optimal Start is not accounted for 
-(in determination of an earlier start time than the schedule) nor is the night setback
-minimum and maximum space temperature configuration that will cause the RTU to operate during
-unoccupied hours to maintain the building space temperatures at the specified minimum and maximum temperatures.
+AFDD agent check if all conditions are true for each devices, 
+if it is true then at midnight it sums the number of minute for each device 
+where both conditions are true and publish a devices true time. 
+if the devices true time exsits the maximum hour threshould then it flag the
+device for excess daily operating hours
 
 ## AFDDSchedulerAgent Agent Configuration
 

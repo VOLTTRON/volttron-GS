@@ -30,9 +30,11 @@ __version__ = '0.1'
 
 class AFDDSchedulerAgent(Agent):
     """
-    This agent
-
-    TODO:write a description of the agent
+    AFDD agent check if all conditions are true for each devices,
+    if it is true then at midnight it sums the number of minute for each device
+    where both conditions are true and publish a devices true time.
+    if the devices true time exsits the maximum hour threshould then it flag the
+    device for excess daily operating hours
     """
 
     def __init__(self, config_path, **kwargs):
