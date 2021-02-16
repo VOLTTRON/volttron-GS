@@ -2,10 +2,12 @@
     "analysis_name": "devices",
     "campus": "campus",
     "building": "building",
-    "device": "rtu4",
-    "mht": 3600,
+    "device": {
+            "AHU1": ["VAV102", "VAV118"],
+            "AHU3": ["VAV104", "VAV105"]
+        },
+    "maximum_hour_threshold" :5.0,
     "excess_operation": false,
-    "interval": 60,
     "timezone": "US/Pacific",
     "simulation": true,
     "year": 2021,
