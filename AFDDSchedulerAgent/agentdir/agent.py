@@ -48,6 +48,7 @@ class AFDDSchedulerAgent(Agent):
         self.excess_operation: False
         self.timezone = "US/Pacific"
         self.condition_list = None
+        self.previous_true_time = 0
 
         # Set up default configuration and config store
         self.default_config = {
@@ -63,11 +64,9 @@ class AFDDSchedulerAgent(Agent):
 
         self.device_topic_list = {}
         self.device_data = []
-        self.device_true_time = 0
-        self.subdevices_list = []
         self.device_status = False
         self.excess_operation = False
-        self.condition_true_time_delta = None
+        self.condition_true_time_delta = 0
         self.day = None
         self.condition_data = []
         self.device_name = []
@@ -178,7 +177,6 @@ class AFDDSchedulerAgent(Agent):
             self.condition_data.append((args, message[0][args]))
 
         _log.info("condition data {}".format(self.condition_data))
-        print(topic)
         # run afdd scheduler between unoccupied period using predefine occupied schedule
         if current_time.time() < parse(schedule[0]).time() or current_time.time() > parse(schedule[1]).time():
             self.run_schedule(current_time, topic)
@@ -198,41 +196,32 @@ class AFDDSchedulerAgent(Agent):
             _log.error("Conditions are not correctly implemented in the config file : {}".format(str(e)))
 
         if condition_status:
-            # Sum the number of minutes when both conditions are true and log each day
-            if self.condition_true_time:
-                self.condition_true_time = current_time
-            self.condition_true_time_delta = (current_time - self.condition_true_time).seconds
+            # Sum the number of minutes when both conditions are true and log each
             self.device_status = True
-            _log.info('All condition true time {}'.format(self.device_true_time))
-            _log.debug(f'Condition true time delta is {self.condition_true_time_delta}')
+            if not self.condition_true_time:
+                self.condition_true_time = current_time
+            self.condition_true_time_delta = self.previous_true_time + (current_time - self.condition_true_time).seconds
+            _log.info(f'Condition true time delta is {self.condition_true_time_delta}')
         else:
-            if self.device_status:
-                self.device_true_time += self.condition_true_time_delta
-                self.device_status = False
-                self.condition_true_time = None
+            self.condition_true_time = None
+            self.device_status = False
+            if self.condition_true_time_delta:
+                self.previous_true_time = self.condition_true_time_delta
             _log.info("One of the condition is false")
 
-        if not self.initial_time:
-            self.initial_time = current_time
-
-        time_delta = current_time - self.initial_time
-        _log.debug(f"Initial time = {self.initial_time},"
-                   f"time delta = {time_delta}")
-
-        if (time_delta.seconds / 3600) >= self.maximum_hour_threshold:
+        if (self.condition_true_time_delta / 3600) >= self.maximum_hour_threshold:
             self.excess_operation = True
 
         # for device_topic in self.device_topic_list:
         message = {'excess_operation': bool(self.excess_operation),
                    'device_status': bool(self.device_status)
                    }
-        print(topic)
         self.publish_analysis(topic, message, current_time)
 
         if self.midnight(current_time):
             message = {'device_true_time': int(self.device_true_time)}
             self.publish_analysis(topic, message, current_time)
-            self.device_true_time = 0
+            self.condition_true_time_delta = 0
 
     def midnight(self, current_time):
         """
@@ -258,7 +247,7 @@ class AFDDSchedulerAgent(Agent):
         """
         headers = {'Date': format_timestamp(current_time)}
         device_topic = topic.replace("devices", self.analysis_name)
-        print(device_topic)
+
         try:
             self.vip.pubsub.publish(peer='pubsub',
                                     topic=device_topic,

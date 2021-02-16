@@ -18,7 +18,7 @@
         "condition_args": ["SupplyFanStatus", "ReturnAirTemperature"]
     }
     },
-    {"device": "rtu5",
+    {"device": "AHU",
     "condition_list": {
         "conditions": ["ReturnAirTemperature > 65.0", "ReturnAirTemperature < 75.0", "SupplyFanStatus"],
         "condition_args": ["SupplyFanStatus", "ReturnAirTemperature"]
