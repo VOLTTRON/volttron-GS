@@ -646,7 +646,7 @@ class EnergyPlusAgent(SynchronizingPubSubAgent):
         self.send_eplus_msg()
 
     def parse_eplus_msg(self, msg):
-        msg = msg.decode("utf-8") 
+        msg = msg.decode("utf-8")
         msg = msg.rstrip()
         log.info('Received message from EnergyPlus: ' + str(msg))
         arry = msg.split()
