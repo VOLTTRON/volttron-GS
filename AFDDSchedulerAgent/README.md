@@ -2,7 +2,7 @@
 AFDD agent check if all conditions are true for each devices, 
 if it is true then at midnight it sums the number of minute for each device 
 where both conditions are true and publish a devices true time. 
-if the devices true time exsits the maximum hour threshould then it flag the
+if the devices true time exceed the maximum hour threshold then it flag the
 device for excess daily operating hours
 
 ## AFDDSchedulerAgent Agent Configuration
