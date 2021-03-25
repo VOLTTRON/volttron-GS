@@ -108,7 +108,7 @@ def setup_logging(name, log_file, level=logging.DEBUG):
     return logger
 
 #ep_res_path = '/Users/ngoh511/Documents/projects/PycharmProjects/transactivenetwork/TNSAgent/tns/test_data/energyplus.txt'
-mixmarket_log = '/home/volttron/volttron/mixmarket'
+mixmarket_log = '/code/volttron/volttron/mixmarket'
 if not os.path.exists(mixmarket_log):
     _log2 = setup_logging('mixmarket', mixmarket_log + '.log')
 else:
