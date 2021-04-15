@@ -108,12 +108,12 @@ def setup_logging(name, log_file, level=logging.DEBUG):
     return logger
 
 #ep_res_path = '/Users/ngoh511/Documents/projects/PycharmProjects/transactivenetwork/TNSAgent/tns/test_data/energyplus.txt'
-mixmarket_log = '/home/volttron/volttron/mixmarket'
-if not os.path.exists(mixmarket_log):
-    _log2 = setup_logging('mixmarket', mixmarket_log + '.log')
-else:
-    temp = str(uuid.uuid4())
-    _log2 = setup_logging('mixmarket', mixmarket_log + temp + '.log')
+#mixmarket_log = '/home/volttron/volttron/mixmarket'
+#if not os.path.exists(mixmarket_log):
+#    _log2 = setup_logging('mixmarket', mixmarket_log + '.log')
+#else:
+#    temp = str(uuid.uuid4())
+#    _log2 = setup_logging('mixmarket', mixmarket_log + temp + '.log')
 
 
 __version__ = '0.1'
@@ -181,7 +181,7 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
             #     for line in fh:
             #         self.ep_lines.append(line)
 
-        _log2.debug("Mixmarket for agent {}:".format(self.name))
+        #_log2.debug("Mixmarket for agent {}:".format(self.name))
 
     @Core.receiver('onstart')
     def onstart(self, sender, **kwargs):
