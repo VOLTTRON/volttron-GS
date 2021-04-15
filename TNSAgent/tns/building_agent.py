@@ -545,11 +545,11 @@ class BuildingAgent(MarketAgent, myTransactiveNode):
             #self.elastive_load_model.default_powers = [-q if q is not None else None for q in self.quantities]
             curves_arr = [(c[0].tuppleize(), c[1].tuppleize()) if c is not None else None
                           for c in self.building_demand_curves]
-            _log2.debug("Data at time {}:".format(Timer.get_cur_time()))
-            _log2.debug("Market intervals: {}".format([x.name for x in self.markets[0].timeIntervals]))
-            _log2.debug("Quantities: {}".format(self.quantities))
-            _log2.debug("Prices: {}".format(self.prices))
-            _log2.debug("Curves: {}".format(curves_arr))
+            #_log2.debug("Data at time {}:".format(Timer.get_cur_time()))
+            #_log2.debug("Market intervals: {}".format([x.name for x in self.markets[0].timeIntervals]))
+            #_log2.debug("Quantities: {}".format(self.quantities))
+            #_log2.debug("Prices: {}".format(self.prices))
+            #_log2.debug("Curves: {}".format(curves_arr))
 
             db_topic = "/".join([self.db_topic, self.name, "AggregateDemand"])
             message = {"Timestamp": format_timestamp(timestamp), "Curves": self.building_demand_curves}
