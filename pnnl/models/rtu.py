@@ -95,7 +95,12 @@ class firstorderzone(object):
             occupied = self.sfs if self.sfs is not None else occupied
             sched_index = self.parent.current_datetime.hour
         else:
-            zt = self.zt_predictions[market_index]
+            if market_index == 0:
+                zt = self.get_input_value(self.zt_name)
+            else:
+                zt = self.zt_predictions[market_index-1]
+            if zt is None:
+                zt = self.get_input_value(self.zt_name)
             oat = self.parent.oat_predictions[market_index] if self.parent.oat_predictions else self.oat
         q = self.predict_quantity(oat, zt, _set, sched_index)
         _log.debug("{}: RTU predicted {} - zt: {} - set: {} - sched: {}".format(self.parent.agent_name, q, zt, _set, sched_index))

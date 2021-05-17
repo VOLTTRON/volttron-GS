@@ -69,7 +69,10 @@ class firstorderzone(object):
             occupied = sfs if sfs is not None else occupied
             sched_index = self.parent.current_datetime.hour
         else:
-            zt = self.zt_predictions[market_index]
+            if market_index == 0:
+                zt = self.get_input_value(self.zt_name)
+            else:
+                zt = self.zt_predictions[market_index - 1]
             if zt is None:
                 zt = self.get_input_value(self.zt_name)
 
