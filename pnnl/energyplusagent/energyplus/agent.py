@@ -76,7 +76,7 @@ from volttron.platform.vip.agent import Agent, Core
 from datetime import timedelta as td
 from datetime import date
 
-
+weekdays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 
 monkey.patch_socket()
 from volttron.platform.agent import utils
